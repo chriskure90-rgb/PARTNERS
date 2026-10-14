@@ -3348,6 +3348,45 @@ function RequiredMark() {
   )
 }
 
+// The (i) next to a suggested standard. It only shows that standard's
+// verified description — it never selects the standard.
+function StandardInfoButton({ standard, isOpen, onToggle, panelId }: { standard: ScienceStandard; isOpen: boolean; onToggle: () => void; panelId: string }) {
+  return (
+    <button
+      type="button"
+      className="standard-info-button"
+      aria-label={`About ${standard.code}`}
+      aria-expanded={isOpen}
+      aria-controls={isOpen ? panelId : undefined}
+      title={`About ${standard.code}`}
+      onClick={onToggle}
+    >
+      i
+    </button>
+  )
+}
+
+// A standard's code and official description from the verified standards
+// data (see scienceStandardsBank), shown under the suggestion bubbles.
+function StandardInfoPanel({ standard, panelId, onClose }: { standard: ScienceStandard; panelId: string; onClose: () => void }) {
+  return (
+    <div className="standard-info-panel" id={panelId} role="region" aria-label={`${standard.code} description`}>
+      <div className="standard-info-header">
+        <p>
+          <strong>{standard.code}</strong> <span>· {standardsFrameworkName(standard.framework)}</span>
+        </p>
+        <button type="button" className="drawer-close standard-info-close" aria-label={`Close ${standard.code} description`} onClick={onClose}>
+          ×
+        </button>
+      </div>
+      <p className="standard-info-description">{standard.description}</p>
+      <a className="standard-info-source" href={standard.sourceUrl} target="_blank" rel="noopener noreferrer">
+        Official standard text
+      </a>
+    </div>
+  )
+}
+
 function FieldError({ show, message = 'This field is required.' }: { show: boolean; message?: string }) {
   return show ? <small className="field-error">{message}</small> : null
 }
@@ -3723,6 +3762,14 @@ function LessonPlanningPanel({
   // Standards chosen in the chat but not yet confirmed. They're written to
   // the form (and counted in the summary) only on Confirm Selection.
   const [pendingStandards, setPendingStandards] = useState<string[]>([])
+  // Which suggested standard's description is open, and where (the form's
+  // suggestions or Brainstorm's) — one at a time, closed by default.
+  const [standardInfo, setStandardInfo] = useState<{ place: 'form' | 'brainstorm'; code: string } | null>(null)
+  const toggleStandardInfo = (place: 'form' | 'brainstorm', code: string) =>
+    setStandardInfo((current) => (current?.place === place && current.code === code ? null : { place, code }))
+  const infoStandard = standardInfo ? scienceStandardsBank.find((standard) => standard.code === standardInfo.code) : undefined
+  const formInfoStandard = standardInfo?.place === 'form' ? infoStandard : undefined
+  const brainstormInfoStandard = standardInfo?.place === 'brainstorm' ? infoStandard : undefined
   const togglePendingStandard = (code: string) =>
     setPendingStandards((prev) => (prev.includes(code) ? prev.filter((item) => item !== code) : [...prev, code]))
   const confirmStandards = () => {
@@ -4129,18 +4176,28 @@ function LessonPlanningPanel({
                     </p>
                     <div className="standards-suggested-row">
                       {topicSuggestions.map((standard) => (
-                        <button
-                          type="button"
-                          key={standard.code}
-                          className="standard-suggestion-bubble"
-                          title={standard.description}
-                          aria-label={`Add ${standard.code}: ${standard.description}`}
-                          onClick={() => addStandard(standard.code)}
-                        >
-                          <span aria-hidden="true">+</span> {standard.code}
-                        </button>
+                        <span key={standard.code} className="standard-bubble-group">
+                          <button
+                            type="button"
+                            className="standard-suggestion-bubble"
+                            title={standard.description}
+                            aria-label={`Add ${standard.code}: ${standard.description}`}
+                            onClick={() => addStandard(standard.code)}
+                          >
+                            <span aria-hidden="true">+</span> {standard.code}
+                          </button>
+                          <StandardInfoButton
+                            standard={standard}
+                            panelId="form-standard-info"
+                            isOpen={standardInfo?.place === 'form' && standardInfo.code === standard.code}
+                            onToggle={() => toggleStandardInfo('form', standard.code)}
+                          />
+                        </span>
                       ))}
                     </div>
+                    {formInfoStandard && (
+                      <StandardInfoPanel standard={formInfoStandard} panelId="form-standard-info" onClose={() => setStandardInfo(null)} />
+                    )}
                   </div>
                 )}
 
@@ -4422,24 +4479,40 @@ function LessonPlanningPanel({
                       const selected = pendingStandards.includes(option.value)
                       const standard = scienceStandardsBank.find((item) => item.code === option.value)
                       return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={`practice-chip ${selected ? 'selected' : ''}`}
-                          aria-pressed={selected}
-                          title={standard?.description}
-                          onClick={() => togglePendingStandard(option.value)}
-                        >
-                          {selected && (
-                            <span className="chip-check" aria-hidden="true">
-                              ✓
-                            </span>
+                        <span key={option.value} className="standard-bubble-group">
+                          <button
+                            type="button"
+                            className={`practice-chip ${selected ? 'selected' : ''}`}
+                            aria-pressed={selected}
+                            title={standard?.description}
+                            onClick={() => togglePendingStandard(option.value)}
+                          >
+                            {selected && (
+                              <span className="chip-check" aria-hidden="true">
+                                ✓
+                              </span>
+                            )}
+                            {option.label}
+                          </button>
+                          {standard && (
+                            <StandardInfoButton
+                              standard={standard}
+                              panelId="brainstorm-standard-info"
+                              isOpen={standardInfo?.place === 'brainstorm' && standardInfo.code === standard.code}
+                              onToggle={() => toggleStandardInfo('brainstorm', standard.code)}
+                            />
                           )}
-                          {option.label}
-                        </button>
+                        </span>
                       )
                     })}
                   </div>
+                  {brainstormInfoStandard && (
+                    <StandardInfoPanel
+                      standard={brainstormInfoStandard}
+                      panelId="brainstorm-standard-info"
+                      onClose={() => setStandardInfo(null)}
+                    />
+                  )}
                   <div className="brainstorm-standards-confirm">
                     <button type="button" className="primary-button" disabled={pendingStandards.length === 0} onClick={confirmStandards}>
                       Confirm Selection
