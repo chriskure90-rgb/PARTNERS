@@ -212,6 +212,11 @@
   padding-bottom: 16px;
   margin-bottom: 4px;
   border-bottom: 1px solid #dfe7ee;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .page-heading h2 {
@@ -344,11 +349,17 @@
   font-weight: 700;
 }
 
-.duration-badge {
+.duration-badge,
+.objective-badge {
   display: inline-block;
   vertical-align: middle;
   padding: 3px 9px;
   margin: 0 2px;
+}
+
+.objective-badge {
+  background: #eef6f1;
+  color: #2c6b4f;
 }
 
 .field-grid {
@@ -466,6 +477,442 @@ textarea {
   box-shadow: 0 6px 14px rgba(27, 40, 52, 0.08);
 }
 
+/* Lesson Planning's three ways to start a lesson. They stay at the top of
+   the panel while the form, upload, or chat they open is shown below. */
+.planning-methods {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.planning-method {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #dbe8f5;
+  border-radius: 12px;
+  background: #f5f9fd;
+  color: #1f2d3d;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.planning-method:hover {
+  background: #eef4fb;
+  border-color: #bdd7ff;
+}
+
+.planning-method.active {
+  background: #ffffff;
+  border-color: #2f80ed;
+  box-shadow: 0 6px 14px rgba(27, 40, 52, 0.08);
+}
+
+.planning-method:focus-visible {
+  outline: 2px solid #2f80ed;
+  outline-offset: 2px;
+}
+
+.planning-method-icon {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #e9f2ff;
+  color: #1a4f8d;
+  font-size: 0.9rem;
+}
+
+.planning-method.active .planning-method-icon {
+  background: #2f80ed;
+  color: #ffffff;
+}
+
+.planning-method-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.planning-method-text strong {
+  font-size: 0.86rem;
+  line-height: 1.25;
+  color: #1a4f8d;
+}
+
+.planning-method-text small {
+  font-size: 0.74rem;
+  line-height: 1.3;
+  color: #5a7385;
+}
+
+/* Nothing chosen yet: only the three buttons show. */
+.planning-method-content:empty {
+  display: none;
+}
+
+/* Brainstorm with AI: intro, then a chat thread that scrolls on its own,
+   then the Form Completion Summary, then the message input. */
+.brainstorm-chat {
+  gap: 12px;
+}
+
+.brainstorm-intro h3 {
+  margin: 0 0 4px;
+  font-size: 1.1rem;
+}
+
+.brainstorm-intro p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: #5a7385;
+}
+
+.brainstorm-thread {
+  max-height: 340px;
+  padding: 4px 4px 0 0;
+}
+
+.brainstorm-thread .chat-thread {
+  margin-bottom: 10px;
+}
+
+/* Suggested answers sit under the assistant's latest question. */
+.brainstorm-quick-replies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+/* Edit on the teacher's latest accepted answer for each field. */
+.brainstorm-edit-answer {
+  display: block;
+  margin: 4px 0 0 auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #1a4f8d;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.brainstorm-edit-answer:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.brainstorm-editing-note {
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #fff6e5;
+  color: #7a5412;
+  font-size: 0.8rem;
+}
+
+.brainstorm-editing-note .ghost-button {
+  padding: 0 4px;
+  border: none;
+  background: transparent;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #1a4f8d;
+  text-decoration: underline;
+}
+
+/* Brainstorm standards: pick several suggestions, then confirm. */
+.brainstorm-standards-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.brainstorm-standards-picker .brainstorm-quick-replies {
+  margin-bottom: 0;
+}
+
+.chip-check {
+  margin-right: 4px;
+  font-weight: 700;
+}
+
+.brainstorm-standards-confirm {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.brainstorm-standards-confirm .primary-button {
+  padding: 7px 14px;
+  font-size: 0.86rem;
+}
+
+.brainstorm-standards-confirm .primary-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+  box-shadow: none;
+}
+
+.form-summary {
+  border: 1px solid #dfe7ee;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.form-summary-heading {
+  margin: 0;
+}
+
+/* Collapsed, the summary is just this one line: title, count, a thin
+   progress bar, and the arrow. */
+.form-summary-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.form-summary-toggle:hover {
+  background: #f1f6fc;
+}
+
+.form-summary-toggle:focus-visible {
+  outline: 2px solid #2f80ed;
+  outline-offset: -2px;
+}
+
+.form-summary-title {
+  flex: none;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #1f2d3d;
+}
+
+.form-summary-count {
+  flex: none;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #5a7385;
+  font-variant-numeric: tabular-nums;
+}
+
+.form-summary-progress {
+  flex: 1;
+  min-width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: #e3eaf1;
+  overflow: hidden;
+}
+
+.form-summary-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #1f7a68;
+  transition: width 0.25s ease;
+}
+
+.form-summary-chevron {
+  flex: none;
+  font-size: 0.8rem;
+  color: #5a7385;
+}
+
+.form-summary-optional {
+  flex: none;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #1f7a68;
+}
+
+.form-summary-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.form-summary-group + .form-summary-group {
+  padding-top: 6px;
+  border-top: 1px dashed #dfe7ee;
+}
+
+.form-summary-group-label {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #5a7385;
+}
+
+.form-summary-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 2px 10px 8px;
+}
+
+.form-summary-review {
+  padding: 2px 4px;
+  border: none;
+  background: transparent;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #1a4f8d;
+}
+
+.form-summary-bubbles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.form-summary-bubble {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 3px 9px 3px 4px;
+  border: 1px solid #dfe7ee;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #5a7385;
+  font-size: 0.76rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.form-summary-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid #c9d6e2;
+  font-size: 0.64rem;
+  font-weight: 700;
+}
+
+.form-summary-bubble.complete {
+  border-color: #bfe3d3;
+  background: #eef8f4;
+  color: #1f5c4a;
+}
+
+.form-summary-bubble.complete .form-summary-icon {
+  border-color: #1f7a68;
+  background: #1f7a68;
+  color: #ffffff;
+}
+
+/* Template / Rubric bubbles are buttons that open their upload; they keep
+   the bubble look, with a hover/focus cue. */
+.form-summary-bubble-button {
+  font: inherit;
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+
+.form-summary-bubble-button:hover,
+.form-summary-bubble-button[aria-expanded='true'] {
+  border-color: #9cbce6;
+}
+
+.form-summary-bubble-button:focus-visible {
+  outline: 2px solid #2f80ed;
+  outline-offset: 1px;
+}
+
+.brainstorm-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid #dfe7ee;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.brainstorm-upload .optional-upload-card {
+  padding: 8px 10px;
+}
+
+.brainstorm-upload-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.brainstorm-upload-close {
+  flex: none;
+  padding: 4px 10px;
+  border: none;
+  background: transparent;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #1a4f8d;
+}
+
+.form-summary-label {
+  font-weight: 700;
+}
+
+
+.brainstorm-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brainstorm-actions .generate-button {
+  flex: 1;
+}
+
+.composer-box .primary-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+}
+
+@media (max-width: 1180px) {
+  .planning-methods {
+    grid-template-columns: 1fr;
+  }
+}
+
 .planning-form,
 .planning-chat {
   display: flex;
@@ -515,6 +962,55 @@ textarea {
   border-color: #dbe8f5;
 }
 
+/* Standards search box + its suggestions dropdown (overlays the fields
+   below while open). */
+.standards-combobox {
+  position: relative;
+}
+
+.standards-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid #c9d8ef;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 14px 30px rgba(27, 40, 52, 0.14);
+}
+
+.standards-dropdown-label {
+  margin: 0;
+  padding: 4px 6px 2px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #5a7385;
+}
+
+.standards-dropdown .standards-suggestions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: none;
+  max-height: 280px;
+}
+
+.standards-dropdown .standard-suggestion {
+  user-select: none;
+}
+
+.standard-suggestion.active {
+  background: #eef4fb;
+  border-color: #bdd7ff;
+}
+
 .standard-suggestion-code {
   font-weight: 700;
   font-size: 0.78rem;
@@ -546,6 +1042,255 @@ textarea {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.selected-standard-chip.custom {
+  background: #f4f1fb;
+  color: #4a3a7a;
+}
+
+.selected-standard-chip.custom small {
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+.standards-field-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.standards-framework select {
+  width: auto;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+}
+
+.standard-custom-add {
+  align-self: flex-start;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #1a4f8d;
+}
+
+/* Topic-based suggestions: dashed "+" bubbles, visibly different from the
+   solid chips of standards already selected. */
+.standards-suggested {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.standards-suggested-label {
+  margin: 0;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #5a7385;
+}
+
+.standards-suggested-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.standard-suggestion-bubble {
+  padding: 4px 10px;
+  border: 1px dashed #9cbce6;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #1a4f8d;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.standard-suggestion-bubble:hover,
+.standard-suggestion-bubble:focus-visible {
+  background: #e9f2ff;
+  border-style: solid;
+}
+
+/* Custom duration: the minutes input shown when "Custom" is selected. */
+.pacing-custom-field {
+  max-width: 220px;
+  gap: 4px;
+  font-size: 0.8rem;
+}
+
+.pacing-custom-input {
+  width: 100%;
+}
+
+/* Additional Customization: optional fields in a collapsible box between
+   Pacing / Duration and Generate Lesson. */
+.customization-section {
+  border: 1px solid #dbe8f5;
+  border-radius: 14px;
+  background: #f8fbfe;
+  padding: 4px 14px 12px;
+}
+
+.customization-section.open {
+  background: #ffffff;
+}
+
+.customization-heading {
+  margin: 0;
+}
+
+.customization-toggle {
+  width: calc(100% + 16px);
+  margin: 0 -8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.customization-toggle:hover {
+  background: #f1f6fc;
+}
+
+.customization-toggle:focus-visible {
+  outline: 2px solid #2f80ed;
+  outline-offset: -2px;
+}
+
+.customization-title {
+  flex: 1;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1f2d3d;
+}
+
+.customization-chevron {
+  color: #5a7385;
+  font-size: 0.85rem;
+}
+
+.customization-description {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #5a7385;
+}
+
+.customization-fields {
+  margin-top: 14px;
+}
+
+.field-hint {
+  margin-top: -4px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #5a7385;
+  line-height: 1.4;
+}
+
+.optional-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.optional-upload-label {
+  padding-left: 2px;
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: #355063;
+}
+
+.optional-upload-card {
+  padding: 10px 12px;
+}
+
+.optional-upload-file {
+  min-width: 0;
+}
+
+.optional-upload-file h4 {
+  margin-top: 4px;
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.optional-upload-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.optional-upload-actions .secondary-button {
+  padding: 7px 12px;
+  font-size: 0.85rem;
+}
+
+.optional-upload-remove {
+  padding: 6px 8px;
+  border: none;
+  background: transparent;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #a63d32;
+}
+
+.customization-note {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #5a7385;
+}
+
+/* Required fields */
+.required-mark {
+  color: #c62828;
+  font-weight: 700;
+}
+
+.required-legend {
+  margin: -8px 0 0;
+  font-size: 0.78rem;
+  color: #5a7385;
+}
+
+.field-invalid input,
+.field-invalid select,
+.field-invalid textarea {
+  border-color: #d9534f;
+}
+
+.field-invalid .practice-chip-row {
+  padding: 4px;
+  border: 1px solid #d9534f;
+  border-radius: 12px;
+}
+
+.field-error {
+  color: #b3261e;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.required-fields-alert {
+  padding: 10px 12px;
+  border: 1px solid #f1b8b4;
+  border-radius: 10px;
+  background: #fdf1f0;
+  color: #8c1d18;
+  font-size: 0.84rem;
+  line-height: 1.4;
 }
 
 .chip-remove {
@@ -595,11 +1340,6 @@ textarea {
 .pacing-chip {
   padding: 7px 12px;
   font-size: 0.78rem;
-}
-
-.pacing-custom-input {
-  width: 120px;
-  margin-top: 2px;
 }
 
 .generate-button {
@@ -713,45 +1453,6 @@ textarea {
   white-space: nowrap;
 }
 
-.state-selector {
-  display: inline-flex;
-  gap: 6px;
-  background: #eef4fb;
-  border: 1px solid #dbe8f5;
-  border-radius: 12px;
-  padding: 4px;
-  margin-bottom: 4px;
-}
-
-.state-tab {
-  border: none;
-  background: transparent;
-  color: #355063;
-  font: inherit;
-  font-weight: 600;
-  font-size: 0.82rem;
-  padding: 8px 14px;
-  border-radius: 9px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.2s ease;
-}
-
-.state-tab:hover {
-  color: #1a4f8d;
-}
-
-.state-tab.active {
-  background: #ffffff;
-  color: #1a4f8d;
-  box-shadow: 0 6px 14px rgba(27, 40, 52, 0.08);
-}
-
-.state-tab:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
 .lesson-source {
   margin: 0;
   color: #5a7385;
@@ -851,6 +1552,92 @@ textarea {
   gap: 4px;
 }
 
+/* Unified lesson view: a pending AI suggestion sits right under its
+   section, with review and dismiss actions. */
+.lesson-suggestion-summary {
+  margin: 0 0 6px;
+  font-size: 0.84rem;
+  color: #7a5412;
+}
+
+.lesson-suggestion-restore,
+.lesson-suggestion-dismiss {
+  padding: 2px 6px;
+  border: none;
+  background: transparent;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #1a4f8d;
+  text-decoration: underline;
+}
+
+.lesson-suggestion-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lesson-suggestion-actions .primary-button {
+  padding: 7px 14px;
+  font-size: 0.86rem;
+}
+
+.lesson-suggestion-dismiss {
+  color: #6b5a2a;
+}
+
+/* Collapsed by default: just the "AI Suggestion" header. */
+.lesson-suggestion-card {
+  padding: 8px 12px;
+}
+
+.lesson-suggestion-card.is-expanded {
+  padding: 10px 14px 12px;
+}
+
+.lesson-suggestion-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lesson-suggestion-toggle .card-label {
+  margin: 0;
+}
+
+.lesson-suggestion-sparkle {
+  color: #d99a1c;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.lesson-suggestion-chevron {
+  margin-left: auto;
+  color: #7a5412;
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.lesson-suggestion-toggle:focus-visible {
+  outline: 2px solid #1a4f8d;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.lesson-suggestion-body {
+  margin-top: 8px;
+}
+
+.lesson-suggestion-body > p {
+  margin: 0 0 10px;
+}
+
 .suggestion-popover {
   position: relative;
   background: #fffdf5;
@@ -920,8 +1707,25 @@ textarea {
   transform: translateY(-1px);
 }
 
+/* The section chat (history + input) opens under the suggested revision
+   via "Ask AI about this". */
+.revision-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.revision-applied-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .revision-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin: -2px 0 14px;
 }
@@ -1963,4 +2767,1826 @@ textarea {
   .composer-box {
     flex-direction: column;
   }
+}
+
+/* ---------------------------------------------------------------------
+   Class Feedback — Individual Student Reports (between Class Statistics
+   and Class Summary). Built from the page's existing pieces: .report-panel
+   card, .planning-tabs for Descriptive/Mechanistic, .standards-suggestions
+   for the student dropdown. The student's initial and revised work is the
+   visual focus; the AI analysis below it is short and lighter in tone.
+   --------------------------------------------------------------------- */
+.student-reports-header {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: 0;
+}
+
+.student-reports-subtitle {
+  margin: 6px 0 0;
+}
+
+.student-reports-header .primary-button,
+.student-reports-header .secondary-button {
+  flex: none;
+}
+
+.student-reports-body {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid #e8eef4;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.student-search {
+  position: relative;
+  max-width: 420px;
+}
+
+.student-search-listbox {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  box-shadow: 0 12px 30px rgba(27, 40, 52, 0.12);
+}
+
+.student-search-option {
+  width: 100%;
+}
+
+.student-search-option.active {
+  background: #f5faff;
+  border-color: #dbe8f5;
+}
+
+.student-report-unavailable {
+  margin: 0;
+}
+
+.student-report {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.student-report-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.student-report-heading h4 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.mock-data-tag {
+  background: #f2f5f8;
+  color: #5a7385;
+}
+
+.student-model-work {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.student-report-subheader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.student-report-subheader h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.artifact-compare-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.artifact-version-card {
+  border: 1px solid #dfe7ee;
+  background: #fff;
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.artifact-version-empty {
+  justify-content: center;
+  min-height: 320px;
+  background: #f9fbff;
+  border-style: dashed;
+}
+
+.artifact-version-empty .empty-state-support {
+  margin: 0;
+}
+
+.artifact-version-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.artifact-version-header h4 {
+  margin: 4px 0 0;
+  font-size: 1rem;
+}
+
+.artifact-version-select {
+  margin-top: 4px;
+  width: auto;
+  padding: 4px 8px;
+  font-weight: 700;
+}
+
+.artifact-version-meta {
+  margin: 0;
+  color: #5a7385;
+  font-size: 0.78rem;
+}
+
+.artifact-image-button {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.artifact-image-button .student-artifact-image {
+  margin: 0;
+  max-height: min(640px, 70vh);
+}
+
+.artifact-image-expand-hint {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  background: rgba(31, 45, 61, 0.78);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 4px 9px;
+  border-radius: 999px;
+}
+
+.artifact-image-placeholder {
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  padding: 18px;
+  border: 1px dashed #bfd2ea;
+  border-radius: 8px;
+  background: repeating-linear-gradient(135deg, #f5faff, #f5faff 12px, #eef5fd 12px, #eef5fd 24px);
+  color: #35506f;
+  line-height: 1.55;
+}
+
+.artifact-image-placeholder p {
+  margin: 0;
+}
+
+.artifact-placeholder-tag {
+  align-self: flex-start;
+  background: #fff;
+  border: 1px solid #dbe8f5;
+  color: #5a7385;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.artifact-explanation .student-quote {
+  margin: 6px 0 0;
+}
+
+.artifact-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(15, 25, 35, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  cursor: zoom-out;
+}
+
+.artifact-lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 8px;
+  cursor: default;
+}
+
+.artifact-lightbox-close {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  width: 38px;
+  height: 38px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #1f2d3d;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.student-ai-analysis {
+  background: #f9fbfd;
+  border: 1px solid #e8eef4;
+  border-radius: 14px;
+  padding: 14px 18px;
+  font-size: 0.92rem;
+}
+
+.analysis-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.analysis-block-title {
+  margin: 0 0 6px;
+  font-weight: 700;
+  color: #1f2d3d;
+}
+
+.analysis-block .empty-state-support {
+  margin: 0;
+}
+
+.analysis-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #1f2d3d;
+}
+
+.analysis-list li {
+  line-height: 1.55;
+}
+
+.analysis-list li + li {
+  margin-top: 6px;
+}
+
+.misconception-idea {
+  font-weight: 600;
+}
+
+.misconception-uncertain-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  background: #f2f5f8;
+  color: #5a7385;
+  vertical-align: 1px;
+}
+
+.misconception-evidence {
+  display: block;
+  color: #5a7385;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 760px) {
+  .artifact-compare-grid,
+  .analysis-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .student-search {
+    max-width: none;
+  }
+
+  .student-reports-header .primary-button,
+  .student-reports-header .secondary-button {
+    width: 100%;
+  }
+
+  .student-ai-analysis {
+    padding: 14px;
+  }
+}
+
+
+/* ---------- Library: classes ---------- */
+
+/* Class cards grow when expanded; aligning to the start keeps the other
+   cards in that row at their collapsed height instead of stretching. */
+.library-grid--classes {
+  align-items: start;
+}
+
+.library-class-card {
+  min-height: 0;
+}
+
+.library-lesson-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.library-class-lessons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.library-class-lessons ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.library-class-lesson {
+  border: 1px solid #dfe7ee;
+  border-radius: 12px;
+  background: #f8fbfd;
+}
+
+.library-class-lesson.open {
+  border-color: #bdd7ff;
+  background: #f5faff;
+}
+
+.library-class-lesson .library-lesson-actions {
+  padding: 0 10px 10px;
+}
+
+.library-class-lesson-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 12px;
+  font: inherit;
+  text-align: left;
+  color: #1f2d3d;
+  cursor: pointer;
+}
+
+.library-class-lesson-toggle .library-context-swatch {
+  height: 28px;
+  width: 8px;
+}
+
+.library-class-lesson-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.library-class-lesson-text strong {
+  font-size: 0.9rem;
+  color: #00005c;
+}
+
+.library-class-lesson-text small {
+  font-size: 0.78rem;
+  color: #5a7385;
+}
+
+.library-class-note {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #5a7385;
+}
+
+.library-dialog-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+}
+
+.library-unassigned {
+  margin-top: 32px;
+}
+
+.library-unassigned h3 {
+  margin-bottom: 4px;
+  font-size: 1.15rem;
+}
+
+.library-unassigned > p {
+  margin-bottom: 14px;
+  color: #5a7385;
+  font-size: 0.88rem;
+}
+
+/* ---------- Library: shared form pieces ---------- */
+
+.library-file-button {
+  flex: none;
+  display: inline-flex;
+  font-size: 0.9rem;
+  color: #1f2d3d;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.library-file-button input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.library-file-button:focus-within {
+  outline: 2px solid #2f80ed;
+  outline-offset: 2px;
+}
+
+.library-checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: #1f2d3d;
+}
+
+.library-checkbox input {
+  width: auto;
+}
+
+.library-dialog-actions {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ---------- Class Setup ---------- */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Sections stack in one narrower column so forms and tables don't stretch
+   across very wide screens. */
+.class-setup {
+  margin-top: 16px;
+  max-width: 1040px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.setup-section {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid #dfe7ee;
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(27, 40, 52, 0.04);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.setup-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.setup-section-title {
+  margin: 0;
+  font-size: 1.08rem;
+  color: #1f2d3d;
+}
+
+/* One function inside a card (Add Class, Edit Existing Class, Check &
+   Edit Student Roster). Collapsible ones are set off from what's above by
+   a thin divider. */
+.setup-subsection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.setup-subsection-title {
+  margin: 0;
+  font-size: 0.92rem;
+  color: #355063;
+}
+
+.setup-collapsible {
+  gap: 0;
+  margin-top: 2px;
+  padding-top: 4px;
+  border-top: 1px solid #e6edf3;
+}
+
+.setup-toggle {
+  width: calc(100% + 16px);
+  margin: 0 -8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.setup-toggle:hover {
+  background: #f1f6fc;
+}
+
+.setup-toggle:focus-visible {
+  outline: 2px solid #2f80ed;
+  outline-offset: -2px;
+}
+
+.setup-toggle-title {
+  flex: none;
+}
+
+.setup-toggle-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #5a7385;
+}
+
+.setup-toggle-chevron {
+  flex: none;
+  color: #5a7385;
+}
+
+.setup-subsection-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 0 2px;
+}
+
+.setup-picker-row {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.setup-picker-row .library-class-note {
+  padding-bottom: 10px;
+}
+
+.setup-class-picker {
+  min-width: 240px;
+  max-width: 360px;
+  gap: 4px;
+}
+
+/* In a section header the picker sits on one line: "Class [select]". */
+.setup-section-header .setup-class-picker {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.setup-section-header .setup-class-picker select {
+  padding: 7px 10px;
+}
+
+.setup-class-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.setup-class-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.setup-class-fields label {
+  gap: 4px;
+}
+
+.setup-class-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.setup-class-actions button:disabled,
+.roster-manual-add .secondary-button:disabled,
+.roster-review .primary-button:disabled,
+.setup-continue .primary-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+  box-shadow: none;
+}
+
+.class-mgmt-notice {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #eef8f4;
+  border: 1px solid #bfe3d3;
+  border-radius: 10px;
+  color: #1f5c4a;
+  font-size: 0.86rem;
+}
+
+.class-mgmt-notice .secondary-button,
+.roster-current-header .secondary-button {
+  padding: 6px 12px;
+  font-size: 0.84rem;
+}
+
+/* ---- Continue to Lesson Planning (bottom of the page) ---- */
+
+.setup-continue {
+  border-color: #bdd7ff;
+  background: #f5faff;
+}
+
+.setup-continue-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+
+.setup-continue-text {
+  flex: 1;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.setup-continue-row .setup-class-picker {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.setup-continue-row .setup-class-picker select {
+  padding: 7px 10px;
+}
+
+/* ---- Onboarding ---- */
+
+.onboarding-panel {
+  border-color: #bdd7ff;
+  background: linear-gradient(180deg, #f5faff 0%, rgba(255, 255, 255, 0.9) 100%);
+}
+
+.onboarding-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.onboarding-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.onboarding-header .card-label {
+  margin-bottom: 2px;
+}
+
+.onboarding-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.onboarding-steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid #dfe7ee;
+  border-radius: 999px;
+  background: #fff;
+  color: #5a7385;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.onboarding-steps li.current {
+  border-color: #2f80ed;
+  color: #1a4f8d;
+}
+
+.onboarding-steps li.done {
+  border-color: #bfe3d3;
+  background: #eef8f4;
+  color: #1f5c4a;
+}
+
+.onboarding-step-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #edf3f8;
+  font-size: 0.74rem;
+}
+
+.onboarding-steps li.current .onboarding-step-marker {
+  background: #2f80ed;
+  color: #fff;
+}
+
+.onboarding-steps li.done .onboarding-step-marker {
+  background: #1f7a68;
+  color: #fff;
+}
+
+.onboarding-swatch {
+  background: #2f80ed;
+}
+
+/* ---- Roster upload ---- */
+
+.privacy-notice {
+  padding: 8px 12px;
+  border: 1px solid #c9d8ef;
+  border-left: 4px solid #2f6fed;
+  border-radius: 10px;
+  background: #f5f8ff;
+}
+
+.privacy-notice h4 {
+  margin: 0 0 4px;
+  font-size: 0.92rem;
+  color: #00005c;
+}
+
+.privacy-notice p {
+  margin: 0;
+  font-size: 0.86rem;
+  color: #355063;
+}
+
+.privacy-notice p + p {
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+.roster-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.roster-upload-card {
+  padding: 12px 14px;
+}
+
+.roster-upload-card h4 {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.roster-upload-hint {
+  margin: 2px 0 0;
+  font-size: 0.84rem;
+  color: #5a7385;
+}
+
+.roster-upload-actions {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+
+.roster-upload-actions .secondary-button,
+.roster-choose-file {
+  padding: 8px 14px;
+  font-size: 0.88rem;
+}
+
+.roster-choose-file {
+  color: #fff;
+  font-weight: 600;
+}
+
+.roster-error {
+  margin: 0;
+  color: #a63d32;
+  font-size: 0.85rem;
+}
+
+.roster-warning {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #fff6e5;
+  color: #7a5412;
+  font-size: 0.84rem;
+}
+
+.roster-review {
+  padding: 12px 14px;
+  border: 1px solid #f0d9a8;
+  background: #fffaf0;
+  border-radius: 12px;
+}
+
+.roster-review .roster-warning {
+  margin-top: 10px;
+}
+
+.roster-review .library-dialog-actions {
+  margin-top: 10px;
+}
+
+.roster-section-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.roster-section-header h4 {
+  margin: 0;
+  font-size: 0.96rem;
+}
+
+.roster-section-header p {
+  margin: 0;
+  color: #5a7385;
+  font-size: 0.82rem;
+}
+
+.roster-status {
+  color: #1f7a68;
+  font-weight: 600;
+}
+
+.roster-status.muted {
+  color: #8a9aa8;
+  font-weight: 500;
+}
+
+.roster-status-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.roster-status-stack small {
+  color: #7a5412;
+  font-size: 0.78rem;
+}
+
+.roster-problem {
+  display: block;
+  color: #a63d32;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.roster-inline-fix {
+  padding: 2px 8px;
+  margin-left: 4px;
+  font-size: 0.78rem;
+}
+
+.roster-link-select {
+  gap: 4px;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.roster-link-select select {
+  padding: 6px 8px;
+  font-size: 0.82rem;
+}
+
+/* ---- Roster tables ---- */
+
+/* position: relative makes this the containing block for the tables'
+   visually-hidden labels, so the horizontal scroll clips them too. */
+.class-mgmt-table-wrap {
+  position: relative;
+  overflow-x: auto;
+  border: 1px solid #dfe7ee;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.class-mgmt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+}
+
+.class-mgmt-table th,
+.class-mgmt-table td {
+  padding: 7px 12px;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid #eef2f6;
+}
+
+.class-mgmt-table thead th {
+  background: #f5f8fb;
+  color: #5a7385;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.class-mgmt-table tbody tr:last-child th,
+.class-mgmt-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.class-mgmt-table tbody th {
+  font-weight: 600;
+  color: #1f2d3d;
+}
+
+.class-mgmt-table tbody tr.blocked {
+  background: #fff5f4;
+}
+
+.class-mgmt-table input[type='text'] {
+  padding: 5px 10px;
+}
+
+.class-mgmt-table input[aria-invalid='true'],
+.roster-manual-add input[aria-invalid='true'] {
+  border-color: #e3a49c;
+}
+
+.class-mgmt-row-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.class-mgmt-row-actions button + button {
+  margin-left: 6px;
+}
+
+.class-mgmt-row-actions .secondary-button,
+.class-mgmt-row-actions .primary-button {
+  padding: 4px 10px;
+  font-size: 0.8rem;
+}
+
+.roster-id {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  color: #355063;
+  white-space: nowrap;
+}
+
+.roster-also-in {
+  display: block;
+  font-weight: 500;
+  font-size: 0.76rem;
+  color: #5a7385;
+}
+
+.roster-icon-button {
+  padding: 4px 10px;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.roster-current-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.roster-manual-add {
+  display: grid;
+  grid-template-columns: minmax(0, 420px) auto;
+  align-items: end;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #dfe7ee;
+}
+
+.roster-manual-add label {
+  gap: 4px;
+}
+
+.login-mode-toggle {
+  border: none;
+  background: transparent;
+  color: #1a4f8d;
+  font-weight: 600;
+  padding: 4px;
+}
+
+@media (max-width: 760px) {
+  .setup-class-fields,
+  .roster-manual-add {
+    grid-template-columns: 1fr;
+  }
+
+  .setup-class-picker {
+    min-width: 0;
+    max-width: none;
+    width: 100%;
+  }
+
+  .setup-section-header .setup-class-picker,
+  .setup-continue-row .setup-class-picker {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .setup-continue-row .primary-button {
+    width: 100%;
+  }
+
+  .roster-upload-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .setup-toggle-summary {
+    display: none;
+  }
+}
+
+/* ---------- Mock Login ---------- */
+
+.login-shell {
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #dfe7ee;
+  border-radius: 18px;
+  box-shadow: 0 12px 30px rgba(27, 40, 52, 0.06);
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.login-heading h2 {
+  margin: 0 0 4px;
+  font-size: 1.4rem;
+}
+
+.login-heading p,
+.login-note {
+  margin: 0;
+  color: #5a7385;
+  font-size: 0.9rem;
+}
+
+.login-note {
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.login-submit {
+  width: 100%;
+  font-weight: 600;
+}
+
+/* ---------- My Lesson Library ---------- */
+
+.library-context-banner {
+  margin-top: 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #f5faff;
+  border: 1px solid #bdd7ff;
+  border-radius: 14px;
+}
+
+.library-context-banner p {
+  flex: 1;
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.library-context-banner p span {
+  color: #5a7385;
+}
+
+.library-context-swatch {
+  flex: none;
+  width: 12px;
+  height: 36px;
+  border-radius: 6px;
+}
+
+.planning-class-banner {
+  align-items: center;
+}
+
+.planning-class-banner .secondary-button {
+  flex: none;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+}
+
+.library-page {
+  margin-top: 20px;
+}
+
+.library-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+}
+
+.library-keyword {
+  flex: 1 1 280px;
+  max-width: 460px;
+}
+
+.library-grade {
+  flex: 0 1 200px;
+}
+
+.library-filters .secondary-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+}
+
+.library-count {
+  margin: 14px 0;
+  color: #5a7385;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.library-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+}
+
+@media (max-width: 1280px) {
+  .library-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 960px) {
+  .library-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .library-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.library-grid > li {
+  display: flex;
+}
+
+.library-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 340px;
+  background: #fff;
+  border: 1px solid #dfe7ee;
+  border-radius: 18px;
+  box-shadow: 0 12px 30px rgba(27, 40, 52, 0.05);
+}
+
+.library-card-banner {
+  height: 110px;
+  border-radius: 17px 17px 0 0;
+}
+
+.library-card-body {
+  flex: 1;
+  padding: 16px 18px 8px;
+}
+
+.library-card-body h3 {
+  margin: 0 0 12px;
+  font-size: 1.08rem;
+  line-height: 1.3;
+  color: #00005c;
+}
+
+.library-card-meta {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.86rem;
+}
+
+.library-card-meta div {
+  display: flex;
+  gap: 6px;
+}
+
+.library-card-meta dt {
+  color: #5a7385;
+  font-weight: 600;
+}
+
+.library-card-meta dt::after {
+  content: ':';
+}
+
+.library-card-meta dd {
+  margin: 0;
+}
+
+.library-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 18px 18px;
+  border-top: 1px solid #eef2f6;
+}
+
+.library-action {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid #d8e1ea;
+  border-radius: 10px;
+  background: #fff;
+  color: #1a4f8d;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.library-action:hover:not(:disabled) {
+  background: #e9f2ff;
+  border-color: #bdd7ff;
+}
+
+.library-action:disabled {
+  color: #8a9aa8;
+  background: #f4f6f8;
+  border-style: dashed;
+  cursor: not-allowed;
+}
+
+.library-action small {
+  font-size: 0.74rem;
+  font-weight: 500;
+  color: inherit;
+  opacity: 0.85;
+}
+
+.library-action-menu {
+  position: relative;
+}
+
+.library-assignment-menu {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #d8e1ea;
+  border-radius: 12px;
+  box-shadow: 0 12px 24px rgba(27, 40, 52, 0.12);
+}
+
+.library-assignment-menu button {
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.86rem;
+  color: #1f2d3d;
+  cursor: pointer;
+}
+
+.library-assignment-menu button:hover,
+.library-assignment-menu button:focus-visible {
+  background: #e9f2ff;
+}
+
+.library-empty {
+  padding: 40px 20px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px dashed #bfd2ea;
+  border-radius: 18px;
+}
+
+.library-empty h3 {
+  margin-bottom: 6px;
+}
+
+.library-empty p {
+  color: #5a7385;
+}
+
+@media (max-width: 600px) {
+  .app-main {
+    padding: 16px;
+  }
+
+  .library-keyword,
+  .library-grade {
+    flex-basis: 100%;
+    max-width: none;
+  }
+}
+
+/* ---- Student Feedback Activities (bottom of the lesson) ---- */
+
+.feedback-activities {
+  margin-top: 18px;
+  padding: 16px 18px;
+  border: 1px solid #dfe7ee;
+  border-radius: 16px;
+  background: #fefefe;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.feedback-activities-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.feedback-activities-header h4 {
+  margin: 2px 0 0;
+}
+
+.feedback-confirmed-count {
+  flex: none;
+  background: #fff6e0;
+  color: #7a5412;
+}
+
+.feedback-confirmed-count.all-confirmed {
+  background: #eef6f1;
+  color: #2c6b4f;
+}
+
+.feedback-activities-hint,
+.feedback-link-note {
+  margin: 0;
+  font-size: 0.84rem;
+  color: #5a7385;
+}
+
+.feedback-activity-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.feedback-activity {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e3e9ef;
+  border-left: 4px solid #f3b73a;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.feedback-activity.confirmed {
+  border-left-color: #2fa36b;
+}
+
+.feedback-activity-new {
+  border-left-color: #2f6fed;
+}
+
+.feedback-activity-text p {
+  margin: 0;
+}
+
+.feedback-activity-text p + p {
+  margin-top: 4px;
+  font-size: 0.88rem;
+  color: #355063;
+}
+
+.feedback-activity-name {
+  font-weight: 700;
+  color: #1f2d3d;
+}
+
+.feedback-activity-number {
+  color: #5a7385;
+}
+
+.feedback-activity-status {
+  margin-left: 8px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #9a6a00;
+}
+
+.feedback-activity-status.confirmed {
+  color: #2c6b4f;
+}
+
+.feedback-activity-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.feedback-activity-actions .primary-button,
+.feedback-activity-actions .secondary-button {
+  padding: 6px 12px;
+  font-size: 0.84rem;
+}
+
+.feedback-activity-remove {
+  padding: 2px 6px;
+  border: none;
+  background: transparent;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #8a3b3b;
+  text-decoration: underline;
+}
+
+.feedback-activity-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.feedback-add-button {
+  align-self: flex-start;
+}
+
+.feedback-link {
+  padding-top: 12px;
+  border-top: 1px solid #e3e9ef;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.feedback-link .card-label {
+  margin: 0;
+}
+
+.feedback-link-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.feedback-link-row input {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.84rem;
+}
+
+.feedback-open-link {
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.feedback-link-pending {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px dashed #c9d8ef;
+  border-radius: 10px;
+  background: #f5f8ff;
+  font-size: 0.86rem;
+  color: #355063;
+}
+
+@media (max-width: 720px) {
+  .feedback-activity,
+  .feedback-link-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* Student page: the lesson's confirmed activities, in order. */
+.student-assignment-list {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.student-assignment-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid #dfe7ee;
+  border-radius: 10px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.student-assignment-item.active {
+  border-color: #2f6fed;
+  background: #f5f8ff;
+}
+
+.student-assignment-item span {
+  font-size: 0.86rem;
+  color: #355063;
+}
+
+.student-assignment-step {
+  font-size: 0.74rem !important;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #5a7385 !important;
+}
+
+.student-assignment-note {
+  margin-top: 10px !important;
+  font-size: 0.8rem;
+  color: #5a7385;
+}
+
+/* ---- Student Feedback: model name + AI feedback ratings ---- */
+
+.model-name-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.model-name-field span {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #1f2d3d;
+}
+
+/* Sits right under its AI bubble — the thread gap is pulled in so the
+   buttons read as part of that message. */
+.feedback-rating {
+  align-self: flex-start;
+  display: flex;
+  gap: 4px;
+  margin-top: -8px;
+  padding-left: 4px;
+}
+
+.feedback-rating-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: #8a9aaa;
+  cursor: pointer;
+}
+
+.feedback-rating-button:hover {
+  background: #f2f5f8;
+  color: #4d6478;
+}
+
+.feedback-rating-button:focus-visible {
+  outline: 2px solid #1a4f8d;
+  outline-offset: 1px;
+}
+
+.feedback-rating-button.selected-up {
+  background: #eef6f1;
+  border-color: #b9dcc8;
+  color: #2c6b4f;
+}
+
+.feedback-rating-button.selected-down {
+  background: #fbf0ee;
+  border-color: #ebc5bf;
+  color: #9a4a3f;
+}
+
+/* ---- Class Feedback: Lesson Context + practice-oriented findings ---- */
+
+.lesson-context-grid {
+  margin: 8px 0 0;
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 12px 24px;
+}
+
+@media (max-width: 720px) {
+  .lesson-context-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lesson-context-grid dt {
+  margin: 0 0 4px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #5a7385;
+}
+
+.lesson-context-grid dd {
+  margin: 0;
+  color: #1f2d3d;
+  line-height: 1.5;
+}
+
+.lesson-context-wide {
+  grid-column: 1 / -1;
+}
+
+.lesson-context-objectives {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #42596c;
+}
+
+.practice-objectives-heading {
+  margin: 0 0 10px;
+  color: #1f2d3d;
+}
+
+.finding-practices {
+  margin: 0 0 4px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #5a7385;
+}
+
+.finding-summary,
+.finding-next-step {
+  margin: 0 0 8px;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: #355063;
+}
+
+/* ---- Class Feedback: example questions + facilitation question labels ---- */
+
+.deeper-analysis-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.question-category {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #6f8597;
+  line-height: 1.4;
+}
+
+/* Facilitation questions grouped by category, each group numbered 1–2. */
+.question-group + .question-group {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #e3e9ef;
+}
+
+.question-group .question-category {
+  margin: 0 0 4px;
+}
+
+/* Each category heading takes the matching Class Summary accent color. */
+.facilitation-whole-class-prompts .question-category {
+  color: #2f6fed;
+}
+
+.facilitation-peer-to-peer-discussion .question-category {
+  color: #29867b;
+}
+
+.facilitation-debrief .question-category {
+  color: #97701e;
 }
