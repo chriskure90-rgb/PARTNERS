@@ -19,18 +19,24 @@ type PageId =
   | 'lesson-generator'
   | 'student-feedback'
   | 'class-feedback-dashboard'
+  | 'student-reports'
 
 // The lesson workspace (generated lesson, AI suggestions, revisions, Edit
 // Lesson) lives inside Lesson Planning — there's no separate nav page for it.
 // `title` overrides `label` for the page heading when the two differ. The
 // mock Login page renders full-screen (no header or page heading), but stays
 // in the nav so demos can get back to it.
-const PAGE_CONFIG: readonly { id: PageId; label: string; title?: string }[] = [
-  { id: 'login', label: 'Mock Login' },
+// `inNav: false` pages need a lesson/class context, so they're only reached
+// from other pages, never from the navigation drawer. The drawer lists the
+// rest in this order. Individual Student Reports opened from the drawer
+// starts with no class, lesson, or student selected.
+const PAGE_CONFIG: readonly { id: PageId; label: string; title?: string; inNav?: false }[] = [
+  { id: 'login', label: 'Login' },
   { id: 'class-setup', label: 'Class Setup' },
   { id: 'lesson-generator', label: 'Lesson Planning' },
   { id: 'student-feedback', label: 'Student Feedback' },
   { id: 'class-feedback-dashboard', label: 'Class Feedback' },
+  { id: 'student-reports', label: 'Individual Student Reports' },
   { id: 'library', label: 'Library', title: 'My Lesson Library' },
 ]
 
@@ -90,7 +96,7 @@ type PlanningTab = 'none' | PlanningMethod | 'revision'
 const planningMethods: { id: PlanningMethod; label: string; description: string; icon: string }[] = [
   { id: 'create', label: 'Create a new lesson', description: 'Fill in the lesson form', icon: '✎' },
   { id: 'upload', label: 'Upload an existing lesson', description: 'Get AI-supported review', icon: '⇪' },
-  { id: 'brainstorm', label: 'Brainstorm with AI', description: 'Answer questions to fill the form', icon: '✦' },
+  { id: 'brainstorm', label: 'Brainstorm with AI', description: 'Talk through ideas; AI suggests form content', icon: '✦' },
 ]
 
 // Teacher-facing practice options for the planning Form. Labels and
@@ -138,6 +144,13 @@ function durationMinutes(selection: string, customMinutes: string): number | nul
 // missing file degrades to a broken-image icon instead of failing the
 // build; drop the real file at public/zombie-fires-student-model.png.
 const ZOMBIE_FIRES_STUDENT_MODEL_IMAGE = '/zombie-fires-student-model.png'
+
+// The real hand-drawn COVID Virus example artifacts, one per model — same
+// /public convention. Student Feedback shows them as the starting models
+// (handleArtifactUpload swaps either one out for the student's own photo),
+// and the COVID Virus Class Feedback mock uses them as one student's work.
+const COVID_DESCRIPTIVE_MODEL_EXAMPLE_IMAGE = '/covid-descriptive-model-example.png'
+const COVID_MECHANISTIC_MODEL_EXAMPLE_IMAGE = '/covid-mechanistic-model-example.png'
 
 // Science standards for the Standards field and its suggestions.
 //
@@ -698,7 +711,170 @@ const misconceptionPatterns: PatternRow[] = [
   },
 ]
 
-// A flat lookup across all three sections, keyed by row id, so the
+// COVID Virus — the Period 1 Life Science class's analyzed work for the
+// lesson's one assignment and its two student products, Descriptive and Mechanistic. Mock
+// data: the students are that class's roster, and Bianca S.'s models are
+// the real COVID example artifacts Student Feedback starts from.
+const covidDescriptivePatterns: PatternRow[] = [
+  {
+    id: 'covid-d-virus-structures-labeled',
+    label: 'Labels the virus’s protein, fatty envelope, and genetic material',
+    count: 15,
+    kind: 'objective',
+    students: [
+      {
+        name: 'Bianca S.',
+        artifact: 'Labeled diagram of the coronavirus (protein, fatty envelope, genetic material) and two soap molecules (hydrophilic head, hydrophobic tail).',
+        artifactImage: COVID_DESCRIPTIVE_MODEL_EXAMPLE_IMAGE,
+      },
+      {
+        name: 'Kai D.',
+        artifact: 'Coronavirus drawn as a circle with spikes labeled “protein,” an outer ring labeled “fatty envelope,” and squiggles inside labeled “genetic material.”',
+      },
+    ],
+  },
+  {
+    id: 'covid-d-soap-two-ends',
+    label: 'Draws the soap molecule with a hydrophilic head and a hydrophobic tail',
+    count: 12,
+    kind: 'objective',
+    students: [
+      {
+        name: 'Bianca S.',
+        artifactImage: COVID_DESCRIPTIVE_MODEL_EXAMPLE_IMAGE,
+        artifact: 'Soap molecules with the head labeled “hydrophilic (likes water)” and the tail labeled “hydrophobic (likes fat/oil).”',
+      },
+      {
+        name: 'Nia Y.',
+        artifact: 'Soap molecule drawn as a circle with a zigzag tail; the head is labeled “likes water” and the tail “likes oil.”',
+      },
+    ],
+  },
+  {
+    id: 'covid-d-fat-attraction',
+    label: 'Notes that the soap’s hydrophobic tail and the virus’s fatty envelope are both associated with fat',
+    count: 7,
+    kind: 'objective',
+    students: [
+      {
+        name: 'Owen F.',
+        response: 'The tail of the soap likes fat, and the outside of the virus is fatty, so I drew an arrow between them.',
+        artifact: 'Arrow labeled “both fatty?” from the soap tail to the virus envelope.',
+      },
+      { name: 'Rosa A.', response: 'The fatty envelope and the soap tail are the same kind of thing — they both like fat.' },
+    ],
+  },
+  {
+    id: 'covid-d-envelope-unlabeled',
+    label: 'Draws the virus without labeling the fatty envelope',
+    count: 6,
+    kind: 'objective',
+    students: [
+      { name: 'Eli N.', artifact: 'Coronavirus with spikes labeled “protein” and inner squiggles labeled “genetic material”; the outer layer has no label.' },
+      { name: 'Sam H.', artifact: 'Coronavirus drawn as a spiky ball with only “virus” written beside it.' },
+    ],
+  },
+  {
+    id: 'covid-d-ends-swapped',
+    label: 'Labels the soap molecule’s hydrophilic and hydrophobic ends the wrong way around',
+    count: 4,
+    kind: 'misconception',
+    students: [
+      {
+        name: 'Gabe B.',
+        response: 'The head is hydrophobic because it’s the part that touches the water.',
+        artifact: 'Soap molecule with the round head labeled “hydrophobic” and the tail labeled “hydrophilic.”',
+      },
+      { name: 'Hana I.', response: 'I think hydrophobic means it likes water, so that’s the head.' },
+    ],
+  },
+  {
+    id: 'covid-d-no-relationship',
+    label: 'Draws the virus and the soap separately, without showing how their structures relate',
+    count: 9,
+    kind: 'objective',
+    students: [
+      { name: 'Isaac P.', artifact: 'Virus and soap molecule drawn on opposite sides of the page with no arrows or notes between them.' },
+      { name: 'Quinn T.', response: 'I drew both parts like the directions said, but I didn’t connect them.' },
+    ],
+  },
+]
+
+const covidMechanisticPatterns: PatternRow[] = [
+  {
+    id: 'covid-m-parts-labeled',
+    label: 'Labels which end of each soap molecule faces the oil and which faces the water',
+    count: 8,
+    kind: 'objective',
+    students: [
+      { name: 'Mateo R.', artifact: 'Oil droplet in the middle with soap tails labeled “tail → oil” pointing in and heads labeled “head → water” pointing out.' },
+      { name: 'Willa Y.', response: 'I labeled the heads facing the water and the tails facing the oil, because that’s what each part likes.' },
+    ],
+  },
+  {
+    id: 'covid-m-single-molecule',
+    label: 'Shows only one soap molecule, so many molecules working together isn’t represented',
+    count: 7,
+    kind: 'objective',
+    students: [
+      { name: 'Dana G.', artifact: 'A single soap molecule touching one oil drop, with an arrow labeled “soap cleans.”' },
+      { name: 'Tariq O.', response: 'I only drew one soap because I thought one would be enough to show it.' },
+    ],
+  },
+  {
+    id: 'covid-m-soap-surrounds-oil',
+    label: 'Shows soap molecules surrounding oil with their hydrophilic heads facing the water',
+    count: 10,
+    kind: 'objective',
+    students: [
+      {
+        name: 'Bianca S.',
+        artifact: 'Beaker of water with soap molecules clustered around three oil droplets, heads facing out — labeled “Soap traps the oil.”',
+        artifactImage: COVID_MECHANISTIC_MODEL_EXAMPLE_IMAGE,
+      },
+      { name: 'Mateo R.', artifact: 'Oil droplet surrounded by a ring of soap molecules, tails in and heads out into the water.' },
+    ],
+  },
+  {
+    id: 'covid-m-tail-into-envelope',
+    label: 'Shows the soap’s hydrophobic tail pushing into the virus’s fatty envelope',
+    count: 12,
+    kind: 'objective',
+    students: [
+      {
+        name: 'Bianca S.',
+        response:
+          'In my model I drew the soap’s hydrophobic tail sticking into the virus’s fatty envelope, since both of those are supposed to be attracted to fat.',
+      },
+      { name: 'Jada W.', artifact: 'Virus envelope with several soap tails stuck into it and a crack drawn across the envelope.' },
+    ],
+  },
+  {
+    id: 'covid-m-no-water-role',
+    label: 'Doesn’t show how water and the hydrophilic heads carry the trapped oil or virus away',
+    count: 10,
+    kind: 'objective',
+    students: [
+      {
+        name: 'Bianca S.',
+        response: 'I’m not totally sure yet how the hydrophilic end helps rinse it away with water — I want to add that to my mechanistic model.',
+      },
+      { name: 'Fatima U.', artifact: 'Soap molecules around the virus, but no water or rinsing is shown.' },
+    ],
+  },
+  {
+    id: 'covid-m-soap-kills',
+    label: 'Describes soap as “killing” the virus rather than breaking apart its structure',
+    count: 5,
+    kind: 'misconception',
+    students: [
+      { name: 'Caleb Z.', response: 'The soap kills the virus, so it can’t make you sick anymore.' },
+      { name: 'Lena K.', response: 'Soap is poison to germs, so it kills them.' },
+    ],
+  },
+]
+
+// A flat lookup across all sections and lessons, keyed by row id, so the
 // individual-evidence panel can resolve whichever row the teacher last
 // clicked regardless of which section it came from.
 const allPatternRows: Record<string, PatternRow> = Object.fromEntries(
@@ -706,8 +882,17 @@ const allPatternRows: Record<string, PatternRow> = Object.fromEntries(
     ...learningObjectiveOverlap.flatMap((group) => group.ideas),
     ...scienceInPracticePatterns.flatMap((group) => group.patterns),
     ...misconceptionPatterns,
+    ...covidDescriptivePatterns,
+    ...covidMechanisticPatterns,
   ].map((row) => [row.id, row]),
 )
+
+// The Zombie Fires assignment's patterns: everything analyzed for it.
+const zombieFiresPatternIds: string[] = [
+  ...learningObjectiveOverlap.flatMap((group) => group.ideas),
+  ...scienceInPracticePatterns.flatMap((group) => group.patterns),
+  ...misconceptionPatterns,
+].map((row) => row.id)
 
 // Suggested Facilitation Questions are generated as exactly two per
 // category — whole-class prompts, peer-to-peer discussion, and debrief —
@@ -728,6 +913,7 @@ const facilitationQuestionInstructions = [
   'Base every question on "classAnalysis": prioritize the learning needs in areasForImprovement (largest student counts first), build on strengths in overlap, and keep the lesson’s practice-oriented objectives in view. In basedOn, list the pattern ids each question responds to.',
   'Within a category, the two questions must address different needs or objectives — not two wordings of the same question.',
   'Do not repeat any question in "previousQuestions". Address students directly, and never mention individual students.',
+  'Ask about the work the assignment in "assignment" asked for.',
 ].join('\n')
 
 const facilitationQuestionSchema = {
@@ -760,12 +946,16 @@ type FacilitationQuestionRequest = {
     areasForImprovement: { objective: string; summary: string; nextStep?: string; patterns: { id: string; label: string; studentCount: number }[] }[]
   }
   previousQuestions: string[]
+  // The assignment whose work was analyzed.
+  assignment: { id: string; title: string; prompt: string }
 }
 
 // The demo model's question ideas for the Zombie Fires lesson, each tied to
 // the patterns it responds to. The mock ranks them by the class's learning
 // needs; a real model writes its own from the same request.
-const mockFacilitationQuestionBank: (FacilitationQuestion & { basedOn: string[] })[] = [
+type MockFacilitationQuestion = FacilitationQuestion & { basedOn: string[] }
+
+const zombieFiresQuestionBank: MockFacilitationQuestion[] = [
   {
     category: 'Whole-class prompts',
     text: 'What evidence in your model best supports the claim that the underground fire keeps burning all winter?',
@@ -858,6 +1048,101 @@ const mockFacilitationQuestionBank: (FacilitationQuestion & { basedOn: string[] 
   },
 ]
 
+
+// The COVID Virus assignments' question ideas, the same way.
+const covidDescriptiveQuestionBank: MockFacilitationQuestion[] = [
+  {
+    category: 'Whole-class prompts',
+    text: 'Which structures in your virus drawing have labels, and which still need one?',
+    basedOn: ['covid-d-envelope-unlabeled', 'covid-d-virus-structures-labeled'],
+  },
+  {
+    category: 'Whole-class prompts',
+    text: 'How did you decide which end of the soap molecule is hydrophilic?',
+    basedOn: ['covid-d-ends-swapped', 'covid-d-soap-two-ends'],
+  },
+  {
+    category: 'Whole-class prompts',
+    text: 'Which part of the virus do you think a soap molecule would touch first, and how could your drawing show that?',
+    basedOn: ['covid-d-no-relationship', 'covid-d-fat-attraction'],
+  },
+  {
+    category: 'Peer-to-peer discussion',
+    text: 'Compare your soap molecules: do you agree on which end likes water and which likes fat?',
+    basedOn: ['covid-d-ends-swapped'],
+  },
+  {
+    category: 'Peer-to-peer discussion',
+    text: 'What could you add to your partner’s drawing to show how the virus and the soap are related?',
+    basedOn: ['covid-d-no-relationship'],
+  },
+  {
+    category: 'Peer-to-peer discussion',
+    text: 'Find a label in your partner’s model you would describe differently. What would you change?',
+    basedOn: ['covid-d-virus-structures-labeled'],
+  },
+  {
+    category: 'Debrief',
+    text: 'Which label in your model are you least sure about, and how could you check it?',
+    basedOn: ['covid-d-ends-swapped', 'covid-d-envelope-unlabeled'],
+  },
+  {
+    category: 'Debrief',
+    text: 'What from your descriptive model will you need when you draw how soap works?',
+    basedOn: ['covid-d-fat-attraction', 'covid-d-no-relationship'],
+  },
+]
+
+const covidMechanisticQuestionBank: MockFacilitationQuestion[] = [
+  {
+    category: 'Whole-class prompts',
+    text: 'What happens to the oil after the soap molecules surround it? Where does your model show that?',
+    basedOn: ['covid-m-no-water-role', 'covid-m-soap-surrounds-oil'],
+  },
+  {
+    category: 'Whole-class prompts',
+    text: 'Why might one soap molecule not be enough? How could your model show many working together?',
+    basedOn: ['covid-m-single-molecule'],
+  },
+  {
+    category: 'Whole-class prompts',
+    text: 'Instead of saying soap “kills” the virus, what does your model show happening to the fatty envelope?',
+    basedOn: ['covid-m-soap-kills', 'covid-m-tail-into-envelope'],
+  },
+  {
+    category: 'Peer-to-peer discussion',
+    text: 'In your partner’s model, which end of the soap faces the oil and which faces the water? Do you agree?',
+    basedOn: ['covid-m-parts-labeled', 'covid-m-soap-surrounds-oil'],
+  },
+  {
+    category: 'Peer-to-peer discussion',
+    text: 'How does your model use the hydrophilic head to explain why rinsing with water matters?',
+    basedOn: ['covid-m-no-water-role'],
+  },
+  {
+    category: 'Peer-to-peer discussion',
+    text: 'What would your partner need to add to show the virus’s envelope breaking apart?',
+    basedOn: ['covid-m-tail-into-envelope', 'covid-m-soap-kills'],
+  },
+  {
+    category: 'Debrief',
+    text: 'Which part of your descriptive model helped you most when you drew the mechanism?',
+    basedOn: ['covid-m-parts-labeled'],
+  },
+  {
+    category: 'Debrief',
+    text: 'What is one thing your model still can’t explain about why handwashing works?',
+    basedOn: ['covid-m-no-water-role', 'covid-m-single-molecule'],
+  },
+]
+
+// The demo question ideas for each Class Feedback assignment.
+const mockFacilitationQuestionBanks: Record<string, MockFacilitationQuestion[]> = {
+  'zombie-fires': zombieFiresQuestionBank,
+  'covid-descriptive': covidDescriptiveQuestionBank,
+  'covid-mechanistic': covidMechanisticQuestionBank,
+}
+
 // How strongly a question responds to the class's needs: learning gaps
 // count double, strengths once.
 function facilitationNeedScore(basedOn: readonly string[], analysis: FacilitationQuestionRequest['classAnalysis']): number {
@@ -891,7 +1176,7 @@ function pickFacilitationQuestions(
 
 function mockFacilitationQuestionReply(request: FacilitationQuestionRequest): string {
   return JSON.stringify({
-    questions: pickFacilitationQuestions(mockFacilitationQuestionBank, request.classAnalysis, request.previousQuestions).map(
+    questions: pickFacilitationQuestions(mockFacilitationQuestionBanks[request.assignment.id] ?? [], request.classAnalysis, request.previousQuestions).map(
       ({ category, text, basedOn }) => ({ category, text, basedOn }),
     ),
   })
@@ -904,6 +1189,7 @@ function readFacilitationQuestions(
   raw: string,
   analysis: FacilitationQuestionRequest['classAnalysis'],
   previous: readonly string[],
+  assignmentId: string,
 ): FacilitationQuestion[] {
   let items: unknown[] = []
   try {
@@ -926,7 +1212,7 @@ function readFacilitationQuestions(
     const chosen = valid.filter((item) => item.category === category).slice(0, questionsPerCategory)
     if (chosen.length < questionsPerCategory) {
       const fill = pickFacilitationQuestions(
-        mockFacilitationQuestionBank.filter((question) => question.category === category && !seen.has(question.text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim())),
+        (mockFacilitationQuestionBanks[assignmentId] ?? []).filter((question) => question.category === category && !seen.has(question.text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim())),
         analysis,
         previous,
       )
@@ -940,6 +1226,7 @@ function generateFacilitationQuestions(
   lesson: ClassFeedbackLessonContext,
   summary: ClassSummaryOutput,
   previousQuestions: string[],
+  assignment: ClassFeedbackAssignment,
 ): FacilitationQuestion[] {
   const patternsFor = (ids: readonly string[]) =>
     ids.map((id) => ({ id, label: allPatternRows[id].label, studentCount: allPatternRows[id].count }))
@@ -955,10 +1242,10 @@ function generateFacilitationQuestions(
   }
   const raw = callAiModel(
     'facilitation-questions',
-    { instructions: facilitationQuestionInstructions, responseSchema: facilitationQuestionSchema, lesson, classAnalysis, previousQuestions },
+    { instructions: facilitationQuestionInstructions, responseSchema: facilitationQuestionSchema, lesson, classAnalysis, previousQuestions, assignment: { id: assignment.id, title: assignment.title, prompt: assignment.task.question } },
     (request) => mockFacilitationQuestionReply(request),
   )
-  return readFacilitationQuestions(raw, classAnalysis, previousQuestions)
+  return readFacilitationQuestions(raw, classAnalysis, previousQuestions, assignment.id)
 }
 
 // Example questions shown above the Deeper AI Analysis input.
@@ -1073,15 +1360,6 @@ function mockDeeperAnalysisReply(
   return `Based on the ${pattern.count} responses behind “${pattern.label}” — including ${namesText} — that's a good question for a small-group check-in rather than whole-class discussion, since the pattern isn't shared by everyone.`
 }
 
-// Shown as an AI-authored line in the conversation itself, right after the
-// teacher clicks the comment/"Ask AI" action on one student's evidence card
-// — this is the "indication" that Deeper AI Analysis has narrowed its
-// context to that one student rather than the whole pattern.
-function buildStudentFocusNote(student: StudentEvidence): string {
-  const excerpt = student.response ?? student.artifact ?? 'their submission'
-  const kind = student.response ? 'response' : 'model'
-  return `🔍 Now focusing on ${student.name}'s ${kind}: “${excerpt}” Ask a follow-up and I'll center the answer on this one student.`
-}
 
 // `bold` marks an epistemic-practice term (existing convention). `added`
 // marks text that AI actually inserted or substantially reworded in the AI
@@ -1536,6 +1814,181 @@ const demoLessonDocument: LessonDocument = {
   suggestionSummaries: chatSuggestionSummary,
   revisionSegments: lessonRevisionSegments,
   workflows: stepWorkflow,
+}
+
+// The COVID Virus lesson's saved plan — mock data like the Zombie Fires
+// lesson above, built around the COVID-19 handwashing activity Student
+// Feedback demonstrates (its two prompts and model types). It has no
+// pending AI suggestions.
+const covidLessonSteps: LessonStep[] = [
+  { label: 'Topic', segments: [{ text: 'COVID-19 & Handwashing: Structure and Function' }] },
+  { label: 'Grade Level', segments: [{ text: 'Grades 6–8' }] },
+  { label: 'Lesson Duration', segments: [{ text: '50 minutes (5 + 10 + 15 + 15 + 5 min across 5 activities)' }] },
+  {
+    label: 'Standards',
+    sectionHeading: 'Standards',
+    displayPrefix: '',
+    listStyle: 'bullet',
+    afterSection: 'practices',
+    segments: [{ text: 'MS-PS1-1 (entered by you)' }],
+  },
+  {
+    label: 'Learning Objective 1',
+    sectionHeading: 'Learning Objectives',
+    leadIn: 'By the end of the lesson, students will be able to:',
+    displayPrefix: '1.A',
+    segments: [
+      {
+        text: 'Develop a model of the coronavirus and a soap molecule that identifies their structures: protein, fatty envelope, and genetic material; hydrophilic and hydrophobic portions.',
+      },
+    ],
+  },
+  {
+    label: 'Learning Objective 2',
+    displayPrefix: '1.B',
+    segments: [{ text: 'Use a model to explain how the structure of soap helps it break apart the virus’s fatty envelope and mix oil with water.' }],
+  },
+  {
+    label: 'Engage',
+    sectionHeading: 'Instructional Sequence',
+    duration: 5,
+    segments: [{ text: 'Students share why washing hands with soap might work better than rinsing with water alone; the class records their ideas.' }],
+  },
+  {
+    label: 'Explore',
+    duration: 10,
+    segments: [{ text: 'In pairs, students examine images of the coronavirus and a soap molecule and list the structures they notice in each.' }],
+  },
+  {
+    label: 'Descriptive Model',
+    duration: 15,
+    segments: [
+      { text: 'Students ' },
+      { text: 'develop a descriptive model', bold: true },
+      { text: ': they draw and label the coronavirus (protein, fatty envelope, genetic material) and a soap molecule (hydrophilic and hydrophobic portions), then get AI feedback on their drawing.' },
+    ],
+  },
+  {
+    label: 'Mechanistic Model',
+    duration: 15,
+    segments: [
+      { text: 'Students ' },
+      { text: 'develop a mechanistic model', bold: true },
+      { text: ' showing how soap molecules, oil, and water interact, and ' },
+      { text: 'construct an explanation', bold: true },
+      { text: ' of how the structure of soap helps it break apart the virus’s fatty envelope.' },
+    ],
+  },
+  {
+    label: 'Debrief',
+    duration: 5,
+    segments: [{ text: 'Pairs compare their models and revise one part using what they learned, noting what they changed and why.' }],
+  },
+  {
+    label: 'Materials',
+    sectionHeading: 'Additional Customization',
+    listStyle: 'bullet',
+    segments: [
+      { text: 'Images of the coronavirus and a soap molecule' },
+      { text: 'Dish soap, cooking oil, and water for a short demonstration' },
+      { text: 'Student Feedback links for the Descriptive and Mechanistic models' },
+    ],
+  },
+]
+
+const covidLessonDocument: LessonDocument = {
+  id: 'covid-virus',
+  title: 'COVID Virus: Structure and Function of Soap',
+  steps: covidLessonSteps,
+  practices: ['Develop and Use Models', 'Construct Explanations'],
+  suggestions: {},
+  suggestionSummaries: {},
+  revisionSegments: {},
+  workflows: {},
+}
+
+// A demo lesson's saved Lesson Planning form, so opening the lesson for its
+// class shows the form filled in alongside the saved plan.
+type PlanningFormSeed = {
+  gradeLevel: string
+  topic: string
+  framework: StandardsFrameworkId
+  standards: string[]
+  customStandards: string[]
+  practices: string[]
+  learningObjectives: string
+  instructionalSequence: string
+  pacingSelection: string
+  customPacingMinutes: string
+  priorInstruction: string
+  subsequentInstruction: string
+  differentiation: string
+  materialsAndEquipment: string
+}
+
+// The form text for a saved lesson's objectives and sequence, from its steps.
+const lessonStepText = (steps: readonly LessonStep[], labels: readonly string[]) =>
+  labels.map((label) => steps.find((step) => step.label === label)).filter((step): step is LessonStep => Boolean(step))
+
+function savedObjectivesText(steps: readonly LessonStep[]): string {
+  return steps
+    .filter((step) => step.label.startsWith('Learning Objective'))
+    .map((step) => `${step.displayPrefix ? `${step.displayPrefix} ` : ''}${segmentsToText(step.segments)}`)
+    .join('\n')
+}
+
+function savedSequenceText(steps: readonly LessonStep[], labels: readonly string[]): string {
+  return lessonStepText(steps, labels)
+    .map((step, index) => `${index + 1}. ${step.label}${step.duration ? ` (${step.duration} min)` : ''}: ${segmentsToText(step.segments)}`)
+    .join('\n')
+}
+
+function savedMaterialsText(steps: readonly LessonStep[], labels: readonly string[]): string {
+  return lessonStepText(steps, labels)
+    .flatMap((step) => step.segments.map((segment) => segment.text))
+    .join('\n')
+}
+
+const demoLessonFormSeeds: Record<string, PlanningFormSeed> = {
+  'zombie-fires': {
+    gradeLevel: '9-12',
+    topic: segmentsToText(demoLessonSteps[0].segments),
+    framework: 'NGSS',
+    standards: ['HS-LS2-3', 'HS-LS2-4', 'HS-LS2-5', 'HS-ESS2-6'],
+    customStandards: [],
+    practices: ['modeling', 'explanation'],
+    learningObjectives: savedObjectivesText(demoLessonSteps),
+    instructionalSequence: savedSequenceText(demoLessonSteps, ['Engage', 'Explore', 'Explain', 'Elaborate', 'Evaluate', 'Assessment']),
+    pacingSelection: '60',
+    customPacingMinutes: '',
+    priorInstruction: '',
+    subsequentInstruction: '',
+    differentiation: '',
+    materialsAndEquipment: savedMaterialsText(demoLessonSteps, ['Materials', 'Equipment & Technology']),
+  },
+  'covid-virus': {
+    gradeLevel: '6-8',
+    topic: segmentsToText(covidLessonSteps[0].segments),
+    framework: 'NGSS',
+    standards: [],
+    customStandards: ['MS-PS1-1'],
+    practices: ['modeling', 'explanation'],
+    learningObjectives: savedObjectivesText(covidLessonSteps),
+    instructionalSequence: savedSequenceText(covidLessonSteps, ['Engage', 'Explore', 'Descriptive Model', 'Mechanistic Model', 'Debrief']),
+    pacingSelection: 'custom',
+    customPacingMinutes: '50',
+    priorInstruction: '',
+    subsequentInstruction: '',
+    differentiation: '',
+    materialsAndEquipment: savedMaterialsText(covidLessonSteps, ['Materials']),
+  },
+}
+
+// Each demo class's mock lesson, loaded when the class is chosen in Class
+// Setup (a demonstration shortcut — there's no class-to-lesson picker).
+const demoClassLessonIds: Record<string, string> = {
+  'period-4-earth-science': 'zombie-fires',
+  'period-1-life-science': 'covid-virus',
 }
 
 function LessonRichText({ segments }: { segments: readonly LessonSegment[] }) {
@@ -2226,20 +2679,56 @@ function App() {
   // generated lesson survives navigating to another page and back.
   const [lessonGenerated, setLessonGenerated] = useState(false)
   const [isGeneratingLesson, setIsGeneratingLesson] = useState(false)
+  // The planning option that generated the lesson in the workspace (null
+  // for a lesson opened from the Library). Once set, Lesson Planning grays
+  // out the other options until the teacher starts something new.
+  const [lessonGeneratedWith, setLessonGeneratedWith] = useState<PlanningMethod | null>(null)
+  // Bumped by Start New to give Lesson Planning a fresh form, conversation,
+  // and activity (and when a saved lesson is opened, to load its form).
+  const [planningSessionKey, setPlanningSessionKey] = useState(0)
+  // A demo lesson's saved planning form, loaded with its lesson; null for a
+  // blank form.
+  const [planningFormSeed, setPlanningFormSeed] = useState<PlanningFormSeed | null>(null)
+  // The demo lesson Generate Lesson Plan shows, when a demo class was opened
+  // from Class Setup and its lesson hasn't been generated yet.
+  const [pendingDemoLesson, setPendingDemoLesson] = useState<LibraryLesson | null>(null)
   // The lesson shown in the workspace.
   const [lessonDocument, setLessonDocument] = useState<LessonDocument>(demoLessonDocument)
   // The lesson's Student Feedback Activities, and the Library lesson the
   // workspace lesson is saved as (if any) so they stay with it.
-  const [feedbackActivities, setFeedbackActivities] = useState<FeedbackActivity[]>(() => identifyFeedbackActivities(demoLessonDocument))
+  const [feedbackActivities, setFeedbackActivities] = useState<FeedbackActivity[]>(() => identifyFeedbackActivities(null))
   const [workspaceLessonId, setWorkspaceLessonId] = useState<string | null>(null)
+  // The Student Feedback URL the app opened on, if any (see StudentFeedbackRoute).
+  const [initialStudentRoute] = useState(readStudentFeedbackRoute)
   // The assignment a Student Feedback link opened, if the page came from one.
-  const [studentAssignment, setStudentAssignment] = useState<StudentAssignmentLink | null>(readStudentAssignmentFromHash)
+  const [studentAssignment, setStudentAssignment] = useState<StudentAssignmentLink | null>(initialStudentRoute?.link ?? null)
+  // The class whose students sign in to Student Feedback, when the URL or a
+  // Library card named one.
+  const [studentFeedbackClassId, setStudentFeedbackClassId] = useState<string | null>(initialStudentRoute?.classId ?? null)
+  // A Library lesson's demo assignment open on Student Feedback (the URL's `task`).
+  const [studentFeedbackTask, setStudentFeedbackTask] = useState<{ lessonId: string; taskId: string } | null>(() =>
+    initialStudentRoute?.taskId ? { lessonId: initialStudentRoute.lessonId, taskId: initialStudentRoute.taskId } : null,
+  )
+  // Who is signed in to Student Feedback, by class: their class Student ID.
+  const [studentSignIns, setStudentSignIns] = useState<Record<string, string>>({})
+  // Individual Student Reports: the lesson, class, student, and model type
+  // it shows (kept in the URL), and the page its Back button returns to.
+  const [studentReportsRoute, setStudentReportsRoute] = useState<StudentReportsRoute | null>(readStudentReportsRoute)
+  const [studentReportsReturnTo, setStudentReportsReturnTo] = useState<PageId | null>(null)
+  // The Class Summary finding selected on Class Feedback — kept here so
+  // Back from a student's report lands on the same finding.
+  const [classFeedbackPatternId, setClassFeedbackPatternId] = useState<string | null>(defaultPatternId)
+  // The Class Feedback assignment shown (null: the lesson's first), kept
+  // for the same reason.
+  const [classFeedbackAssignmentId, setClassFeedbackAssignmentId] = useState<string | null>(null)
+  // Class Feedback's Model / Explanation selection, kept with the assignment.
+  const [classFeedbackWorkType, setClassFeedbackWorkType] = useState<WorkType>('model')
   // A different lesson starts with no revisions, conversations, dismissed
   // suggestions, or manual edits carried over from the previous one.
   const showLessonDocument = (
     document: LessonDocument,
     libraryLessonId: string | null,
-    activities: FeedbackActivity[] = identifyFeedbackActivities(document),
+    activities: FeedbackActivity[] = identifyFeedbackActivities(libraryLessonId),
   ) => {
     setFeedbackActivities(activities)
     setWorkspaceLessonId(libraryLessonId)
@@ -2264,7 +2753,9 @@ function App() {
   // the context banner that tells the teacher which demo content they're
   // looking at. Cleared by any navigation that doesn't come from a card.
   const [libraryContext, setLibraryContext] = useState<LibraryContext | null>(null)
-  const [studentFeedbackTab, setStudentFeedbackTab] = useState<ModelTab>('descriptive')
+  const [studentFeedbackTab, setStudentFeedbackTab] = useState<ModelTab>(
+    () => (initialStudentRoute && findDemoAssignment(initialStudentRoute.lessonId, initialStudentRoute.taskId)?.modelTab) || 'descriptive',
+  )
 
   // Library classes (and any created with New Class) plus which cards are
   // expanded live here so they survive navigating to a lesson page and back.
@@ -2276,7 +2767,7 @@ function App() {
   const [classFeedbackLessonId, setClassFeedbackLessonId] = useState<string | null>(null)
   const classFeedbackLesson =
     libraryLessons.find((lesson) => lesson.id === classFeedbackLessonId) ??
-    libraryLessons.find((lesson) => lesson.id === analyzedClassFeedbackLessonIds[0]) ??
+    libraryLessons.find((lesson) => lesson.id === classFeedbackAssignments[0].lessonId) ??
     initialLibraryLessons[0]
 
   // Keep the AI gateway's list of student identifiers in step with the
@@ -2284,6 +2775,18 @@ function App() {
   useEffect(() => {
     syncAiRosterGuard(students)
   }, [students])
+
+  // Mirror each class's active Student IDs for the Student Feedback login in
+  // other tabs (see readStoredLoginRosters). A tab opened from a student link
+  // starts from the seeded classes, so it doesn't overwrite the teacher's
+  // saved rosters until something in it actually changes.
+  const [seededClassesFromLink] = useState(() => (initialStudentRoute !== null ? libraryClasses : null))
+  const lastStoredClasses = useRef<LibraryClass[] | null>(seededClassesFromLink)
+  useEffect(() => {
+    if (lastStoredClasses.current === libraryClasses) return
+    lastStoredClasses.current = libraryClasses
+    storeLoginRosters(libraryClasses)
+  }, [libraryClasses])
 
   const [teacherAccounts, setTeacherAccounts] = useState<Record<string, TeacherAccount>>({
     [DEMO_TEACHER_EMAIL]: { email: DEMO_TEACHER_EMAIL, onboardingComplete: true, state: null, district: '' },
@@ -2332,12 +2835,68 @@ function App() {
   const navigateTo = (page: PageId) => {
     setLibraryContext(null)
     setStudentAssignment(null)
+    setStudentFeedbackClassId(null)
+    setStudentFeedbackTask(null)
     setClassFeedbackLessonId(null)
     setPlanningTarget(null)
     setStartCreatingClass(false)
+    setClassFeedbackPatternId(defaultPatternId)
+    setClassFeedbackAssignmentId(null)
     if (page === 'library' && selectedClassId) expandLibraryClass(selectedClassId)
+    // From the drawer, reports start unselected (and have no page to go back to).
+    if (page === 'student-reports') {
+      setStudentReportsRoute(null)
+      setStudentReportsReturnTo(null)
+    }
     setActivePage(page)
   }
+
+  // Opens Individual Student Reports; Back returns to the page it was
+  // opened from (with that page's context left as it was).
+  const openStudentReports = (route: StudentReportsRoute) => {
+    if (activePage !== 'student-reports') setStudentReportsReturnTo(activePage)
+    setStudentReportsRoute(route)
+    setActivePage('student-reports')
+  }
+
+  // The student's class Student ID, or null if they aren't on the roster.
+  const classStudentIdFor = (classId: string, studentName: string): string | null => {
+    const classroom = libraryClasses.find((item) => item.id === classId)
+    const student = classroom && students.find((item) => classroom.studentIds.includes(item.id) && item.name === studentName)
+    return classroom && student ? (classroom.studentCodes[student.id] ?? null) : null
+  }
+
+  // From Student Evidence on Class Feedback: that student's report for the
+  // same assignment and student work (Model or Explanation), in the class
+  // whose submissions the evidence came from.
+  const handleOpenStudentReport = (lesson: LibraryLesson, studentName: string, assignmentId: string) => {
+    const classId = analyzedSubmissionClassIds[lesson.id] ?? null
+    const assignment = classFeedbackAssignments.find((item) => item.id === assignmentId)
+    openStudentReports({
+      lessonId: lesson.id,
+      classId,
+      studentId: classId ? classStudentIdFor(classId, studentName) : null,
+      modelTab: assignment?.modelTabs[0] ?? 'descriptive',
+      assignmentId,
+      work: classFeedbackWorkType,
+    })
+  }
+
+  // From a Library lesson card: that lesson and class, no student yet.
+  const handleOpenStudentReports = (lesson: LibraryLesson, classroom: LibraryClass | null) => {
+    setLibraryContext(null)
+    const assignment = classFeedbackAssignmentsFor(lesson.id)[0]
+    openStudentReports({
+      lessonId: lesson.id,
+      classId: classroom?.id ?? null,
+      studentId: null,
+      modelTab: assignment?.modelTabs[0] ?? 'descriptive',
+      assignmentId: assignment?.id ?? null,
+      work: 'model',
+    })
+  }
+
+  const handleStudentReportsBack = () => setActivePage(studentReportsReturnTo ?? 'library')
 
   const handleCreateClassFromLibrary = () => {
     navigateTo('class-setup')
@@ -2348,10 +2907,29 @@ function App() {
     if (generateLessonTimeoutRef.current !== null) window.clearTimeout(generateLessonTimeoutRef.current)
     setIsGeneratingLesson(false)
     setLessonGenerated(false)
+    setLessonGeneratedWith(null)
+    setPendingDemoLesson(null)
   }
 
+  // Start New on Lesson Planning: clears the workspace lesson, form,
+  // conversation, and activity, and restores every planning option. A
+  // class the page was opened for stays its class, but the next lesson is
+  // saved as a new one.
+  const handleStartNewPlanning = () => {
+    resetGeneratedLesson()
+    setWorkspaceLessonId(null)
+    setLibraryContext(null)
+    setPlanningTarget((target) => (target ? { classId: target.classId, savedLessonId: null } : null))
+    setPlanningTab('none')
+    setPlanningFormSeed(null)
+    setPlanningSessionKey((key) => key + 1)
+  }
+
+  // Add Lesson always starts a new, blank lesson — never a demo lesson.
   const handleAddLessonToClass = (classroom: LibraryClass) => {
     resetGeneratedLesson()
+    setPlanningFormSeed(null)
+    setPlanningSessionKey((key) => key + 1)
     setLibraryContext(null)
     setSelectedClassId(classroom.id)
     setPlanningTarget({ classId: classroom.id, savedLessonId: null })
@@ -2410,20 +2988,23 @@ function App() {
     setFeedbackActivities(next)
     if (!workspaceLessonId) return
     const link = assignmentLinkFor(lessonLinkId, lessonDocument.title, next)
-    const assignmentId = `${workspaceLessonId}-feedback-activities`
+    const generatedId = `${workspaceLessonId}-feedback-activities`
     setLibraryLessons((prev) =>
-      prev.map((lesson) =>
-        lesson.id === workspaceLessonId
-          ? {
-              ...lesson,
-              lessonPlan: { ...lesson.lessonPlan, feedbackActivities: next },
-              studentFeedback: [
-                ...lesson.studentFeedback.filter((assignment) => assignment.id !== assignmentId),
-                ...(link ? [{ id: assignmentId, title: 'Student Feedback Activities', modelTab: 'descriptive' as const, link }] : []),
-              ],
-            }
-          : lesson,
-      ),
+      prev.map((lesson) => {
+        if (lesson.id !== workspaceLessonId) return lesson
+        // The lesson has one assignment link: the confirmed products update
+        // it in place (a demo lesson's own, e.g. COVID Virus's) rather than
+        // adding a second one. Unconfirming removes only a link made here.
+        const existing = lesson.studentFeedback.find((assignment) => assignment.link)
+        const id = existing?.id ?? generatedId
+        const updated = link ? { id, title: joinLabels(next.map((activity) => activity.name)), modelTab: 'descriptive' as const, link } : null
+        const others = lesson.studentFeedback.filter((assignment) => assignment.id !== id)
+        return {
+          ...lesson,
+          lessonPlan: { ...lesson.lessonPlan, feedbackActivities: next },
+          studentFeedback: updated ? [...others, updated] : id === generatedId ? others : lesson.studentFeedback,
+        }
+      }),
     )
   }
 
@@ -2459,19 +3040,50 @@ function App() {
         [currentTeacherEmail]: { ...currentAccount, onboardingComplete: true },
       }))
     }
-    handleAddLessonToClass(classroom)
+    // A demo class opens its saved mock lesson (demonstration only);
+    // any other class starts a new lesson for it.
+    const demoLesson = libraryLessons.find((lesson) => lesson.id === demoClassLessonIds[classroom.id])
+    if (demoLesson) {
+      setSelectedClassId(classroom.id)
+      openDemoClassLesson(demoLesson, classroom)
+    } else {
+      handleAddLessonToClass(classroom)
+    }
   }
 
   // Only lessons with prototype content behind them reveal the generated
   // lesson workspace; the rest open on the blank planning form so the
   // teacher never sees one lesson's content under another lesson's title.
-  const handleOpenLessonPlan = (lesson: LibraryLesson, classroom: LibraryClass | null) => {
+  // Opens a saved lesson on Lesson Planning: its plan in the workspace and,
+  // for a demo lesson, its saved planning form. Nothing is generated or
+  // saved, so the mock lesson is never overwritten.
+  const openSavedLesson = (lesson: LibraryLesson, classroom: LibraryClass | null, source: 'library' | 'class-setup') => {
     resetGeneratedLesson()
     const document = lesson.lessonPlan.document ?? demoLessonDocument
-    showLessonDocument(document, lesson.id, lesson.lessonPlan.feedbackActivities ?? identifyFeedbackActivities(document))
+    showLessonDocument(document, lesson.id, lesson.lessonPlan.feedbackActivities ?? identifyFeedbackActivities(lesson.id))
     setLessonGenerated(lesson.lessonPlan.hasDemoContent)
+    setPlanningFormSeed(demoLessonFormSeeds[lesson.id] ?? null)
+    setPlanningSessionKey((key) => key + 1)
     setPlanningTarget(null)
-    setLibraryContext({ lesson, className: classroom ? classDisplayName(classroom) : undefined, page: 'lesson-generator' })
+    setLibraryContext({ lesson, className: classroom ? classDisplayName(classroom) : undefined, page: 'lesson-generator', source })
+    setActivePage('lesson-generator')
+  }
+
+  const handleOpenLessonPlan = (lesson: LibraryLesson, classroom: LibraryClass | null) => openSavedLesson(lesson, classroom, 'library')
+
+  // From Class Setup, a demo class's lesson starts with the planning options
+  // collapsed (the form is filled in behind "Create a new lesson") and an
+  // empty workspace; Generate Lesson Plan then shows the saved
+  // mock lesson (see handleGenerateLessonPlan). Nothing is saved.
+  const openDemoClassLesson = (lesson: LibraryLesson, classroom: LibraryClass) => {
+    resetGeneratedLesson()
+    setPendingDemoLesson(lesson)
+    setWorkspaceLessonId(lesson.id)
+    setPlanningFormSeed(demoLessonFormSeeds[lesson.id] ?? null)
+    setPlanningSessionKey((key) => key + 1)
+    setPlanningTarget(null)
+    setPlanningTab('none')
+    setLibraryContext({ lesson, className: classDisplayName(classroom), page: 'lesson-generator', source: 'class-setup' })
     setActivePage('lesson-generator')
   }
 
@@ -2482,6 +3094,8 @@ function App() {
   ) => {
     setStudentFeedbackTab(assignment.modelTab)
     setStudentAssignment(assignment.link ?? null)
+    setStudentFeedbackClassId(classroom?.id ?? null)
+    setStudentFeedbackTask(assignment.link ? null : { lessonId: lesson.id, taskId: assignment.id })
     setLibraryContext({ lesson, className: classroom ? classDisplayName(classroom) : undefined, page: 'student-feedback', assignmentTitle: assignment.title })
     setActivePage('student-feedback')
   }
@@ -2494,12 +3108,31 @@ function App() {
 
   const handleGenerateLessonPlan = (details: PlanningLessonDetails) => {
     if (isGeneratingLesson) return
-    const document = generateLessonDocument(details)
-    showLessonDocument(document, saveLessonForPlanningTarget(details, document))
+    // Generate Lesson is on the form and in Brainstorm with AI.
+    const method: PlanningMethod = planningTab === 'brainstorm' ? 'brainstorm' : 'create'
+    // A demo class's form, still as saved: show its saved mock lesson (with
+    // its AI suggestions). If the teacher changed the form, generate from
+    // what they entered instead — never saved over the mock lesson.
+    const seed = pendingDemoLesson ? demoLessonFormSeeds[pendingDemoLesson.id] : undefined
+    const unchanged =
+      seed &&
+      details.topic.trim() === seed.topic.trim() &&
+      details.gradeLevel === seed.gradeLevel &&
+      details.learningObjectives.trim() === seed.learningObjectives.trim() &&
+      details.instructionalSequence.trim() === seed.instructionalSequence.trim()
+    if (pendingDemoLesson && unchanged) {
+      const saved = pendingDemoLesson.lessonPlan.document ?? demoLessonDocument
+      showLessonDocument(saved, pendingDemoLesson.id, pendingDemoLesson.lessonPlan.feedbackActivities ?? identifyFeedbackActivities(pendingDemoLesson.id))
+    } else {
+      const document = generateLessonDocument(details)
+      showLessonDocument(document, saveLessonForPlanningTarget(details, document))
+    }
+    setPendingDemoLesson(null)
     setLessonSource('ai-generated')
     setIsGeneratingLesson(true)
     generateLessonTimeoutRef.current = window.setTimeout(() => {
       setLessonGenerated(true)
+      setLessonGeneratedWith(method)
       setIsGeneratingLesson(false)
     }, 900)
   }
@@ -2515,6 +3148,7 @@ function App() {
     setIsGeneratingLesson(true)
     generateLessonTimeoutRef.current = window.setTimeout(() => {
       setLessonGenerated(true)
+      setLessonGeneratedWith('upload')
       setIsGeneratingLesson(false)
     }, 900)
   }
@@ -2523,6 +3157,9 @@ function App() {
     editor: revisionEditor,
     lesson: lessonDocument,
     lessonLinkId,
+    linkClasses: myClasses
+      .filter((classroom) => classroom.lessonIds.includes(lessonLinkId))
+      .map((classroom) => ({ id: classroom.id, label: classDisplayName(classroom) })),
     feedbackActivities,
     onFeedbackActivitiesChange: updateFeedbackActivities,
     setPlanningTab,
@@ -2539,22 +3176,57 @@ function App() {
     setEditBaseline,
   }
 
+  // The class an activity planned on Lesson Planning belongs to: the class
+  // Lesson Planning was opened for, else the classes holding the Library
+  // lesson open in the workspace. Never a default or selected class — with
+  // neither, the activity has no class and no link.
+  const activityLinkClasses: LinkClass[] = (
+    planningTargetClass
+      ? [planningTargetClass]
+      : workspaceLessonId
+        ? myClasses.filter((classroom) => classroom.lessonIds.includes(workspaceLessonId))
+        : []
+  ).map((classroom) => ({ id: classroom.id, label: classDisplayName(classroom) }))
+
   const planningPanelProps = {
     planningTab,
     setPlanningTab,
     revisionEditor,
     // A teacher's own state framework comes first; NGSS otherwise.
     defaultFramework: (currentAccount.state ?? 'NGSS') as StandardsFrameworkId,
+    formSeed: planningFormSeed,
+    // A saved demo lesson opened as-is (from the Library), not generated here.
+    savedLessonOpen: planningFormSeed !== null && lessonGenerated && lessonGeneratedWith === null,
+    classGradeLevel: activityLinkClasses.length === 1 ? (myClasses.find((classroom) => classroom.id === activityLinkClasses[0].id)?.gradeLevel ?? null) : null,
   }
 
+  // Student Feedback's URL names the lesson's assignment and the class (see
+  // StudentFeedbackRoute), so it can be reloaded or shared as is.
   useEffect(() => {
-    window.location.hash = activePage === 'student-feedback' && studentAssignment ? studentAssignmentHash(studentAssignment) : activePage
-  }, [activePage, studentAssignment])
+    let hash: string = activePage
+    if (activePage === 'student-feedback') {
+      const classId = studentAssignment?.classId ?? studentFeedbackClassId
+      if (studentAssignment) {
+        hash = studentFeedbackHash({ lessonId: studentAssignment.lessonId, classId, taskId: null, link: studentAssignment })
+      } else if (studentFeedbackTask) {
+        hash = studentFeedbackHash({ lessonId: studentFeedbackTask.lessonId, classId, taskId: studentFeedbackTask.taskId, link: null })
+      }
+    }
+    if (activePage === 'student-reports' && studentReportsRoute) hash = studentReportsHash(studentReportsRoute)
+    window.location.hash = hash
+  }, [activePage, studentAssignment, studentFeedbackClassId, studentFeedbackTask, studentReportsRoute])
 
   useEffect(() => {
     // Follows a link opened in this tab — a Student Feedback link included.
     const handleHashChange = () => {
-      setStudentAssignment(readStudentAssignmentFromHash())
+      const route = readStudentFeedbackRoute()
+      const demoAssignment = route ? findDemoAssignment(route.lessonId, route.taskId) : null
+      setStudentAssignment(route?.link ?? null)
+      setStudentFeedbackClassId(route?.classId ?? null)
+      setStudentFeedbackTask(route?.taskId ? { lessonId: route.lessonId, taskId: route.taskId } : null)
+      if (demoAssignment) setStudentFeedbackTab(demoAssignment.modelTab)
+      const reportsRoute = readStudentReportsRoute()
+      if (reportsRoute) setStudentReportsRoute(reportsRoute)
       setActivePage(getInitialPage())
     }
     window.addEventListener('hashchange', handleHashChange)
@@ -2574,6 +3246,13 @@ function App() {
     () => PAGE_CONFIG.find((page) => page.id === activePage) ?? PAGE_CONFIG[0],
     [activePage],
   )
+
+  // The class whose students may sign in to Student Feedback: a link names
+  // its class; a Library card passes the class it was opened under; the main
+  // nav's demo page uses its demo class.
+  const studentLoginClassId = studentAssignment
+    ? (studentAssignment.classId ?? studentFeedbackClassId)
+    : (studentFeedbackClassId ?? demoStudentFeedbackClassId)
 
   if (activePage === 'login') return <LoginPage onLogin={handleLogin} />
 
@@ -2644,6 +3323,7 @@ function App() {
               onOpenLessonPlan: handleOpenLessonPlan,
               onOpenStudentFeedback: handleOpenStudentFeedback,
               onOpenClassFeedback: handleOpenClassFeedback,
+              onOpenStudentReports: handleOpenStudentReports,
             }}
             onAddLesson={handleAddLessonToClass}
           />
@@ -2668,22 +3348,79 @@ function App() {
 
         {activePage === 'lesson-generator' && (
           <LessonPlanningPage
+            key={planningSessionKey}
+            lessonGeneratedWith={lessonGeneratedWith}
+            onStartNew={handleStartNewPlanning}
             onGenerateLessonPlan={handleGenerateLessonPlan}
             onUploadLesson={planningTargetClass ? handleUploadLesson : undefined}
             lessonGenerated={lessonGenerated}
             isGeneratingLesson={isGeneratingLesson}
             canvasProps={canvasProps}
             planningPanelProps={planningPanelProps}
+            activityClasses={activityLinkClasses}
           />
         )}
         {activePage === 'student-feedback' && (
-          <StudentFeedbackPage
-            key={`${studentFeedbackTab}:${studentAssignment ? studentAssignmentHash(studentAssignment) : ''}`}
-            initialModelTab={studentFeedbackTab}
-            assignment={studentAssignment}
+          <StudentLoginGate
+            key={studentLoginClassId ?? 'no-class'}
+            classId={studentLoginClassId}
+            lessonTitle={
+              studentAssignment?.lessonTitle ??
+              libraryLessons.find((lesson) => lesson.id === studentFeedbackTask?.lessonId)?.title ??
+              null
+            }
+            classes={libraryClasses}
+            signIns={studentSignIns}
+            onSignIn={(classId, studentId) => setStudentSignIns((prev) => ({ ...prev, [classId]: studentId }))}
+            onSignOut={(classId) =>
+              setStudentSignIns((prev) => {
+                const next = { ...prev }
+                delete next[classId]
+                return next
+              })
+            }
+          >
+            {/* Keyed by lesson and assignment, so another lesson never keeps
+                this one's conversation or work. */}
+            <StudentFeedbackPage
+              key={`${studentAssignment?.lessonId ?? studentFeedbackTask?.lessonId ?? ''}:${studentFeedbackTask?.taskId ?? ''}:${studentFeedbackTab}:${
+                studentAssignment ? studentAssignmentHash(studentAssignment) : ''
+              }`}
+              lessonId={studentAssignment?.lessonId ?? studentFeedbackTask?.lessonId ?? null}
+              lessonTitle={
+                studentAssignment?.lessonTitle ?? libraryLessons.find((lesson) => lesson.id === studentFeedbackTask?.lessonId)?.title ?? null
+              }
+              initialModelTab={studentFeedbackTab}
+              assignment={studentAssignment}
+            />
+          </StudentLoginGate>
+        )}
+        {activePage === 'class-feedback-dashboard' && (
+          <FeedbackDashboardPage
+            key={classFeedbackLesson.id}
+            lesson={classFeedbackLesson}
+            assignmentId={classFeedbackAssignmentId}
+            onAssignmentChange={setClassFeedbackAssignmentId}
+            workType={classFeedbackWorkType}
+            onWorkTypeChange={setClassFeedbackWorkType}
+            selectedPatternId={classFeedbackPatternId}
+            onSelectPattern={setClassFeedbackPatternId}
+            onOpenStudentReport={(studentName, assignmentId) => handleOpenStudentReport(classFeedbackLesson, studentName, assignmentId)}
           />
         )}
-        {activePage === 'class-feedback-dashboard' && <FeedbackDashboardPage key={classFeedbackLesson.id} lesson={classFeedbackLesson} />}
+        {activePage === 'student-reports' && (
+          <StudentReportsPage
+            route={studentReportsRoute}
+            lesson={studentReportsRoute ? (libraryLessons.find((lesson) => lesson.id === studentReportsRoute.lessonId) ?? null) : null}
+            classroom={studentReportsRoute?.classId ? (libraryClasses.find((classroom) => classroom.id === studentReportsRoute.classId) ?? null) : null}
+            students={students}
+            classes={myClasses}
+            lessons={libraryLessons}
+            onRouteChange={setStudentReportsRoute}
+            backLabel={PAGE_CONFIG.find((page) => page.id === (studentReportsReturnTo ?? 'library'))?.label ?? 'Library'}
+            onBack={studentReportsReturnTo ? handleStudentReportsBack : null}
+          />
+        )}
       </main>
 
       {navOpen && (
@@ -2710,7 +3447,7 @@ function App() {
             </div>
 
             <nav className="page-nav" aria-label="Prototype pages">
-              {PAGE_CONFIG.map((page) => (
+              {PAGE_CONFIG.filter((page) => page.inNav !== false).map((page) => (
                 <button
                   key={page.id}
                   type="button"
@@ -2735,20 +3472,26 @@ function App() {
 type ChatMessage = { role: 'ai' | 'teacher'; text: string }
 
 // ---------------------------------------------------------------------------
-// Brainstorm with AI — a guided conversation that fills in the lesson form
+// Brainstorm with AI — an open conversation that feeds the lesson form
 //
-// The assistant walks through the same fields as "Create a new lesson", one
-// question at a time, skipping anything the teacher already filled in:
-// first the seven required fields (no skipping), then — if the teacher
-// wants to customize — the optional Additional Customization fields (any of
-// which can be skipped). Each answer is interpreted locally and written
-// straight into the form, so the form and the conversation always agree;
-// the assistant's wording comes from the (mock) model through callAiModel
-// like every other AI reply.
+// The teacher talks through their lesson idea in any order, and the
+// assistant responds as a planning partner — feedback, critique, and
+// instructional guidance — instead of walking through the form question by
+// question. When something the teacher says fits a lesson form field (the
+// seven required fields or the optional Additional Customization fields),
+// it's picked up as a *suggestion*: shown for review, editable, and written
+// to the form only when the teacher applies it. Applying never silently
+// overwrites the form — it fills an empty field or adds to what's there, and
+// replacing is always an explicit choice. The Lesson Planning Notes summary
+// shows each field as in the form (✓), suggested (✦), or not added yet, as
+// the bridge between brainstorming and Generate Lesson — for information
+// only; brainstorming never requires any field. Picking up fields is done
+// locally; the assistant's wording comes from the (mock) model through
+// callAiModel like every other AI reply.
 // ---------------------------------------------------------------------------
 
 type BrainstormField =
-  // Required (no skipping)
+  // Required
   | 'gradeLevel'
   | 'topic'
   | 'standards'
@@ -2756,7 +3499,7 @@ type BrainstormField =
   | 'learningObjectives'
   | 'instructionalSequence'
   | 'pacing'
-  // Optional (can be skipped)
+  // Optional (Additional Customization)
   | 'priorInstruction'
   | 'subsequentInstruction'
   | 'differentiation'
@@ -2764,11 +3507,7 @@ type BrainstormField =
   | 'lessonTemplate'
   | 'rubric'
 
-// Where the conversation is: asking about a field, offering the optional
-// customization questions, or finished.
-type BrainstormStage = BrainstormField | 'customize-offer' | 'done'
-
-// A read-only view of the lesson form, for deciding what to ask next.
+// A read-only view of the lesson form.
 type LessonFormSnapshot = {
   gradeLevel: string
   topic: string
@@ -2790,12 +3529,8 @@ type LessonFormSnapshot = {
   rubricName: string
 }
 
-// A suggested answer under the assistant's question. `openUpload` chips
-// don't send a message — they open that file upload right in the chat.
-type QuickReply = { label: string; value: string; openUpload?: 'lessonTemplate' | 'rubric' }
-
+// Form fields filled with the teacher's own wording.
 type BrainstormTextField =
-  | 'gradeLevel'
   | 'topic'
   | 'learningObjectives'
   | 'instructionalSequence'
@@ -2804,22 +3539,26 @@ type BrainstormTextField =
   | 'differentiation'
   | 'materialsAndEquipment'
 
-type BrainstormAnswer =
-  | { kind: 'fill'; field: BrainstormTextField; value: string; summary: string }
-  | { kind: 'fill'; field: 'standards'; value: { codes: string[]; custom: string[] }; summary: string }
-  | { kind: 'fill'; field: 'practices'; value: string[]; summary: string }
-  | { kind: 'fill'; field: 'pacing'; value: { selection: string; customMinutes: string }; summary: string }
-  // Only optional questions can be skipped.
-  | { kind: 'skip' }
-  | { kind: 'retry'; hint: string }
+// What the assistant picked up from the conversation for one form field.
+// It stays a suggestion — the form doesn't change — until the teacher
+// applies it. For standards and practices, `options` are everything that was
+// suggested and `value` the ones still selected.
+type BrainstormSuggestion =
+  | { field: BrainstormTextField; value: string }
+  | { field: 'gradeLevel'; value: string }
+  | { field: 'standards' | 'practices'; value: string[]; options: string[] }
+  | { field: 'pacing'; value: { selection: string; customMinutes: string } }
+
+type BrainstormSuggestions = Partial<Record<BrainstormField, BrainstormSuggestion>>
 
 type BrainstormStep = {
   field: BrainstormField
   label: string
   shortLabel: string
+  // How the assistant brings the field up when it's still open.
   question: string
   optional?: boolean
-  // Lesson Template / Rubric: answered by attaching a file in the form.
+  // Lesson Template / Rubric: attached as a file, never picked up from chat.
   upload?: boolean
 }
 
@@ -2827,12 +3566,12 @@ type BrainstormStep = {
 const brainstormSteps: BrainstormStep[] = [
   { field: 'gradeLevel', label: 'Grade level', shortLabel: 'Grade level', question: 'Which grade band is this lesson for?' },
   { field: 'topic', label: 'Topic', shortLabel: 'Topic', question: 'What topic or phenomenon will students explore?' },
-  { field: 'standards', label: 'Standards', shortLabel: 'Standards', question: 'Which standard should this lesson address?' },
+  { field: 'standards', label: 'Standards', shortLabel: 'Standards', question: 'Which standards should this lesson address?' },
   {
     field: 'practices',
     label: 'Science Practices to Emphasize',
     shortLabel: 'Practices',
-    question: 'Which science practices should students emphasize? You can name more than one — for example, “models and explanations”.',
+    question: 'Which science practices — modeling, explanation, or argumentation — should students emphasize?',
   },
   {
     field: 'learningObjectives',
@@ -2844,10 +3583,9 @@ const brainstormSteps: BrainstormStep[] = [
     field: 'instructionalSequence',
     label: 'Instructional sequence',
     shortLabel: 'Sequence',
-    question:
-      'What sequence of activities do you have in mind? For example: launch with a phenomenon, investigate, then make sense of the evidence.',
+    question: 'What sequence of activities do you have in mind?',
   },
-  { field: 'pacing', label: 'Pacing / Duration', shortLabel: 'Pacing', question: 'How long is the lesson — 45, 60, or 90 minutes, or another length?' },
+  { field: 'pacing', label: 'Pacing / Duration', shortLabel: 'Pacing', question: 'How long is the lesson?' },
   {
     field: 'priorInstruction',
     label: 'Prior Instruction',
@@ -2873,15 +3611,14 @@ const brainstormSteps: BrainstormStep[] = [
     field: 'materialsAndEquipment',
     label: 'Materials & equipment',
     shortLabel: 'Materials',
-    question: 'What materials, equipment, or technology will you use? Mention any lab or safety needs.',
+    question: 'What materials, equipment, or technology will you use?',
     optional: true,
   },
   {
     field: 'lessonTemplate',
     label: 'Lesson Template',
     shortLabel: 'Template',
-    question:
-      'Do you have an existing lesson template you’d like the lesson to follow? Choose “Upload File” to attach it.',
+    question: 'Do you have an existing lesson template you’d like the lesson to follow?',
     optional: true,
     upload: true,
   },
@@ -2889,17 +3626,14 @@ const brainstormSteps: BrainstormStep[] = [
     field: 'rubric',
     label: 'Rubric',
     shortLabel: 'Rubric',
-    question: 'Do you have a rubric for evaluating students’ products? Choose “Upload File” to attach it.',
+    question: 'Do you have a rubric for evaluating students’ products?',
     optional: true,
     upload: true,
   },
 ]
 
 const brainstormStepFor = (field: BrainstormField) => brainstormSteps.find((step) => step.field === field)!
-const isBrainstormField = (stage: BrainstormStage | null): stage is BrainstormField =>
-  stage !== null && stage !== 'customize-offer' && stage !== 'done'
 const requiredBrainstormSteps = brainstormSteps.filter((step) => !step.optional)
-const optionalBrainstormSteps = brainstormSteps.filter((step) => step.optional)
 
 function isBrainstormFieldFilled(field: BrainstormField, form: LessonFormSnapshot): boolean {
   switch (field) {
@@ -2920,50 +3654,28 @@ function isBrainstormFieldFilled(field: BrainstormField, form: LessonFormSnapsho
   }
 }
 
-// Standards are scoped to the grade band, so without one there's nothing to
-// suggest and the step is passed over.
-function isBrainstormFieldAskable(field: BrainstormField, form: LessonFormSnapshot): boolean {
-  return field !== 'standards' || Boolean(gradeLevelToStandardsBand[form.gradeLevel])
-}
+const gradeBandLabel = (gradeLevel: string) =>
+  gradeLevel === '6-8' ? 'Grades 6–8' : gradeLevel === '9-12' ? 'Grades 9–12' : gradeLevel
 
-// What to ask next, in form order: the first empty required field (these
-// can't be skipped, and a field cleared in the form is asked again); then
-// the offer to customize; then — if the teacher said yes — each empty
-// optional field they haven't skipped.
-function nextBrainstormStage(
-  form: LessonFormSnapshot,
-  customize: 'yes' | 'no' | null,
-  skipped: readonly BrainstormField[],
-): BrainstormStage {
-  const required = requiredBrainstormSteps.find(
-    (step) => !isBrainstormFieldFilled(step.field, form) && isBrainstormFieldAskable(step.field, form),
-  )
-  if (required) return required.field
-  if (customize === null) return 'customize-offer'
-  if (customize === 'yes') {
-    const optional = optionalBrainstormSteps.find((step) => !isBrainstormFieldFilled(step.field, form) && !skipped.includes(step.field))
-    if (optional) return optional.field
-  }
-  return 'done'
-}
+const pacingLabel = (selection: string, customMinutes: string) =>
+  selection === 'custom'
+    ? `${customMinutes.trim()} minutes`
+    : (pacingOptions.find((option) => option.id === selection)?.label ?? '')
 
-// The teacher's current answer for a field, written out in full — used to
-// prefill the input when they edit an earlier answer.
+const practiceLabels = (ids: readonly string[]) =>
+  practiceOptions.filter((practice) => ids.includes(practice.id)).map((practice) => practice.label)
+
+// A form field's current value, written out in full.
 function brainstormAnswerText(field: BrainstormField, form: LessonFormSnapshot): string {
   switch (field) {
     case 'gradeLevel':
-      return form.gradeLevel === '6-8' ? 'Grades 6–8' : form.gradeLevel === '9-12' ? 'Grades 9–12' : form.gradeLevel
+      return gradeBandLabel(form.gradeLevel)
     case 'standards':
       return [...form.standards, ...form.customStandards].join(', ')
     case 'pacing':
-      return form.pacingSelection === 'custom'
-        ? `${form.customPacingMinutes.trim()} minutes`
-        : (pacingOptions.find((option) => option.id === form.pacingSelection)?.label ?? '')
+      return pacingLabel(form.pacingSelection, form.customPacingMinutes)
     case 'practices':
-      return practiceOptions
-        .filter((practice) => form.practices.includes(practice.id))
-        .map((practice) => practice.label)
-        .join(', ')
+      return practiceLabels(form.practices).join(', ')
     case 'lessonTemplate':
       return form.lessonTemplateName
     case 'rubric':
@@ -2973,93 +3685,81 @@ function brainstormAnswerText(field: BrainstormField, form: LessonFormSnapshot):
   }
 }
 
-// The form as the assistant should see it while a field's answer is being
-// replaced: that field's current value no longer counts (so, e.g., standard
-// suggestions include the ones about to be replaced).
-function withoutBrainstormField(form: LessonFormSnapshot, field: BrainstormField): LessonFormSnapshot {
-  switch (field) {
-    case 'standards':
-      return { ...form, standards: [], customStandards: [] }
-    case 'practices':
-      return { ...form, practices: [] }
-    case 'pacing':
-      return { ...form, pacingSelection: '', customPacingMinutes: '' }
-    case 'lessonTemplate':
-      return { ...form, lessonTemplateName: '' }
-    case 'rubric':
-      return { ...form, rubricName: '' }
-    default:
-      return { ...form, [field]: '' }
-  }
-}
-
-function suggestedStandardsFor(form: LessonFormSnapshot): ScienceStandard[] {
-  return suggestStandards(form.framework, form.gradeLevel, form.topic, form.standards, 6)
-}
-
-const hasOptionalFieldsLeft = (form: LessonFormSnapshot) =>
-  optionalBrainstormSteps.some((step) => !isBrainstormFieldFilled(step.field, form))
-
-// Suggested answers shown under the assistant's latest question.
-function brainstormQuickReplies(stage: BrainstormStage | null, form: LessonFormSnapshot): QuickReply[] {
-  const skip = { label: 'Skip', value: 'skip' }
-  switch (stage) {
+// A suggestion written out in full, the way it would read in the form.
+function suggestionText(suggestion: BrainstormSuggestion): string {
+  switch (suggestion.field) {
     case 'gradeLevel':
-      return [
-        { label: 'Grades 6–8', value: '6-8' },
-        { label: 'Grades 9–12', value: '9-12' },
-      ]
+      return gradeBandLabel(suggestion.value)
     case 'standards':
-      return suggestedStandardsFor(form).map((standard) => ({ label: standard.code, value: standard.code }))
-    case 'pacing':
-      return pacingOptions.filter((option) => option.id !== 'custom').map((option) => ({ label: option.label, value: option.label }))
+      return suggestion.value.join(', ')
     case 'practices':
-      return [
-        ...practiceOptions.map((practice) => ({ label: practice.label, value: practice.label })),
-        { label: 'All three practices', value: 'all three' },
-      ]
-    case 'customize-offer':
-      return [
-        { label: 'Yes, customize', value: 'Yes, customize' },
-        { label: 'No, continue', value: 'No, continue' },
-      ]
-    case 'lessonTemplate':
-    case 'rubric': {
-      return [
-        { label: 'Upload File', value: '', openUpload: stage },
-        { label: 'I’ve attached it', value: 'I’ve attached it' },
-        skip,
-      ]
-    }
-    case 'priorInstruction':
-    case 'subsequentInstruction':
-    case 'differentiation':
-    case 'materialsAndEquipment':
-      return [skip]
-    case 'done':
-      return hasOptionalFieldsLeft(form) ? [{ label: 'Customize lesson', value: 'Customize lesson' }] : []
+      return practiceLabels(suggestion.value).join(', ')
+    case 'pacing':
+      return pacingLabel(suggestion.value.selection, suggestion.value.customMinutes)
     default:
-      return []
+      return suggestion.value
   }
+}
+
+const normalizeForCompare = (text: string) => text.toLowerCase().replace(/\s+/g, ' ').trim()
+
+// Whether the form already says what the suggestion says (e.g. the teacher
+// typed it in themselves), so there's nothing left to review.
+function isSuggestionInForm(suggestion: BrainstormSuggestion, form: LessonFormSnapshot): boolean {
+  switch (suggestion.field) {
+    case 'gradeLevel':
+      return form.gradeLevel === suggestion.value
+    case 'standards':
+      return suggestion.options.every((code) => form.standards.includes(code))
+    case 'practices':
+      return suggestion.options.every((id) => form.practices.includes(id))
+    case 'pacing':
+      return (
+        durationMinutes(form.pacingSelection, form.customPacingMinutes) ===
+        durationMinutes(suggestion.value.selection, suggestion.value.customMinutes)
+      )
+    default:
+      return normalizeForCompare(form[suggestion.field]).includes(normalizeForCompare(suggestion.value))
+  }
+}
+
+// A later message adds to an earlier suggestion for the same field rather
+// than discarding it; a grade band or duration is simply the newest one.
+function mergeSuggestion(previous: BrainstormSuggestion | undefined, next: BrainstormSuggestion): BrainstormSuggestion {
+  if (!previous || previous.field !== next.field) return next
+  if (
+    (previous.field === 'standards' || previous.field === 'practices') &&
+    (next.field === 'standards' || next.field === 'practices')
+  ) {
+    const union = (a: readonly string[], b: readonly string[]) => [...a, ...b.filter((item) => !a.includes(item))]
+    return { field: next.field, value: union(previous.value, next.value), options: union(previous.options, next.options) }
+  }
+  if (previous.field === 'gradeLevel' || previous.field === 'pacing' || next.field === 'gradeLevel' || next.field === 'pacing') {
+    return next
+  }
+  const earlier = previous.value as string
+  const later = next.value as string
+  return normalizeForCompare(earlier).includes(normalizeForCompare(later))
+    ? previous
+    : { field: next.field as BrainstormTextField, value: `${earlier} ${later}` }
+}
+
+const shortenSummaryText = (text: string) => {
+  const clean = text.trim().replace(/\s+/g, ' ')
+  return clean.length > 24 ? `${clean.slice(0, 22)}…` : clean
 }
 
 type FormSummaryItem = { field: BrainstormField; label: string; value: string | null; optional: boolean }
 
-// One bubble in the Form Completion Summary: completion comes from the
-// form's actual values (the same check that decides what to ask), so it
-// reflects manual edits and never counts an answer that was only suggested.
+// One bubble in Brainstorm's Lesson Planning Notes: whether a field is
+// added comes from the form's actual values, so it reflects manual edits and applied
+// suggestions, and never counts a suggestion that hasn't been applied.
 function formCompletionSummary(form: LessonFormSnapshot): FormSummaryItem[] {
-  const shorten = (text: string) => {
-    const clean = text.trim().replace(/\s+/g, ' ')
-    return clean.length > 24 ? `${clean.slice(0, 22)}…` : clean
-  }
   const valueFor = (field: BrainstormField): string => {
     switch (field) {
-      case 'gradeLevel':
-        return form.gradeLevel === '6-8' ? 'Grades 6–8' : form.gradeLevel === '9-12' ? 'Grades 9–12' : form.gradeLevel
       case 'standards': {
         const all = [...form.standards, ...form.customStandards]
-        return all.length > 1 ? `${shorten(all[0])} +${all.length - 1}` : shorten(all[0])
+        return all.length > 1 ? `${shortenSummaryText(all[0])} +${all.length - 1}` : shortenSummaryText(all[0])
       }
       case 'pacing':
         return form.pacingSelection === 'custom'
@@ -3067,14 +3767,10 @@ function formCompletionSummary(form: LessonFormSnapshot): FormSummaryItem[] {
           : (pacingOptions.find((option) => option.id === form.pacingSelection)?.label ?? form.pacingSelection)
       case 'practices':
         return form.practices.length === 1
-          ? (practiceOptions.find((practice) => practice.id === form.practices[0])?.label ?? '1 selected')
+          ? (practiceLabels(form.practices)[0] ?? '1 selected')
           : `${form.practices.length} selected`
-      case 'lessonTemplate':
-        return shorten(form.lessonTemplateName)
-      case 'rubric':
-        return shorten(form.rubricName)
       default:
-        return shorten(form[field])
+        return shortenSummaryText(brainstormAnswerText(field, form))
     }
   }
   return brainstormSteps.map((step) => ({
@@ -3085,160 +3781,1462 @@ function formCompletionSummary(form: LessonFormSnapshot): FormSummaryItem[] {
   }))
 }
 
-const skipPattern = /^(skip|skip it|skip this|pass|next|later|not now|no thanks|not sure|unsure|idk|i don[’']?t know|n\/?a|none|nothing|no)[.!]?$/i
+// ---- Picking up lesson information from what the teacher says ----
 
-// Turns the teacher's reply into a form value for `field`. (Lesson Template
-// and Rubric are answered by attaching a file, so they're handled by the
-// panel, not here.)
-function interpretBrainstormAnswer(field: BrainstormField, text: string, form: LessonFormSnapshot): BrainstormAnswer {
-  const answer = text.trim()
-  const optional = Boolean(brainstormStepFor(field).optional)
-  if (skipPattern.test(answer)) {
-    // Optional questions can be skipped; required ones need a real answer.
-    return optional
-      ? { kind: 'skip' }
-      : {
-          kind: 'retry',
-          hint: `This question needs an answer before we move on — it fills in ${brainstormStepFor(field).label} on the lesson form. ${brainstormQuestion(field, form)}`,
-        }
+const sentencesOf = (text: string) =>
+  text
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean)
+
+const sequenceMarkerPattern =
+  /\b(first(ly)?|start(ing)? (with|by|off)|begin(ning)? (with|by)|then|after that|afterwards?|finally|launch|wrap up|end (with|by)|followed by)\b/gi
+const countSequenceMarkers = (sentence: string) => sentence.match(sequenceMarkerPattern)?.length ?? 0
+
+// Sentence-level fields, most specific first; a sentence feeds at most one.
+const sentenceFieldPatterns: { field: BrainstormTextField; pattern: RegExp }[] = [
+  {
+    field: 'subsequentInstruction',
+    pattern: /\b(next (lesson|class|week|unit)|after this (lesson|unit)|follow-?up lesson|following lesson|later in the unit)\b/i,
+  },
+  {
+    field: 'priorInstruction',
+    pattern: /\b(already (know|knows|learned|studied|covered|understand)|previous(ly)?|prior (knowledge|lessons?|instruction)|misconceptions?|last (week|lesson|unit))\b/i,
+  },
+  {
+    field: 'differentiation',
+    pattern: /\b(ells?|english (language )?learners|multilingual|ieps?|504|accommodat\w*|differentiat\w*|struggl\w*|advanced (students|learners)|reading levels?|special education|scaffold\w*)\b/i,
+  },
+  {
+    field: 'learningObjectives',
+    pattern: /\b((students|they|kids) (will|should|can|need to)|be able to|by the end|learning (goals?|objectives?)|objectives?|i want (students|them|my students|my class) to)\b/i,
+  },
+  {
+    field: 'materialsAndEquipment',
+    pattern: /\b(materials?|equipment|supplies|lab (equipment|materials|safety)|laptops?|chromebooks?|tablets?|ipads?|kits?|probes?|microscopes?|beakers?|goggles|poster paper|chart paper|simulations?)\b/i,
+  },
+]
+
+const topicPatterns = [
+  /\b(?:topic|phenomenon|unit|lesson|focus) (?:is|will be|is about|is on|focuses on)\s+([^.;!?\n]+)/i,
+  /\b(?:lesson|unit) (?:on|about)\s+([^.;!?\n]+)/i,
+  /\b(?:teach(?:ing)?|cover(?:ing)?|explor(?:e|ing)|investigat(?:e|ing)|study(?:ing)?)\s+(?:about\s+)?([^.;!?\n]+)/i,
+  /\blearn(?:ing)? about\s+([^.;!?\n]+)/i,
+]
+
+// The topic part of a phrase like "teaching 9th grade photosynthesis to my
+// class" → "Photosynthesis" (or "teaching my students about wildfires" →
+// "Wildfires"), or null if it doesn't read like a topic.
+function cleanTopic(raw: string): string | null {
+  const topic = (/\babout\s+(.+)/i.exec(raw)?.[1] ?? raw)
+    // Stops before what the teacher says *about* the topic ("…about volcanoes
+    // more engaging" → "volcanoes").
+    .split(/,|\s+(?:with|for|to|so|because|since|and (?:i|we|they|students)|where|using|in (?:my|our)|this|next|by|more|less|better|engaging|interesting|fun)\b/i)[0]
+    .replace(/\b\d+(st|nd|rd|th)?[\s-]*grade(rs)?\b|\bgrade\s*\d+\b|\b(middle|high)[\s-]school\b/gi, '')
+    .replace(/^\s*(?:the|a|an)\s+/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!topic || topic.split(' ').length > 8) return null
+  if (/^(them|it|this|that|these|those|how|what|why|my|our|students?|kids|class|lessons?|ideas?)\b/i.test(topic)) return null
+  return topic.charAt(0).toUpperCase() + topic.slice(1)
+}
+
+// Every form field the teacher's message gives information for, as
+// suggestions. `pending` (suggestions not yet reviewed) fills in context —
+// e.g. a grade band mentioned earlier — but nothing here touches the form.
+function extractLessonSuggestions(
+  message: string,
+  form: LessonFormSnapshot,
+  pending: BrainstormSuggestions,
+): BrainstormSuggestion[] {
+  const text = message.trim()
+  const lower = text.toLowerCase()
+  const found: BrainstormSuggestion[] = []
+
+  let gradeLevel: string | null = null
+  if (/\b(6|7|8)(th)?[\s-]*grade|grades?\s*(6|7|8)\b|middle[\s-]school/.test(lower)) gradeLevel = '6-8'
+  else if (/\b(9|10|11|12)(th)?[\s-]*grade|grades?\s*(9|10|11|12)\b|high[\s-]school|freshm[ae]n|sophomores?/.test(lower)) gradeLevel = '9-12'
+  if (gradeLevel) found.push({ field: 'gradeLevel', value: gradeLevel })
+
+  const minutes = /\b(\d{2,3})[\s-]*(?:min(?:ute)?s?)\b/.exec(lower)?.[1]
+  if (minutes && Number(minutes) > 0) {
+    const preset = pacingOptions.find((option) => option.id === minutes)
+    found.push({
+      field: 'pacing',
+      value: preset ? { selection: preset.id, customMinutes: '' } : { selection: 'custom', customMinutes: minutes },
+    })
   }
-  const lower = answer.toLowerCase()
 
-  switch (field) {
-    case 'gradeLevel': {
-      if (/\b(6|7|8)(th)?\b|middle/.test(lower)) return { kind: 'fill', field, value: '6-8', summary: 'Grades 6–8' }
-      if (/\b(9|10|11|12)(th)?\b|high/.test(lower)) return { kind: 'fill', field, value: '9-12', summary: 'Grades 9–12' }
-      return { kind: 'retry', hint: 'I can plan for Grades 6–8 or Grades 9–12 — which one fits?' }
+  const practicePatterns: Record<string, RegExp> = {
+    modeling: /\bmodel(s|ing|ling)?\b/,
+    explanation: /\b(construct(ing)? explanations?|explanations?|(students?|they) (will |should |can )?explain)\b/,
+    argumentation: /\b(argu(e|ing|ment|mentation)|claims? (and|with|from) evidence|evidence-based)\b/,
+  }
+  const practices = practiceOptions.filter((practice) => practicePatterns[practice.id]?.test(lower)).map((practice) => practice.id)
+  if (practices.length > 0) found.push({ field: 'practices', value: practices, options: practices })
+
+  let topic: string | null = null
+  for (const pattern of topicPatterns) {
+    const match = pattern.exec(text)
+    topic = match ? cleanTopic(match[1]) : null
+    if (topic) break
+  }
+  if (topic) found.push({ field: 'topic', value: topic })
+
+  const codes = (text.match(/\b(?:MS|HS)-[A-Z]{2,4}\d-\d\b/gi) ?? [])
+    .map((code) => code.toUpperCase())
+    .filter((code, index, all) => all.indexOf(code) === index && scienceStandardsBank.some((standard) => standard.code === code))
+  if (codes.length > 0) {
+    found.push({ field: 'standards', value: codes, options: codes })
+  } else if ((topic || gradeLevel) && form.standards.length + form.customStandards.length === 0 && !pending.standards) {
+    // With a topic and a grade band known (from this message, an earlier
+    // suggestion, or the form), suggest the closest verified standards.
+    const pendingText = (field: BrainstormField) => {
+      const suggestion = pending[field]
+      return suggestion && typeof suggestion.value === 'string' ? suggestion.value : ''
     }
-    case 'standards': {
-      const available = standardsFor(form.framework, form.gradeLevel)
-      // No verified data for this framework yet: keep the teacher's own
-      // wording as a custom standard rather than guessing a match.
-      if (available.length === 0) {
-        return { kind: 'fill', field, value: { codes: [], custom: [answer] }, summary: `${answer} (custom)` }
-      }
-      const codes = (answer.match(/\b(?:MS|HS)-[A-Z]{2,4}\d-\d\b/gi) ?? []).map((code) => code.toUpperCase())
-      // Keep the teacher's order (and drop repeats or codes outside this grade band).
-      let picked = codes.filter((code, index) => codes.indexOf(code) === index && available.some((standard) => standard.code === code))
-      if (picked.length === 0 && codes.length === 0) {
-        const match =
-          suggestStandards(form.framework, form.gradeLevel, answer, form.standards, 1)[0] ??
-          available.find((standard) => matchesStandardsQuery(standard, answer))
-        if (match) picked = [match.code]
-      }
-      if (picked.length === 0) {
-        return {
-          kind: 'retry',
-          hint: 'I couldn’t find that standard for this grade band. Pick a suggestion, describe the concept, or add it as a custom standard in the form.',
-        }
-      }
-      return { kind: 'fill', field, value: { codes: picked, custom: [] }, summary: picked.join(', ') }
+    const band = gradeLevel ?? (pendingText('gradeLevel') || form.gradeLevel)
+    const subject = topic ?? (pendingText('topic') || form.topic)
+    const suggested = band && subject ? suggestStandards(form.framework, band, subject, [], 2).map((standard) => standard.code) : []
+    if (suggested.length > 0) found.push({ field: 'standards', value: suggested, options: suggested })
+  }
+
+  const sentences = sentencesOf(text)
+  const sequenceSentenceCount = sentences.filter((sentence) => countSequenceMarkers(sentence) > 0).length
+  const bySentence = new Map<BrainstormTextField, string[]>()
+  for (const sentence of sentences) {
+    const markers = countSequenceMarkers(sentence)
+    const specific = sentenceFieldPatterns.slice(0, 3).find((item) => item.pattern.test(sentence))
+    const field: BrainstormTextField | undefined =
+      specific?.field ??
+      (markers >= 2 || (markers > 0 && sequenceSentenceCount >= 2)
+        ? 'instructionalSequence'
+        : sentenceFieldPatterns.slice(3).find((item) => item.pattern.test(sentence))?.field)
+    // A bare question to the assistant isn't lesson content.
+    if (!field || (sentence.endsWith('?') && field !== 'instructionalSequence')) continue
+    bySentence.set(field, [...(bySentence.get(field) ?? []), sentence])
+  }
+  for (const [field, parts] of bySentence) found.push({ field, value: parts.join(' ') })
+
+  return found.filter((suggestion) => {
+    if (isSuggestionInForm(suggestion, form)) return false
+    const existing = pending[suggestion.field]
+    return !existing || suggestionText(existing) !== suggestionText(suggestion)
+  })
+}
+
+// ---- The assistant's reply ----
+
+// What the teacher chose to plan when they opened Brainstorm with AI. It's
+// sent with every request, so it shapes the assistant's guidance, not just
+// its greeting.
+type BrainstormFocus = 'lesson' | 'practice'
+
+const brainstormFocusOptions: { id: BrainstormFocus; label: string; description: string; icon: string }[] = [
+  {
+    id: 'lesson',
+    label: 'Whole Lesson',
+    description: 'Brainstorm a lesson plan.',
+    icon: '✎',
+  },
+  {
+    id: 'practice',
+    label: 'Science Practice Activity',
+    description: 'Design a practice-focused activity.',
+    icon: '⚗',
+  },
+]
+
+type BrainstormReplyRequest =
+  // `activityContext`: the grade and topic already known (from the class or
+  // the conversation) when a science practice activity starts.
+  | { kind: 'start'; focus: BrainstormFocus; keptExistingAnswers: boolean; activityContext?: ActivityContext }
+  // The teacher changed focus partway through; the conversation carries on.
+  | { kind: 'switch'; focus: BrainstormFocus; lesson: BrainstormLessonView; activityContext?: ActivityContext }
+  | {
+      kind: 'reply'
+      focus: BrainstormFocus
+      message: string
+      // Form fields this message gave suggestions for.
+      noticedFields: BrainstormField[]
+      noticedLabels: string[]
+      lesson: BrainstormLessonView
+      // Required fields that are neither in the form nor suggested, and how
+      // to bring each one up.
+      stillOpen: { field: BrainstormField; question: string }[]
+      // Required fields covered only by suggestions not yet applied.
+      requiredAwaitingReview: number
+      // Science practices the teacher picked with the practice bubbles
+      // (practiceOptions ids) — the activity should integrate all of them.
+      focusPracticeIds: string[]
+      // This message is the teacher's Continue from the practice bubbles.
+      fromPracticeSelection: boolean
+      // An activity draft is already in the workspace (practice focus).
+      hasActivityDraft: boolean
+      // The grade and topic known so far (practice focus), and which of
+      // them this message gave or changed.
+      activityContext: ActivityContext
+      contextUpdate: { grade: boolean; topic: boolean }
     }
-    case 'pacing': {
-      // 45, 60, or 90 select that preset; any other positive length is a
-      // custom duration.
-      const minutes = /(\d+(?:\.\d+)?)/.exec(lower)?.[1]
-      if (!minutes || Number(minutes) <= 0) {
-        return { kind: 'retry', hint: 'About how many minutes? Pick 45, 60, or 90, or type another length — for example, “50 minutes”.' }
-      }
-      const preset = pacingOptions.find((option) => option.id === minutes)
-      return preset
-        ? { kind: 'fill', field, value: { selection: preset.id, customMinutes: '' }, summary: preset.label }
-        : { kind: 'fill', field, value: { selection: 'custom', customMinutes: minutes }, summary: `${minutes} min` }
-    }
-    case 'practices': {
-      const keywords: Record<string, string[]> = {
-        modeling: ['model'],
-        explanation: ['explanation', 'explain'],
-        argumentation: ['argument', 'evidence', 'argue'],
-      }
-      const picked = /\ball( three| of (them|these|the practices))?\b/.test(lower)
-        ? practiceOptions
-        : practiceOptions.filter(
-            (practice) => lower.includes(practice.label.toLowerCase()) || keywords[practice.id]?.some((word) => lower.includes(word)),
-          )
-      if (picked.length === 0) {
-        return { kind: 'retry', hint: 'Choose from Develop and Use Models, Construct Explanations, or Engage in Argument from Evidence.' }
-      }
-      return { kind: 'fill', field, value: picked.map((practice) => practice.id), summary: picked.map((practice) => practice.label).join(', ') }
-    }
-    case 'lessonTemplate':
-    case 'rubric':
-      return { kind: 'retry', hint: brainstormQuestion(field, form) }
-    default: {
-      // A short question or filler ("what next?", "ok") isn't an answer to
-      // a free-text field — ask again instead of writing it into the form.
-      const isQuestion = answer.endsWith('?') && answer.split(/\s+/).length <= 4
-      if (isQuestion || /^(ok(ay)?|yes|hmm+|help|thanks?( you)?)[.!]?$/i.test(answer)) {
-        return {
-          kind: 'retry',
-          hint: `I need an answer for ${brainstormStepFor(field).label}${optional ? ' (or say “skip”)' : ''} before we move on. ${brainstormQuestion(field, form)}`,
-        }
-      }
-      return { kind: 'fill', field, value: answer, summary: answer }
-    }
+
+// Science Practice Activity context sent with each brainstorm message.
+type PracticeReplyContext = {
+  focusPracticeIds: readonly string[]
+  fromPracticeSelection: boolean
+  hasActivityDraft: boolean
+  activityContext: ActivityContext
+  contextUpdate: { grade: boolean; topic: boolean }
+}
+
+// The lesson so far, from the form or, where empty there, suggestions.
+type BrainstormLessonView = { topic: string; objectives: string; sequence: string; practices: string; practiceIds: string[] }
+
+function brainstormLessonView(form: LessonFormSnapshot, suggestions: BrainstormSuggestions): BrainstormLessonView {
+  const current = (field: BrainstormField) => {
+    if (isBrainstormFieldFilled(field, form)) return brainstormAnswerText(field, form)
+    const suggestion = suggestions[field]
+    return suggestion ? suggestionText(suggestion) : ''
+  }
+  const suggestedPractices = suggestions.practices
+  return {
+    topic: current('topic'),
+    objectives: current('learningObjectives'),
+    sequence: current('instructionalSequence'),
+    practices: current('practices'),
+    practiceIds:
+      form.practices.length > 0
+        ? [...form.practices]
+        : suggestedPractices?.field === 'practices'
+          ? suggestedPractices.value
+          : [],
   }
 }
 
-function brainstormQuestion(stage: BrainstormStage, form: LessonFormSnapshot): string {
-  if (stage === 'done') {
-    return (
-      'That covers the lesson form. Choose “Create a new lesson” above to review or adjust anything, or generate the lesson now.' +
-      (hasOptionalFieldsLeft(form) ? ' You can choose “Customize lesson” anytime to add optional details.' : '')
+function brainstormReplyRequest(
+  focus: BrainstormFocus,
+  message: string,
+  found: readonly BrainstormSuggestion[],
+  form: LessonFormSnapshot,
+  suggestions: BrainstormSuggestions,
+  practice: PracticeReplyContext,
+): BrainstormReplyRequest {
+  const notInForm = requiredBrainstormSteps.filter((step) => !isBrainstormFieldFilled(step.field, form))
+  return {
+    focusPracticeIds: [...practice.focusPracticeIds],
+    fromPracticeSelection: practice.fromPracticeSelection,
+    hasActivityDraft: practice.hasActivityDraft,
+    activityContext: practice.activityContext,
+    contextUpdate: practice.contextUpdate,
+    kind: 'reply',
+    focus,
+    message,
+    noticedFields: found.map((suggestion) => suggestion.field),
+    noticedLabels: found.map((suggestion) => brainstormStepFor(suggestion.field).label),
+    lesson: brainstormLessonView(form, suggestions),
+    stillOpen: notInForm.filter((step) => !suggestions[step.field]).map((step) => ({ field: step.field, question: step.question })),
+    requiredAwaitingReview: notInForm.filter((step) => suggestions[step.field]).length,
+  }
+}
+
+const joinLabels = (labels: readonly string[]) =>
+  labels.length <= 1 ? (labels[0] ?? '') : `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`
+
+// What the assistant knows about each science practice, for the Science
+// Practice Activity focus: what it means, an activity idea, and what an
+// activity needs for students to really engage in it.
+const practiceCoaching: Record<
+  string,
+  { name: string; mentions: RegExp; explain: string; idea: (topic: string) => string; needs: RegExp; missing: string }
+> = {
+  modeling: {
+    name: 'developing and using models',
+    mentions: /\bmodel(s|ing|ling)?\b/,
+    explain:
+      'Developing and using models means students build a representation of how something works and use it to predict and explain — for example, sketching how sound travels through air, predicting what happens in a vacuum, then revising the sketch after a bell-jar demo.',
+    idea: (topic) =>
+      `For ${topic || 'your topic'}, have students sketch an initial model of what they think is happening, use it to predict a new observation or data set, then revise it with a partner and annotate what changed and why.`,
+    needs: /\b(revis|test|predict|mechanism|cause|evidence)\w*/i,
+    missing:
+      'Right now students build the model but don’t use it — have them use it to predict or explain something new, then revise it when the evidence doesn’t fit.',
+  },
+  explanation: {
+    name: 'constructing explanations',
+    mentions: /\b(explanations?|explain(ing)?|claim[- ]evidence|cer)\b/,
+    explain:
+      'Constructing explanations means students make a claim about why something happens and connect it to evidence with reasoning — for example, “Ice melts faster on metal because metal transfers thermal energy faster, as our temperature data show.”',
+    idea: (topic) =>
+      `For ${topic || 'your topic'}, give students a puzzling observation, have them draft a claim–evidence–reasoning explanation, then trade with a partner who checks whether the reasoning really links the evidence to the claim before they revise.`,
+    needs: /\b(evidence|reason\w*|claim)\b/i,
+    missing:
+      'Consider asking students to connect their claim to specific evidence with reasoning, so the activity produces an explanation rather than a description.',
+  },
+  argumentation: {
+    name: 'engaging in argument from evidence',
+    mentions: /\b(argu(e|ing|ment|mentation)|debate|counter-?argument)\b/,
+    explain:
+      'Engaging in argument from evidence means students defend and critique claims with evidence — for example, two groups with different food web models debating which one better fits the population data, then revising.',
+    idea: (topic) =>
+      `For ${topic || 'your topic'}, pose two competing claims, give groups a set of evidence cards, and have them argue for the better-supported claim — then each group responds to one counterargument from another group.`,
+    needs: /\b(critique|counter|compet|disagree|debate|respond|rebut|question each other)\w*/i,
+    missing:
+      'For real argumentation, students need to respond to each other — build in a step where groups critique a competing claim or answer a counterargument.',
+  },
+}
+
+// The bubbles under the Science Practice Activity welcome message. Teachers
+// can pick any number before Continue, or skip them and just type.
+const practiceFocusBubbles: { id: string; label: string }[] = [
+  { id: 'modeling', label: 'Developing and Using Models' },
+  { id: 'explanation', label: 'Constructing Explanations' },
+  { id: 'argumentation', label: 'Engaging in Argument from Evidence' },
+]
+
+// One activity idea that weaves two or more practices together, so each
+// practice feeds the next instead of becoming a separate task.
+function integratedPracticeIdea(ids: readonly string[], topic: string): string {
+  const has = (id: string) => ids.includes(id)
+  const subject = topic || 'your topic'
+  const names = joinLabels(ids.map((id) => practiceCoaching[id]?.name).filter(Boolean))
+  const lead = `${names.charAt(0).toUpperCase()}${names.slice(1)} fit well into one activity, with each practice feeding the next.`
+  if (has('modeling') && has('explanation') && has('argumentation')) {
+    return `${lead} For ${subject}, students sketch an initial model of the phenomenon, use it to construct an explanation of why it happens, then argue from evidence with another group about whose explanation the data better supports — and revise their models based on that discussion.`
+  }
+  if (has('modeling') && has('explanation')) {
+    return `${lead} For ${subject}, students develop a model of what’s happening, then use it as the reasoning in an explanation of the phenomenon — revising the model wherever their explanation doesn’t hold up against the evidence.`
+  }
+  if (has('modeling') && has('argumentation')) {
+    return `${lead} For ${subject}, groups build competing models, then argue from evidence about which one better accounts for a new observation — and revise their own model in light of the strongest critique.`
+  }
+  return `${lead} For ${subject}, students draft explanations for a puzzling observation, then pair with a group whose explanation differs and argue from evidence about which is better supported — revising their own explanation afterward.`
+}
+
+// ---- Teaching context for a practice activity ----
+//
+// A practice activity is designed for the teacher's grade level and topic,
+// which the assistant asks for in the conversation (never through the
+// lesson form). The mock model can only use them through keyword-matched
+// topic notes and grade-band templates — it doesn't understand topics.
+
+type GradeBand = 'K-2' | '3-5' | '6-8' | '9-12'
+type ActivityGrade = { label: string; band: GradeBand }
+// What the teacher has told the assistant so far; each is null until given.
+type ActivityContext = { grade: ActivityGrade | null; topic: string | null; phenomenon: string | null }
+
+const emptyActivityContext: ActivityContext = { grade: null, topic: null, phenomenon: null }
+
+const gradeBandFor = (grade: number): GradeBand => (grade <= 2 ? 'K-2' : grade <= 5 ? '3-5' : grade <= 8 ? '6-8' : '9-12')
+
+const gradeWords: Record<string, number> = {
+  first: 1, second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6, seventh: 7, eighth: 8, ninth: 9, tenth: 10, eleventh: 11, twelfth: 12,
+}
+
+// Matches any grade phrase, so it can be stripped from a message.
+const gradePhrasePattern =
+  /\b(?:(?:1[0-2]|[1-9])(?:st|nd|rd|th)?|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth)[\s-]*grade(?:rs?)?\b|\bgrades?\s*(?:1[0-2]|[1-9])\b|\b(?:middle|high|elementary)[\s-]school(?:ers?)?\b|\bkindergarten(?:ers?)?\b|\b(?:freshm[ae]n|sophomores?|juniors|seniors)\b/gi
+
+// "8th-grade students", "grade 8", "eighth graders", "middle school" → a grade.
+function extractActivityGrade(text: string): ActivityGrade | null {
+  const lower = text.toLowerCase()
+  if (/\bkindergarten/.test(lower)) return { label: 'Kindergarten', band: 'K-2' }
+  const numbered =
+    /\b(1[0-2]|[1-9])(?:st|nd|rd|th)?[\s-]*grade/.exec(lower)?.[1] ??
+    /\bgrades?\s*(1[0-2]|[1-9])\b/.exec(lower)?.[1] ??
+    String(gradeWords[/\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth)[\s-]*grade/.exec(lower)?.[1] ?? ''] ?? '')
+  const grade = Number(numbered) || ({ freshman: 9, freshmen: 9, sophomore: 10, sophomores: 10, juniors: 11, seniors: 12 } as Record<string, number>)[
+    /\b(freshm[ae]n|sophomores?|juniors|seniors)\b/.exec(lower)?.[1] ?? ''
+  ]
+  if (grade) return { label: `Grade ${grade}`, band: gradeBandFor(grade) }
+  if (/\bmiddle[\s-]school/.test(lower)) return { label: 'Middle school (Grades 6–8)', band: '6-8' }
+  if (/\bhigh[\s-]school/.test(lower)) return { label: 'High school (Grades 9–12)', band: '9-12' }
+  if (/\belementary/.test(lower)) return { label: 'Elementary school (Grades 3–5)', band: '3-5' }
+  return null
+}
+
+const titleSmallWords = /^(and|or|of|the|a|an|in|on|to|for|with|at|by|from)$/
+function titleCaseTopic(topic: string): string {
+  return topic
+    .split(' ')
+    .map((word, index) => (index > 0 && titleSmallWords.test(word.toLowerCase()) ? word.toLowerCase() : word.charAt(0).toUpperCase() + word.slice(1)))
+    .join(' ')
+}
+
+// The topic and phenomenon in a message. `answeringContext` is set when the
+// assistant just asked for them, so a bare answer ("8th grade, ecosystems")
+// counts as the topic.
+function extractActivityTopic(message: string, answeringContext: boolean): { topic: string | null; phenomenon: string | null } {
+  const text = message.trim()
+  // A phenomenon is often a question ("the phenomenon is why ice melts…"),
+  // which the lesson topic patterns skip.
+  const phenomenon = /\bphenomenon is\s+([^.;!?\n]+)/i.exec(text)?.[1].trim() ?? null
+  const changed = /\b(?:change|switch)\w* (?:the |our )?(?:topic|unit) to\s+([^.;!?\n]+)/i.exec(text)?.[1]
+  let topic = changed ? cleanTopic(changed) : null
+  if (!topic && !phenomenon) {
+    for (const pattern of topicPatterns) {
+      const match = pattern.exec(text)
+      topic = match ? cleanTopic(match[1]) : null
+      if (topic) break
+    }
+  }
+  if (!topic && !phenomenon && answeringContext && !/\?\s*$/.test(text)) {
+    const about = /\babout\s+([^.;!?\n]+)/i.exec(text)?.[1]
+    const rest = (about ?? text)
+      .replace(gradePhrasePattern, ' ')
+      .replace(
+        /\b(i'?m|i’m|i am|i|we'?re|we’re|we are|we|they'?re|they’re|they|them|are|is|am|be|in|at|of|on|a|an|the|this|that|year|now|currently|right|both|so|yes|ok|okay|teaching|teach|my|our|students?|kids|class(es)?|graders?|level|science|it'?s|it’s|the topic is|topic)\b/gi,
+        ' ',
+      )
+      .replace(/[,.;:!-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    // A topic needs at least one real word, not leftover letters.
+    if (rest && rest.split(' ').length <= 6 && /[a-z]{3,}/i.test(rest)) topic = cleanTopic(rest)
+  }
+  return { topic: topic ? titleCaseTopic(topic) : null, phenomenon }
+}
+
+// Built-in notes for common topics: what students could model, predict,
+// explain, and argue about. Matched by keyword only — a topic outside these
+// gets general wording (see generalTopicNotes).
+type TopicNotes = {
+  // What the notes cover, shown to the teacher.
+  covers: string
+  matches: RegExp
+  phenomenon: string
+  // What students model, and what the model should include.
+  system: string
+  parts: string
+  // Something students use the model to predict.
+  prediction: string
+  // Data or observations students use as evidence.
+  evidence: string
+  // The how/why question students explain.
+  question: string
+  // Competing claims to argue between.
+  claims: [string, string]
+  // What the model is called ("food web model").
+  product: string
+}
+
+const topicNotesBank: TopicNotes[] = [
+  // The two demo lessons (their activity drafts use prewritten templates —
+  // see templateActivityDraft — and the chat matches them).
+  {
+    covers: 'the Zombie Fires demo lesson',
+    matches: /zombie|peat|permafrost|overwinter/,
+    phenomenon: 'zombie fires smolder underground through the Arctic winter and flare up again in spring',
+    system: 'how matter (peat carbon) and energy (fire) flow between the biosphere and atmosphere',
+    parts: 'the peat layer, permafrost, fire, and atmosphere, with arrows for carbon and energy',
+    prediction: 'how carbon release changes as permafrost thaws',
+    evidence: 'CO₂ emissions data from recent Arctic fire seasons',
+    question: 'how zombie fires keep burning under snow and ice',
+    claims: ['warming temperatures drive zombie fires', 'human land use plays the bigger role'],
+    product: 'zombie fire model',
+  },
+  {
+    covers: 'the COVID Virus demo lesson',
+    matches: /covid|coronavirus|sars|\bvirus|soap|hand ?wash/,
+    phenomenon: 'washing hands with soap breaks apart the virus that causes COVID-19',
+    system: 'the virus’s structure and how it enters and replicates in host cells',
+    parts: 'spike proteins, the fatty envelope, genetic material, and a soap molecule’s hydrophilic head and hydrophobic tail',
+    prediction: 'what happens to the virus’s fatty envelope when soap is added',
+    evidence: 'a demonstration of soap breaking up oil in water',
+    question: 'why washing with soap protects against infection',
+    claims: ['handwashing with soap is more effective', 'hand sanitizer is more effective'],
+    product: 'virus model',
+  },
+  {
+    covers: 'the water cycle',
+    matches: /water cycle|groundwater|precipitation|puddle/,
+    phenomenon: 'puddles disappear after a rainstorm, and dew forms on grass overnight',
+    system: 'how water moves between the land, oceans, and atmosphere',
+    parts: 'where water is stored, how it moves, and what energy drives each change',
+    prediction: 'how fast a puddle will disappear on a hot day compared with a cold one',
+    evidence: 'observations of evaporation and condensation in covered and uncovered containers',
+    question: 'where the water in a puddle goes',
+    claims: ['the water soaks into the ground', 'the water evaporates into the air as water vapor'],
+    product: 'water cycle model',
+  },
+  {
+    covers: 'ecosystems, food webs, and energy flow',
+    matches: /ecosystem|food (web|chain)|producer|consumer|decomposer|predator|prey|trophic|biome|habitat|population/,
+    phenomenon: 'after wolves returned to Yellowstone, the elk population dropped and streamside plants grew back',
+    system: 'the food web — how energy moves from the sun to producers, consumers, and decomposers',
+    parts: 'the organisms, arrows showing the direction energy flows, and how much energy reaches each level',
+    prediction: 'what happens to the other populations if one species is removed',
+    evidence: 'population data from before and after a change, such as wolves returning to Yellowstone',
+    question: 'why an ecosystem supports far fewer top predators than producers',
+    claims: [
+      'removing a top predator helps an ecosystem because more prey survive',
+      'removing a top predator harms an ecosystem because prey overconsume the producers',
+    ],
+    product: 'food web model',
+  },
+  {
+    covers: 'photosynthesis and cellular respiration',
+    matches: /photosynth|cellular respiration|chloroplast|glucose|plant growth|plants? (make|grow|get)/,
+    phenomenon: 'a tiny seed grows into a tree weighing tons, while the soil around it barely changes',
+    system: 'how a plant takes in carbon dioxide, water, and light energy and turns them into the sugars it uses to grow',
+    parts: 'the inputs and outputs, where they enter and leave the plant, and where the energy comes from',
+    prediction: 'how a plant’s growth changes with less light or less carbon dioxide',
+    evidence: 'data from a plant-growth or Elodea oxygen-bubble experiment under different light levels',
+    question: 'where a growing tree’s mass comes from',
+    claims: ['most of a tree’s mass comes from the soil', 'most of a tree’s mass comes from carbon dioxide in the air'],
+    product: 'photosynthesis model',
+  },
+  {
+    covers: 'matter, particles, and thermal energy',
+    matches: /states? of matter|phase change|melt|freez|boil|evaporat|condens|thermal|heat|temperature|particle|insulat|conduct/,
+    phenomenon: 'an ice cube melts faster on a metal tray than on a plastic one, even though both are at room temperature',
+    system: 'how particles move and how thermal energy transfers between objects',
+    parts: 'particles drawn at different temperatures and arrows showing which way thermal energy moves',
+    prediction: 'which material will melt an ice cube fastest',
+    evidence: 'temperature and melting-time measurements for different materials',
+    question: 'why some materials feel colder than others at the same temperature',
+    claims: ['metal is colder than plastic', 'metal transfers thermal energy away from your hand faster than plastic'],
+    product: 'particle model',
+  },
+  {
+    covers: 'chemical reactions and conservation of matter',
+    matches: /chemical (reaction|change)|reactant|conservation of (mass|matter)|\batoms?\b|molecule/,
+    phenomenon: 'a sealed bag of baking soda and vinegar puffs up, but its mass stays the same',
+    system: 'how atoms rearrange during a chemical reaction',
+    parts: 'the atoms in the reactants and products, showing that none are created or destroyed',
+    prediction: 'how the mass will compare before and after the reaction in an open versus a closed container',
+    evidence: 'mass measurements before and after a reaction',
+    question: 'why mass seems to disappear in an open container but not a closed one',
+    claims: ['mass is lost when a reaction makes gas', 'mass is conserved, and the gas escapes the open container'],
+    product: 'atom-level model',
+  },
+  {
+    covers: 'forces and motion',
+    matches: /force|motion|newton|friction|gravity|momentum|collision|speed|velocity|accelerat/,
+    phenomenon: 'in a crash-test video, the dummy keeps moving forward when the car suddenly stops',
+    system: 'the forces acting on an object and how they change its motion',
+    parts: 'force arrows (size and direction) on each object before, during, and after an interaction',
+    prediction: 'how the motion changes if the mass or the force changes',
+    evidence: 'distance and time data from cart or ramp trials',
+    question: 'why a moving object keeps moving or changes direction',
+    claims: ['a moving object needs a constant force to keep moving', 'a moving object keeps moving unless a net force acts on it'],
+    product: 'force diagram',
+  },
+  {
+    covers: 'weather, climate, and Earth’s energy balance',
+    matches: /weather|climate|greenhouse|global warming|atmospher|air mass|storm|hurricane/,
+    phenomenon: 'the average temperature where you live has risen over the last 50 years',
+    system: 'how energy from the sun enters and leaves Earth’s atmosphere',
+    parts: 'incoming sunlight, energy radiated back to space, and how greenhouse gases change what escapes',
+    prediction: 'what happens to temperature if greenhouse gas levels keep rising',
+    evidence: 'temperature and carbon dioxide graphs over time',
+    question: 'why Earth’s average temperature is rising',
+    claims: ['rising temperatures are mainly caused by natural cycles', 'rising temperatures are mainly caused by greenhouse gases from human activity'],
+    product: 'energy-balance model',
+  },
+  {
+    covers: 'plate tectonics and Earth’s surface',
+    matches: /plate|tectonic|earthquake|volcano|rock cycle|erosion|landform|mountain|fossil|continent/,
+    phenomenon: 'matching fossils and rock layers are found on continents separated by an ocean',
+    system: 'how Earth’s plates move and shape the surface over time',
+    parts: 'the plates, the direction they move, and what forms at their boundaries',
+    prediction: 'where earthquakes and volcanoes are most likely to happen',
+    evidence: 'maps of earthquake, volcano, and fossil locations',
+    question: 'why earthquakes and volcanoes cluster in certain places',
+    claims: ['the continents have always been where they are now', 'the continents have moved over millions of years'],
+    product: 'plate boundary model',
+  },
+  {
+    covers: 'waves, sound, and light',
+    matches: /wave|sound|light|vibrat|reflect|refract|wavelength|frequenc/,
+    phenomenon: 'a straw looks bent where it enters a glass of water',
+    system: 'how a wave carries energy from a source through a material',
+    parts: 'the source, the material it travels through, and how the wave changes along the way',
+    prediction: 'what happens to the sound or light when the material changes',
+    evidence: 'observations from tuning forks, slinkies, or light passing through different materials',
+    question: 'how energy travels from the source to your ear or eye',
+    claims: ['sound travels by air moving from the source to your ear', 'sound travels as a vibration passed from particle to particle'],
+    product: 'wave model',
+  },
+  {
+    covers: 'heredity and genetics',
+    matches: /gene|heredit|inherit|\bdna\b|trait|allele|mutation|offspring/,
+    phenomenon: 'two brown-eyed parents have a blue-eyed child',
+    system: 'how traits pass from parents to offspring through genes',
+    parts: 'each parent’s alleles, how they combine, and the resulting traits',
+    prediction: 'the chances of offspring having a particular trait',
+    evidence: 'family pedigree data and expected versus observed offspring ratios',
+    question: 'how a child can have a trait neither parent shows',
+    claims: ['offspring are a blend of their parents’ traits', 'offspring get one allele from each parent, and some alleles can stay hidden'],
+    product: 'inheritance model',
+  },
+  {
+    covers: 'natural selection and evolution',
+    matches: /evolution|natural selection|adaptation|species|variation|extinct/,
+    phenomenon: 'peppered moths changed from mostly light to mostly dark during the Industrial Revolution',
+    system: 'how variation and selection change a population over generations',
+    parts: 'variation among individuals, the environmental pressure, who survives and reproduces, and the next generation',
+    prediction: 'how the population would change if the environment changed again',
+    evidence: 'counts of light and dark moths over many years',
+    question: 'why the moth population changed color',
+    claims: ['individual moths changed color to survive', 'darker moths survived and reproduced more, so the population changed'],
+    product: 'natural selection model',
+  },
+  {
+    covers: 'cells and body systems',
+    matches: /\bcells?\b|organelle|body system|digest|circulat|respiratory|immune|heart|lung/,
+    phenomenon: 'your heart rate and breathing both speed up during exercise',
+    system: 'how body systems and cells work together to keep the body running',
+    parts: 'the organs and cells involved and what moves between them',
+    prediction: 'what happens when one part of the system can’t keep up',
+    evidence: 'heart rate and breathing data before and after exercise',
+    question: 'why heart rate and breathing increase together during exercise',
+    claims: ['the heart and lungs work independently', 'the heart and lungs work together to deliver the oxygen cells need for energy'],
+    product: 'body systems model',
+  },
+  {
+    covers: 'the Sun, Earth, and Moon',
+    matches: /\bmoon\b|phases|season|solar system|planet|orbit|eclipse|\bstars?\b/,
+    phenomenon: 'the Moon seems to change shape over the course of a month',
+    system: 'how the Sun, Earth, and Moon are positioned and lit over time',
+    parts: 'the positions of the Sun, Earth, and Moon, and which side of the Moon is lit',
+    prediction: 'what the Moon will look like a week from now',
+    evidence: 'a month of Moon observations or photos',
+    question: 'why the Moon’s shape seems to change',
+    claims: ['Earth’s shadow causes the Moon’s phases', 'the phases depend on how much of the Moon’s lit side we can see'],
+    product: 'Sun–Earth–Moon model',
+  },
+  {
+    covers: 'electricity and circuits',
+    matches: /circuit|electric|current|battery|magnet/,
+    phenomenon: 'a bulb lights in one circuit but not in another built from the same parts',
+    system: 'how electric current flows through a circuit',
+    parts: 'the battery, wires, and bulbs, and the path the current takes',
+    prediction: 'what happens to the brightness when another bulb is added',
+    evidence: 'bulb brightness in different circuit arrangements',
+    question: 'why a bulb lights in some arrangements but not others',
+    claims: ['current gets used up by the first bulb', 'current flows in a complete loop and is the same all the way around a series circuit'],
+    product: 'circuit model',
+  },
+]
+
+// Wording for a topic the bank doesn't cover: built from the teacher's own
+// words, with nothing claimed about the topic itself.
+function generalTopicNotes(topic: string, phenomenon: string | null): TopicNotes {
+  const subject = topic.toLowerCase()
+  return {
+    covers: '',
+    matches: /$^/,
+    phenomenon: phenomenon ?? `an observation or data set about ${subject} that students can’t yet fully explain`,
+    system: `what is happening in ${phenomenon ?? subject} and what causes it`,
+    parts: 'the key parts, how they interact, and what causes the change students observe',
+    prediction: `a new observation about ${subject}`,
+    evidence: `data or observations about ${subject} that you provide`,
+    question: phenomenon ?? `how or why the phenomenon in ${subject} happens`,
+    claims: [`one explanation of ${phenomenon ?? subject} is better supported`, 'a competing explanation is'],
+    product: 'model',
+  }
+}
+
+// How each practice looks at a grade band.
+type GradeBandSupport = {
+  // How students build a model, and what that model is.
+  model: string
+  modelMedium: string
+  // The form an explanation takes, and what it's called as a product.
+  explainWith: string
+  explanationProduct: string
+  // How students argue.
+  argue: string
+  revision: string
+  // Supports to build in.
+  scaffold: string
+  // Shorter forms for chat replies.
+  modelShort: string
+  explainShort: string
+  argueShort: string
+  scaffoldShort: string
+}
+
+const gradeBandSupports: Record<GradeBand, GradeBandSupport> = {
+  'K-2': {
+    model: 'draw and label a picture',
+    modelMedium: 'a labeled drawing',
+    explainWith: 'the sentence frame “I think ___ because I saw ___”',
+    explanationProduct: 'sentence-frame explanation',
+    argue: 'talk as a whole class, using “I agree / I disagree because…”, about',
+    revision: 'add to or change their drawing in a different color',
+    scaffold: 'picture cards, hands-on observation, and sentence frames; keep each part short and do the writing together',
+    modelShort: 'draw and label a picture',
+    explainShort: 'use a sentence frame to explain',
+    argueShort: 'talk as a class about',
+    scaffoldShort: 'picture cards and sentence frames',
+  },
+  '3-5': {
+    model: 'draw a labeled diagram with arrows',
+    modelMedium: 'a labeled diagram with arrows',
+    explainWith: 'a claim and two pieces of evidence, using sentence starters',
+    explanationProduct: 'claim with two pieces of evidence',
+    argue: 'debate with a partner, then share with the class which evidence convinced them, about',
+    revision: 'revise their diagram in a different color and say what changed',
+    scaffold: 'a word bank, sentence starters, and partner talk before writing',
+    modelShort: 'draw a labeled diagram',
+    explainShort: 'write a claim with two pieces of evidence explaining',
+    argueShort: 'debate with a partner about',
+    scaffoldShort: 'a word bank and sentence starters',
+  },
+  '6-8': {
+    model: 'build a diagram with labeled parts and arrows showing interactions',
+    modelMedium: 'a diagram with labeled parts and interaction arrows',
+    explainWith: 'a claim–evidence–reasoning (CER) explanation',
+    explanationProduct: 'CER explanation',
+    argue: 'argue in small groups, using evidence cards, about',
+    revision: 'revise their model and annotate what changed and why',
+    scaffold: 'a CER organizer, evidence cards, and a model checklist (parts, interactions, cause)',
+    modelShort: 'build a labeled diagram with interaction arrows',
+    explainShort: 'write a CER explaining',
+    argueShort: 'argue in small groups about',
+    scaffoldShort: 'a CER organizer and evidence cards',
+  },
+  '9-12': {
+    model: 'build a model of the underlying mechanism, with quantitative relationships where the data allow',
+    modelMedium: 'a mechanistic model',
+    explainWith: 'an explanation that applies scientific principles to the data',
+    explanationProduct: 'written explanation applying scientific principles',
+    argue: 'evaluate competing claims, weighing the strength and limitations of the evidence, about',
+    revision: 'revise their model and justify each change with evidence',
+    scaffold: 'raw data to analyze, a critique protocol, and an expectation that students address the limits of their evidence',
+    modelShort: 'build a mechanistic model',
+    explainShort: 'use scientific principles and data to explain',
+    argueShort: 'evaluate competing claims about',
+    scaffoldShort: 'raw data and a critique protocol',
+  },
+}
+
+// Everything the mock model knows to tailor an activity, once the grade and
+// topic are known.
+type ActivityTeaching = { grade: ActivityGrade; topic: string; notes: TopicNotes; matched: boolean; support: GradeBandSupport }
+
+function activityTeaching(context: ActivityContext): ActivityTeaching | null {
+  if (!context.grade || !context.topic) return null
+  const text = `${context.topic} ${context.phenomenon ?? ''}`.toLowerCase()
+  const matched = topicNotesBank.find((notes) => notes.matches.test(text))
+  const notes = matched
+    ? { ...matched, ...(context.phenomenon ? { phenomenon: context.phenomenon } : {}) }
+    : generalTopicNotes(context.topic, context.phenomenon)
+  return { grade: context.grade, topic: context.topic, notes, matched: Boolean(matched), support: gradeBandSupports[context.grade.band] }
+}
+
+// "Grade 8 students", "middle school students", "kindergartners".
+function gradeAudience(grade: ActivityGrade): string {
+  if (grade.label === 'Kindergarten') return 'kindergartners'
+  return grade.label.startsWith('Grade') ? `${grade.label} students` : `${grade.label.split(' (')[0].toLowerCase()} students`
+}
+
+// One activity idea for the practices, tailored to the grade and topic.
+function contextualActivityIdea(ids: readonly string[], teaching: ActivityTeaching): string {
+  const { grade, topic, notes, support, matched } = teaching
+  const has = (id: string) => ids.includes(id)
+  // Two sentences: the idea, then its anchor phenomenon (or, for a topic
+  // without notes, that the idea is general).
+  // One practice gets its fuller form; combined practices stay brief so each
+  // feeds the next in one sentence.
+  const steps: string[] = []
+  const single = ids.length === 1
+  if (has('modeling')) steps.push(single ? `${support.modelShort} (a ${notes.product}) and use it to predict ${notes.prediction}` : `${support.modelShort} (a ${notes.product})`)
+  if (has('explanation')) steps.push(has('modeling') ? `use it to explain ${notes.question}` : `${support.explainShort} ${notes.question}`)
+  if (has('argumentation')) {
+    steps.push(
+      single
+        ? `${support.argueShort} ${notes.question}`
+        : `${support.argueShort} which ${has('explanation') ? 'explanation' : 'model'} the evidence best supports`,
     )
   }
-  if (stage === 'customize-offer') {
-    return 'All seven required fields are complete. Would you like to provide additional information to customize your lesson?'
-  }
-  if (stage === 'standards') {
-    if (standardsFor(form.framework, form.gradeLevel).length === 0) {
-      return `Which standard should this lesson address? Verified ${standardsFrameworkName(form.framework)} standards aren’t loaded yet, so type the standard you’d like to use and I’ll add it as a custom standard.`
-    }
-    const suggestions = suggestedStandardsFor(form)
-    return suggestions.length > 0
-      ? `Which standards should this lesson address? These ${standardsFrameworkName(form.framework)} standards fit “${form.topic.trim()}” — select one or more, then choose “Confirm Selection”.`
-      : 'Which standard should this lesson address? Describe the concept or type a standard code.'
-  }
-  if (stage === 'learningObjectives' && form.practices.length > 0) {
-    const practices = practiceOptions.filter((practice) => form.practices.includes(practice.id)).map((practice) => practice.label)
-    return `What should students be able to do by the end of the lesson, related to ${practices.join(' and ')}?`
-  }
-  const step = brainstormStepFor(stage)
-  return step.optional ? `${step.question} (Optional — you can skip this.)` : step.question
+  const revised = has('modeling') ? 'model' : has('explanation') ? 'explanation' : 'claim'
+  const audience = gradeAudience(grade)
+  const idea = `${audience.charAt(0).toUpperCase()}${audience.slice(1)} studying ${topic.toLowerCase()} could ${steps.join(', then ')}, and finally revise their ${revised}.`
+  return matched
+    ? `${idea} A phenomenon to anchor it: ${notes.phenomenon.replace(/[.!]$/, '')}.`
+    : `${idea} I don’t have built-in notes on ${topic.toLowerCase()}, so this idea is general.`
 }
 
-// The mock planning model. It only phrases the reply — the form changes are
-// made locally from the teacher's answer before this is called.
-function mockBrainstormReply(request: {
-  outcome: 'start' | 'filled' | 'updated' | 'skipped' | 'retry' | 'after-done'
-  fieldLabel: string
-  summary: string
-  nextQuestion: string
-  keptExistingAnswers: boolean
-}): string {
-  const quoted = request.summary.length > 80 ? `“${request.summary.slice(0, 77)}…”` : `“${request.summary}”`
-  switch (request.outcome) {
-    case 'start':
-      return (
-        'Hi! I’ll help you plan this lesson by filling in the lesson form with you, one question at a time. ' +
-        'Type an answer or pick a suggestion — each required question needs an answer, and you can change any answer later with its Edit button.' +
-        (request.keptExistingAnswers ? ' I’ll keep what you already entered in the form.' : '') +
-        ` ${request.nextQuestion}`
-      )
-    case 'filled':
-      return `Got it — I added ${quoted} to ${request.fieldLabel}. ${request.nextQuestion}`
-    case 'updated':
-      return `Updated ${request.fieldLabel} to ${quoted}. ${request.nextQuestion}`
-    case 'skipped':
-      return `No problem — we’ll leave ${request.fieldLabel} for now. ${request.nextQuestion}`
-    case 'retry':
-    case 'after-done':
-      return request.nextQuestion
+// Which grade and/or topic is still missing, as the question to ask.
+function missingContextQuestion(context: ActivityContext): string | null {
+  if (!context.grade && !context.topic) return 'What grade level and science topic are you teaching?'
+  if (!context.grade) return 'What grade level are you teaching?'
+  if (!context.topic) return 'What science topic are you teaching?'
+  return null
+}
+
+// Simple topic-based cues for which practices could fit — a mock heuristic
+// for the prototype, not a validated pedagogical recommendation. The
+// teacher always makes the choice.
+const practiceFitCues: { id: string; cue: RegExp; reason: (topic: string) => string }[] = [
+  {
+    id: 'modeling',
+    cue: /cycle|system|ecosystem|food (web|chain)|structure|cell|virus|body|organ|energy|matter|atom|molecule|particle|reaction|weather|climate|season|moon|earth|plate|rock|water|wave|sound|light|force|motion|circuit|electric|magnet|fire|heat/,
+    reason: (topic) => `a model helps students show the processes behind ${topic}`,
+  },
+  {
+    id: 'explanation',
+    cue: /why|cause|adapt|trait|inherit|disease|germ|cell|reaction|weather|season|erosion|heat|sound|light|phase|state|change|handwash|soap/,
+    reason: (topic) => `students can explain what causes the patterns they see in ${topic}`,
+  },
+  {
+    id: 'argumentation',
+    cue: /climate|carbon|vaccin|covid|evolution|natural selection|resource|pollution|human impact|invasive|conservation|renewable|fire|ecosystem|biodiversity|health/,
+    reason: (topic) => `students can weigh competing claims about ${topic} with evidence`,
+  },
+]
+
+// Up to two practices whose cues match the topic (models and explanations
+// when nothing matches).
+function suggestedPracticesFor(teaching: ActivityTeaching): string[] {
+  const topic = teaching.topic.toLowerCase()
+  const fits = practiceFitCues.filter((fit) => fit.cue.test(topic)).map((fit) => fit.id)
+  return fits.length > 0 ? fits.slice(0, 2) : ['modeling', 'explanation']
+}
+
+// A topic mid-sentence: lowercase, except acronyms ("COVID Virus" → "COVID virus").
+function topicInSentence(topic: string): string {
+  return topic
+    .split(' ')
+    .map((word) => (/[A-Z].*[A-Z]/.test(word) ? word : word.toLowerCase()))
+    .join(' ')
+}
+
+// Once the grade and topic are known: which practices could fit, and why,
+// then the teacher picks (or proposes another) — nothing is selected for them.
+function practiceSuggestionReply(teaching: ActivityTeaching): string {
+  const ids = suggestedPracticesFor(teaching)
+  const topic = topicInSentence(teaching.topic)
+  const reasons = ids.map((id) => practiceFitCues.find((fit) => fit.id === id)!.reason(topic))
+  return chatReply({
+    say: [
+      `For ${gradeAudience(teaching.grade)} studying ${topic}, ${joinLabels(ids.map((id) => practiceCoaching[id].name))} could fit — ${joinLabels(reasons)}.`,
+      'That’s a quick topic-based starting point, so go with what fits your class.',
+    ],
+    ask: 'Which practices would you like to focus on — select one or more below, or suggest a different one?',
+  })
+}
+
+// A message that only gave the grade/topic (or picked practices) — not yet
+// any discussion of the activity itself.
+function isContextOnlyMessage(text: string, context: ActivityContext): boolean {
+  if (/^i’d like to focus on\b/i.test(text.trim())) return true
+  const lower = text.toLowerCase()
+  // Naming a practice ("let's focus on constructing explanations") is
+  // context too, not an activity idea.
+  const practiceWords =
+    /\b(develop(ing)?|us(e|ing)|models?|model(l)?ing|construct(ing)?|explanations?|explain(ing)?|engag(e|ing)|argu(e|ing|ment|mentation)|from|evidence|practices?|focus(ing)?|science)\b/g
+  const mentionsContext =
+    new RegExp(gradePhrasePattern.source, 'i').test(lower) ||
+    [context.topic, context.phenomenon].some((part) => part && lower.includes(part.toLowerCase())) ||
+    /\b(topic|unit|phenomenon)\b/.test(lower) ||
+    Object.values(practiceCoaching).some((coaching) => coaching.mentions.test(lower))
+  if (!mentionsContext) return false
+  let rest = lower.replace(gradePhrasePattern, ' ').replace(practiceWords, ' ')
+  for (const part of [context.topic, context.phenomenon]) if (part) rest = rest.replace(part.toLowerCase(), ' ')
+  rest = rest.replace(
+    /\b(i'?m|i’m|i am|we'?re|we’re|we are|they'?re|they’re|they are|teaching|teach|my|our|students?|kids|class(es)?|graders?|about|the|a|an|and|on|unit|topic|is|it'?s|it’s|actually|now|in|of|to|switch\w*|change\w*|let'?s|let’s|phenomenon|instead|grade|level)\b/g,
+    ' ',
+  )
+  return rest.split(/[^a-z]+/).filter(Boolean).length < 3
+}
+
+// ---- Science Practice Activity drafts ----
+//
+// Science Practice Activity mode doesn't go through the lesson form: the
+// brainstorm produces an Activity Draft in the right-side workspace, which
+// the teacher confirms, then confirms its student-work collection
+// opportunities before getting a Student Feedback link.
+
+// A point in the activity where students submit work for feedback. All of
+// an activity's opportunities belong to one assignment (one link), in order.
+type CollectionOpportunity = { id: string; name: string; submission: string }
+
+type ActivityDraft = {
+  title: string
+  gradeLabel: string
+  topic: string
+  // practiceOptions ids, in bubble order.
+  practiceIds: string[]
+  description: string
+  // Which mock template wrote it: a demo lesson's prewritten one, or the
+  // generic template filled in with the teacher's topic and practices.
+  template: ActivityTemplateId
+  // The activity's two student product types (what a removed one comes back as).
+  products: CollectionOpportunity[]
+  goal: string
+  sequence: { name: string; text: string }[]
+  // Grade-level supports built into the activity.
+  supports: string
+  // AI-identified; the teacher reviews them before the link is created.
+  collection: CollectionOpportunity[]
+  // What the teacher said in the brainstorm that shaped this draft.
+  incorporated: string[]
+  // Which built-in topic notes shaped the draft, or '' when none matched
+  // and the wording is general.
+  topicNotesUsed: string
+}
+
+// What Generate Activity Draft sends to the AI model: the practices, the
+// teaching context, and the teacher's side of the brainstorm (never the
+// lesson form).
+type ActivityDraftRequest = {
+  practiceIds: string[]
+  context: { grade: ActivityGrade; topic: string; phenomenon: string | null }
+  teacherMessages: string[]
+}
+
+// The student work collected for feedback. For the prototype every lesson
+// and activity collects the same two student products within one
+// assignment — a Model and an Explanation. Initial and revised submissions
+// are versions of these products, never separate items or assignments.
+const studentProducts: readonly CollectionOpportunity[] = [
+  { id: 'model', name: 'Model', submission: 'Students develop a scientific model to represent their understanding of the phenomenon.' },
+  { id: 'explanation', name: 'Explanation', submission: 'Students explain the scientific phenomenon using their models and supporting evidence.' },
+]
+
+// Lessons whose mock data collects other products than the Model and
+// Explanation — still two products in one assignment. Their ids match the
+// lesson's Class Feedback data (ClassFeedbackAssignment.productId).
+const lessonStudentProducts: Record<string, readonly CollectionOpportunity[]> = {
+  'covid-virus': [
+    {
+      id: 'descriptive',
+      name: 'Descriptive',
+      submission: 'Students describe the structure and key components of the COVID-19 virus and its interaction with host cells.',
+    },
+    { id: 'mechanistic', name: 'Mechanistic', submission: 'Students develop a model explaining how the virus enters host cells and replicates.' },
+  ],
+}
+
+function studentProductsFor(lessonId: string | null): readonly CollectionOpportunity[] {
+  return (lessonId && lessonStudentProducts[lessonId]) || studentProducts
+}
+
+function practiceCollectionPoints(): CollectionOpportunity[] {
+  return studentProducts.map((product) => ({ ...product }))
+}
+
+const practiceTitleNames: Record<string, string> = {
+  modeling: 'Modeling',
+  explanation: 'Explaining',
+  argumentation: 'Arguing from Evidence',
+}
+
+const practiceGoalVerbs: Record<string, string> = {
+  modeling: 'develop and use a model',
+  explanation: 'construct an evidence-based explanation',
+  argumentation: 'argue from evidence',
+}
+
+// Is this teacher message an idea for the activity (rather than a question
+// or the practice bubbles' Continue)?
+function isActivityIdea(message: string): boolean {
+  const text = message.trim()
+  return !/\?\s*$/.test(text) && !/^i’d like to focus on\b/i.test(text) && text.split(/\s+/).length >= 6
+}
+
+// The prototype's prewritten activity templates for its two demo lessons,
+// chosen by the teaching topic; any other topic gets the generic template.
+type ActivityTemplateId = 'zombie-fires' | 'covid-virus' | 'generic'
+
+const activityTemplateLabels: Record<Exclude<ActivityTemplateId, 'generic'>, string> = {
+  'zombie-fires': 'Zombie Fires (Earth Science)',
+  'covid-virus': 'COVID Virus (Life Science)',
+}
+
+function activityTemplateFor(topic: string | null, phenomenon: string | null = null): ActivityTemplateId {
+  const text = `${topic ?? ''} ${phenomenon ?? ''}`.toLowerCase()
+  if (/zombie|peat|permafrost|overwinter/.test(text)) return 'zombie-fires'
+  if (/covid|coronavirus|sars|\bvirus|soap|hand ?wash/.test(text)) return 'covid-virus'
+  return 'generic'
+}
+
+// The two student products an activity collects: the COVID demo's
+// Descriptive and Mechanistic, otherwise the Model and Explanation.
+function activityProductsFor(template: ActivityTemplateId): CollectionOpportunity[] {
+  return studentProductsFor(template === 'covid-virus' ? 'covid-virus' : null).map((product) => ({ ...product }))
+}
+
+// A demo lesson's prewritten activity, with the steps for each selected
+// practice. Fixed mock content — it doesn't change with the conversation.
+function templateActivityDraft(
+  template: Exclude<ActivityTemplateId, 'generic'>,
+  practiceIds: readonly string[],
+  grade: ActivityGrade,
+  topic: string,
+  ideas: string[],
+): ActivityDraft {
+  const has = (id: string) => practiceIds.includes(id)
+  const audience = gradeAudience(grade)
+  const Audience = `${audience.charAt(0).toUpperCase()}${audience.slice(1)}`
+  const verbs = joinLabels(practiceIds.map((id) => practiceGoalVerbs[id]).filter(Boolean))
+  const names = joinLabels(practiceIds.map((id) => practiceTitleNames[id]).filter(Boolean))
+  const sequence: ActivityDraft['sequence'] = []
+  let title: string
+  let description: string
+  let goal: string
+  if (template === 'zombie-fires') {
+    title = `Zombie Fires: ${names}`
+    description =
+      'Students investigate “zombie fires” — peat fires that smolder underground through the Arctic winter and flare up again in spring — and figure out how matter (peat carbon) and energy (fire) flow between the biosphere and atmosphere.'
+    goal = `${Audience} ${verbs} to explain how zombie fires keep burning under snow and ice, and why they release so much carbon.`
+    sequence.push({
+      name: 'Launch',
+      text: 'Show satellite images and news footage of zombie fires reigniting in Alaska and Siberia after winter. Students record what they notice and wonder about how a fire survives under snow.',
+    })
+    if (has('modeling')) {
+      sequence.push({
+        name: 'Develop an initial model',
+        text: 'Students draw a model of the peat layer, permafrost, fire, and atmosphere, with arrows showing how matter (carbon) and energy move between them.',
+      })
+      sequence.push({
+        name: 'Use the model',
+        text: 'Students use their model to predict how carbon release changes as permafrost thaws, then compare the prediction with CO₂ emissions data from recent Arctic fire seasons.',
+      })
+    }
+    if (has('explanation')) {
+      sequence.push({
+        name: 'Construct an explanation',
+        text: 'Students explain how zombie fires keep burning under snow and ice, using the emissions data as evidence and their model as the reasoning.',
+      })
+    }
+    if (has('argumentation')) {
+      sequence.push({
+        name: 'Argue from evidence',
+        text: 'Groups argue whether warming temperatures or human land use plays the bigger role in zombie fires, citing the data, and respond to at least one critique.',
+      })
+    }
+    sequence.push({ name: 'Revise', text: 'Students revise their model and explanation, noting which evidence changed their thinking.' })
+  } else {
+    title = `COVID Virus: ${names}`
+    description =
+      'Students investigate the structure of the COVID-19 virus — its spike proteins, fatty envelope, and genetic material — how it enters and replicates in host cells, and why washing with soap breaks it apart.'
+    goal = `${Audience} ${verbs} to describe the virus’s structure and explain how it infects host cells and how soap disrupts it.`
+    sequence.push({
+      name: 'Launch',
+      text: 'Show an image of the coronavirus and a short demonstration of soap breaking up oil in water. Students record what they notice and wonder about why handwashing works.',
+    })
+    if (has('modeling')) {
+      sequence.push({
+        name: 'Develop a descriptive model',
+        text: 'Students draw and label the virus’s structures — spike proteins, fatty envelope, and genetic material — and a soap molecule’s hydrophilic head and hydrophobic tail.',
+      })
+      sequence.push({
+        name: 'Develop a mechanistic model',
+        text: 'Students extend their model to show how the virus enters a host cell and replicates, and how soap breaks apart the fatty envelope.',
+      })
+    }
+    if (has('explanation')) {
+      sequence.push({
+        name: 'Construct an explanation',
+        text: 'Students explain why washing with soap protects against infection, using the virus’s structure as evidence and their models as the reasoning.',
+      })
+    }
+    if (has('argumentation')) {
+      sequence.push({
+        name: 'Argue from evidence',
+        text: 'Students argue whether handwashing with soap or using hand sanitizer is more effective against the virus, citing evidence about its structure.',
+      })
+    }
+    sequence.push({ name: 'Revise', text: 'After feedback, students revise their descriptive and mechanistic work, noting what changed and why.' })
   }
+  const products = activityProductsFor(template)
+  return {
+    title,
+    gradeLabel: grade.label,
+    topic,
+    practiceIds: [...practiceIds],
+    description,
+    template,
+    products,
+    goal,
+    sequence,
+    supports: `For ${audience}: ${gradeBandSupports[grade.band].scaffold}.`,
+    collection: products.map((product) => ({ ...product })),
+    incorporated: ideas.slice(-3),
+    topicNotesUsed: '',
+  }
+}
+
+// The mock activity model. A demo lesson's topic gets its prewritten
+// template; any other topic gets the generic template: the practices'
+// develop → use → revise arc, filled in from the topic notes and
+// grade-band supports (see activityTeaching) and adjusted by keywords in
+// what the teacher asked for.
+function mockActivityDraft({ practiceIds, context, teacherMessages }: ActivityDraftRequest): ActivityDraft {
+  const teaching = activityTeaching(context) as ActivityTeaching
+  const { notes, support, grade, topic } = teaching
+  const has = (id: string) => practiceIds.includes(id)
+  const ideas = teacherMessages.filter((text) => isActivityIdea(text) && !isContextOnlyMessage(text, context))
+  const template = activityTemplateFor(topic, context.phenomenon)
+  if (template !== 'generic') return templateActivityDraft(template, practiceIds, grade, topic, ideas)
+  const said = ideas.join(' ').toLowerCase()
+  const young = grade.band === 'K-2' || grade.band === '3-5'
+  const sequence: ActivityDraft['sequence'] = []
+
+  const launchWith = /\bsimulation\b/.test(said)
+    ? 'a simulation'
+    : /\b(data|graph)\w*/.test(said)
+      ? 'a data set or graph'
+      : young
+        ? 'a hands-on demonstration or picture'
+        : 'a short video, image, or demonstration'
+  sequence.push({
+    name: 'Launch',
+    text: `Introduce the phenomenon — ${notes.phenomenon.replace(/[.!]$/, '')} — with ${launchWith}. Students record what they notice and wonder${young ? ', then share aloud' : ''}.`,
+  })
+  if (has('modeling')) {
+    sequence.push({
+      name: `Develop an initial ${notes.product}`,
+      text: `${young ? 'In pairs' : 'Individually or in pairs'}, students ${support.model} of ${notes.system}. The model should show ${notes.parts}.`,
+    })
+    sequence.push({
+      name: 'Use the model',
+      text: `Students use their ${notes.product} to predict ${notes.prediction}, then check the prediction against ${notes.evidence}.`,
+    })
+  }
+  if (has('explanation')) {
+    sequence.push({
+      name: 'Construct an explanation',
+      text: `Students explain ${notes.question}, using ${support.explainWith}${has('modeling') ? ' — with their model as the reasoning' : ''}. Evidence comes from ${notes.evidence}.`,
+    })
+  }
+  if (has('argumentation')) {
+    sequence.push({
+      name: 'Argue from evidence',
+      text: `${/gallery walk/.test(said) ? 'In a gallery walk, students' : 'Students'} ${support.argue} whether ${notes.claims[0]} or ${notes.claims[1]}, and respond to at least one critique.`,
+    })
+  }
+  if (/\b(peer|partner)\b[^.]{0,30}\b(feedback|review)\b/.test(said)) {
+    sequence.push({ name: 'Peer feedback', text: 'Partners trade work and give one piece of evidence-based feedback each before revising.' })
+  }
+  const revised = has('modeling') ? notes.product : has('explanation') ? 'explanation' : 'claim'
+  sequence.push({
+    name: `Revise the ${revised}`,
+    text: has('modeling')
+      ? `Using the evidence and what they heard from others, students ${support.revision}.`
+      : `Using the evidence and what they heard from others, students revise their ${revised} and note what changed and why.`,
+  })
+
+  const collection = practiceCollectionPoints()
+  if (/\b(exit ticket|reflection|reflect)\b/.test(said)) {
+    sequence.push({ name: 'Reflect', text: `Students write${young ? ' or draw' : ''} a short reflection on how their thinking changed and what evidence changed it.` })
+  }
+
+  const audience = gradeAudience(grade)
+  const names = practiceIds.map((id) => practiceTitleNames[id]).filter(Boolean)
+  const verbs = joinLabels(practiceIds.map((id) => practiceGoalVerbs[id]).filter(Boolean))
+  return {
+    title: `${joinLabels(names)}: ${topic}`,
+    gradeLabel: grade.label,
+    topic,
+    practiceIds: [...practiceIds],
+    description: `Students investigate ${topic.toLowerCase()} through ${joinLabels(practiceIds.map((id) => practiceCoaching[id].name))}, starting from a phenomenon, then using and revising their thinking as evidence comes in.`,
+    template: 'generic',
+    products: practiceCollectionPoints(),
+    goal: `${audience.charAt(0).toUpperCase()}${audience.slice(1)} ${verbs} to figure out ${notes.question}, then revise their thinking as new evidence comes in.`,
+    sequence,
+    supports: `For ${audience}: ${support.scaffold}.`,
+    collection,
+    incorporated: ideas.slice(-3),
+    topicNotesUsed: teaching.matched ? notes.covers : '',
+  }
+}
+
+// What the brainstorm model is asked to do, sent with each request like the
+// other AI purposes' instructions. The limits apply to chat replies only —
+// lesson plans, activity drafts, and form suggestions are separate outputs.
+const brainstormReplyInstructions = [
+  'You are the PARTNERS brainstorming partner for science teachers, in a back-and-forth chat.',
+  'Reply in at most 3 sentences. Write a short reply from the start — never cut a longer one down.',
+  'Ask at most one follow-up question, and only when it moves the planning forward. Explore anything else in later turns.',
+  'Spend the reply on instructional guidance, constructive critique, or a concrete activity idea — no introductions, recaps, or repeated information.',
+  'When the teacher asks what a science practice means, give a one-sentence explanation with a concrete example.',
+  'For a science practice activity, first learn the grade level and topic (skip whatever the class or conversation already gives), then suggest practices that could fit the topic with a brief reason each. The teacher chooses — never pick practices for them.',
+  'Once the grade level, topic, and practices are known, never ask for them again or ask questions just to move on: offer a concise activity idea and say the teacher can refine it or generate a draft.',
+]
+
+// The most sentences and questions in one chat reply.
+const MAX_REPLY_SENTENCES = 3
+
+// Sentences in a reply: each ends in . ! or ? (allowing a closing quote).
+function replySentences(text: string): string[] {
+  return text.match(/[^.!?]+(?:[.!?]+["”’)]*)(?=\s|$)/g)?.map((sentence) => sentence.trim()) ?? [text.trim()]
+}
+
+// One chat reply: what the assistant has to say, then any optional notes
+// that fit, then its one question — at most three sentences in all. Each
+// part is written as whole sentences; optional notes that don't fit are
+// left out rather than shortened.
+function chatReply({ say, notes = [], ask }: { say: string[]; notes?: string[]; ask?: string | null }): string {
+  const count = (parts: readonly string[]) => parts.reduce((total, part) => total + replySentences(part).length, 0)
+  const parts = [...say]
+  const room = MAX_REPLY_SENTENCES - (ask ? 1 : 0)
+  for (const note of notes) if (count([...parts, note]) <= room) parts.push(note)
+  if (ask && count(parts) < MAX_REPLY_SENTENCES) parts.push(ask)
+  const reply = parts.join(' ')
+  if (import.meta.env.DEV && count(parts) > MAX_REPLY_SENTENCES) console.warn(`Brainstorm reply over ${MAX_REPLY_SENTENCES} sentences:`, reply)
+  return reply
+}
+
+// The mock planning model: a brainstorming partner that gives short
+// feedback and instructional guidance in light of the chosen focus — at
+// most three sentences and one question per reply (see
+// brainstormReplyInstructions). It mentions what it picked up for the form
+// and at most gently brings up one open field; it never makes the teacher
+// fill the form in order.
+function mockBrainstormReply(request: BrainstormReplyRequest): string {
+  if (request.kind === 'start') {
+    if (request.focus === 'practice') {
+      // Teaching context first; practices are suggested once it's known.
+      const known = request.activityContext ?? emptyActivityContext
+      const teaching = activityTeaching(known)
+      if (teaching) return practiceSuggestionReply(teaching)
+      if (known.grade) return `Hi! What science topic are you teaching your ${gradeAudience(known.grade)}?`
+      if (known.topic) return `Hi! What grade level are you teaching ${known.topic.toLowerCase()} to?`
+      return 'Hi! What grade level and science topic are you teaching?'
+    }
+    return chatReply({
+      say: [
+        'Hi! Tell me about your lesson in any order — the topic or phenomenon, your students, your goals, or activities you have in mind — and I’ll help brainstorm and critique it.',
+        request.keptExistingAnswers
+          ? 'Anything that belongs in the lesson form comes back as a suggestion for you to review, and I won’t change what you’ve already filled in.'
+          : 'Anything that belongs in the lesson form comes back as a suggestion for you to review first.',
+      ],
+    })
+  }
+  if (request.kind === 'switch') {
+    const keep = 'Everything we’ve discussed and your form suggestions are still here.'
+    if (request.focus === 'practice') {
+      const known = request.activityContext ?? emptyActivityContext
+      const teaching = activityTeaching(known)
+      if (teaching) return practiceSuggestionReply(teaching)
+      return chatReply({ say: ['Switched to planning a science practice activity.', keep], ask: missingContextQuestion(known) })
+    }
+    return chatReply({
+      say: ['Switched to planning the whole lesson.', keep],
+      ask: request.lesson.topic ? `How do the activities for ${request.lesson.topic} build toward your objectives?` : 'What topic or phenomenon is the lesson about?',
+    })
+  }
+
+  const {
+    focus,
+    message,
+    noticedFields,
+    noticedLabels,
+    lesson,
+    stillOpen,
+    requiredAwaitingReview,
+    focusPracticeIds,
+    fromPracticeSelection,
+    hasActivityDraft,
+    activityContext,
+    contextUpdate,
+  } = request
+  const lower = message.toLowerCase()
+  const asking = /\?\s*$/.test(message) || /\b(help|ideas?|suggest|feedback|critique|improve|thoughts|how (can|could|do|should|would) i)\b/.test(lower)
+  const noticed = new Set(noticedFields)
+  const topic = lesson.topic.trim()
+
+  if (focus === 'practice') {
+    // The practices under discussion: those named in this message, else the
+    // ones the teacher selected. (The lesson form's practices aren't assumed —
+    // the teacher chooses the activity's practices here.)
+    const named = Object.keys(practiceCoaching).filter((id) => practiceCoaching[id].mentions.test(lower))
+    const practiceIds = (named.length > 0 ? named : focusPracticeIds).filter(
+      (id) => practiceCoaching[id],
+    )
+    const coaching = practiceIds.length > 0 ? practiceCoaching[practiceIds[0]] : undefined
+    const practiceNames = joinLabels(practiceIds.map((id) => practiceCoaching[id].name))
+    // The grade and topic: once both are known, ideas are tailored to them;
+    // until then the assistant asks for whichever is missing.
+    const teaching = activityTeaching(activityContext)
+    const missingQuestion = missingContextQuestion(activityContext)
+    const tailorAsk = missingQuestion ? `To tailor this, ${missingQuestion.charAt(0).toLowerCase()}${missingQuestion.slice(1)}` : null
+    const ideaFor = (ids: readonly string[]) =>
+      teaching ? contextualActivityIdea(ids, teaching) : ids.length > 1 ? integratedPracticeIdea(ids, '') : practiceCoaching[ids[0]].idea('')
+    const contextChanged = contextUpdate.grade || contextUpdate.topic
+    const contextOnly = isContextOnlyMessage(message, activityContext)
+    const contextNamed = [contextUpdate.grade && activityContext.grade?.label, contextUpdate.topic && activityContext.topic].filter(Boolean).join(', ')
+    const wantsExplanation = /\b(what (is|does|are)|what.*(mean|look like)|explain (the |this )?practice|define)\b/.test(lower)
+    const wantsIdeas = /\b(ideas?|suggest|brainstorm|activit(y|ies) (for|to|that)|give me)\b/.test(lower) && !/critique|feedback/.test(lower)
+    const wantsCritique = /\b(critique|feedback|improve|what do you think|review)\b/.test(lower)
+    const wantsCollection = /\b(collect\w*|submit\w*|student work|turn in|hand in|artifacts?|assess\w*)\b/.test(lower)
+    // A change the teacher wants made to the activity ("add a gallery walk").
+    const wantsChange =
+      !asking && !contextOnly && /^(please\s+)?(add|include|change|replace|remove|drop|skip|make|use|swap|switch|let|have them|instead)\b|\binstead\b/.test(lower)
+    // The activity to critique: what this message describes, else the plan so far.
+    const activity =
+      !contextOnly &&
+      (noticed.has('instructionalSequence') || noticed.has('learningObjectives') || ((!asking || wantsCritique) && message.split(/\s+/).length >= 12))
+        ? message
+        : wantsCritique
+          ? lesson.sequence
+          : ''
+    // Points to the draft once there's an idea and the teaching context.
+    // Once the grade, topic, and practices are known, a draft can be
+    // generated at any time — the assistant offers it instead of asking
+    // more questions, and brainstorming further is up to the teacher.
+    const ready = Boolean(teaching && coaching)
+    const readyIdea = teaching ? `We could design an activity where students investigate ${topicInSentence(teaching.topic)} through ${practiceNames}.` : ''
+    const readyNote = hasActivityDraft
+      ? 'Click Regenerate Activity Draft whenever you’d like the draft updated.'
+      : 'You can refine the idea with me or generate a draft to review.'
+    const draftNote = ready && !(hasActivityDraft && asking) ? readyNote : null
+
+    if (fromPracticeSelection && coaching) {
+      // The teacher just picked practices: first find out who and what the
+      // activity is for, unless they've already said.
+      if (missingQuestion) return `Great! ${missingQuestion}`
+      return chatReply({ say: [readyIdea, readyNote] })
+    }
+    if (contextChanged && !activity) {
+      if (missingQuestion) return chatReply({ say: [`Thanks — ${contextNamed}.`], ask: missingQuestion })
+      if (!coaching && teaching) return practiceSuggestionReply(teaching)
+      return chatReply({ say: [`Got it — ${contextNamed}.`, readyIdea, readyNote] })
+    }
+    if (!coaching) {
+      if (teaching && !activity) return practiceSuggestionReply(teaching)
+      if (missingQuestion && !activity) return missingQuestion
+      return chatReply({
+        say: activity ? ['Once I know the practice, I can critique the activity through that lens.'] : [],
+        ask: 'Which science practice should the activity build — developing and using models, constructing explanations, or engaging in argument from evidence?',
+      })
+    }
+    if (wantsExplanation) {
+      // A one-sentence explanation with an example for each practice asked
+      // about, plus how it could look for the teacher's topic.
+      const explained = named.length > 0 ? named : [practiceIds[0]]
+      const tailored =
+        teaching && explained.length === 1 && teaching.matched
+          ? {
+              modeling: `For ${teaching.topic.toLowerCase()}, that could be a ${teaching.notes.product} students use to predict ${teaching.notes.prediction}.`,
+              explanation: `For ${teaching.topic.toLowerCase()}, students could explain ${teaching.notes.question}.`,
+              argumentation: `For ${teaching.topic.toLowerCase()}, students could argue about ${teaching.notes.question}.`,
+            }[explained[0]]
+          : undefined
+      return chatReply({
+        say: explained.map((id) => practiceCoaching[id].explain),
+        notes: [...(tailored ? [tailored] : []), ...(draftNote ? [draftNote] : [])],
+        ask: tailorAsk,
+      })
+    }
+    if (wantsChange) {
+      if (hasActivityDraft) return chatReply({ say: ['Got it.', 'Click Regenerate Activity Draft to see that change in the draft, or keep refining first.'] })
+      return chatReply({ say: ['Good idea — I’ll work that into the draft.'], notes: draftNote ? [draftNote] : [], ask: missingQuestion })
+    }
+    if (wantsCollection) {
+      // What's collected for feedback: the activity's two student products,
+      // in one assignment (Descriptive and Mechanistic for the COVID demo).
+      const products = activityProductsFor(activityTemplateFor(activityContext.topic, activityContext.phenomenon))
+      return chatReply({
+        say: [
+          `Students submit two products in one assignment: ${joinLabels(products.map((product) => `${product.name.toLowerCase()} work`))}.`,
+          'When they revise, the new work is saved as a new version, so you can see how their thinking changed.',
+        ],
+        notes: draftNote ? [draftNote] : [],
+        ask: tailorAsk,
+      })
+    }
+    if (activity && (wantsCritique || !asking)) {
+      // Critique through every practice in focus — the first gap, or what's
+      // working — then one revision point fitted to the grade.
+      const gap = practiceIds.map((id) => practiceCoaching[id]).find((item) => !item.needs.test(activity))
+      const revises = /\b(revis|refin|update|change (their|its))\w*/i.test(activity)
+      return chatReply({
+        say: [
+          gap ? gap.missing : `This gives students real practice in ${practiceNames} — they’re working with evidence, not just completing steps.`,
+          teaching
+            ? revises
+              ? `Make clear what evidence prompts the revision, and give ${gradeAudience(teaching.grade)} ${teaching.support.scaffoldShort}.`
+              : `Build in a revision point after students examine ${teaching.notes.evidence}.`
+            : revises
+              ? 'Make clear what new evidence prompts the revision.'
+              : 'Build in a point where students use their idea on something new and then revise it.',
+        ],
+        notes: draftNote ? [draftNote] : [],
+        ask: tailorAsk,
+      })
+    }
+    if (wantsIdeas || asking) {
+      return chatReply({ say: [ideaFor(practiceIds)], notes: draftNote ? [draftNote] : [], ask: tailorAsk })
+    }
+    if (ready) return chatReply({ say: [readyIdea, readyNote] })
+    return chatReply({ say: [], ask: tailorAsk ?? `Where in the activity do students do the work of ${practiceNames}?` })
+  }
+
+  // Whole lesson: one piece of guidance, then the form note and at most one
+  // question about what's still open.
+  const say: string[] = []
+  let ask: string | null = null
+  const objectivesAdvice = (objectives: string) =>
+    /\b(explain|model|argue|construct|develop|predict|compare|analy[sz]e|evaluate|describe|identify|design|use|revise|justify)\w*\b/i.test(objectives)
+      ? 'Your objective names something observable students will do — consider adding the evidence or reasoning you’ll look for.'
+      : 'Try phrasing the objective with an observable verb, like “develop a model that shows…”, so you can tell whether students got there.'
+  const sequenceAdvice = (sequence: string) =>
+    /\b(discuss|share|explain|revise|reflect|consensus|argue|compare)\w*\b/i.test(sequence)
+      ? 'The sequence builds toward sense-making — bring the opening phenomenon back at the end so students see how far their thinking moved.'
+      : 'Consider adding a moment where students share and revise their ideas, so the investigation becomes sense-making rather than task completion.'
+
+  if (asking && /objective|goal/.test(lower)) {
+    say.push(
+      'A strong objective names something students will do that you can observe — “develop a model,” “construct an explanation,” “argue from evidence” — tied to the core idea.',
+      'Keep it to one or two per lesson, each connected to a science practice.',
+    )
+  } else if (asking && /phenomen/.test(lower)) {
+    if (topic) {
+      say.push(
+        `For ${topic}, look for something students can observe but can’t yet explain, like a short video or a data set with a surprising pattern.`,
+        'Their questions about it can drive the whole lesson.',
+      )
+    } else {
+      say.push('A good phenomenon is something students can observe but can’t yet explain, like a surprising video or data pattern from their world.')
+      ask = 'What topic are you working with?'
+    }
+  } else if (/engag|interest|motivat|boring/.test(lower)) {
+    say.push(
+      'Engagement usually comes from a genuine puzzle: open with the phenomenon, let students notice and wonder, and give them a model or claim to revise as evidence comes in.',
+    )
+  } else if (noticed.has('learningObjectives') && lesson.objectives) {
+    say.push(objectivesAdvice(lesson.objectives))
+    if (noticed.has('instructionalSequence') && lesson.sequence) say.push(sequenceAdvice(lesson.sequence))
+  } else if (noticed.has('instructionalSequence') && lesson.sequence) {
+    say.push(sequenceAdvice(lesson.sequence))
+    if (lesson.objectives && lesson.practices) say.push(`Check that each activity moves students toward the objective and gives them a chance to practice ${lesson.practices}.`)
+    else ask = lesson.objectives ? 'Which science practice should the activities emphasize?' : 'What should students be able to do by the end?'
+  } else if (noticed.has('topic') && topic) {
+    say.push(`${topic} is a rich topic to build a lesson around.`)
+    ask = 'Is there a phenomenon students could be puzzled by at the start?'
+  } else if (noticed.has('practices') && lesson.practices) {
+    say.push(`Emphasizing ${lesson.practices} works best when students revisit their work — for example, revising an initial model or claim once they have more evidence.`)
+  } else if (asking) {
+    if (topic) {
+      say.push(`For ${topic}, anchor the lesson in a phenomenon, have students make their thinking visible, and plan a point where they revise it with evidence.`)
+      ask = 'What part would you like to work through first?'
+    } else {
+      say.push('Share your lesson idea, even a rough one, and I’ll give feedback on how it supports students’ sense-making.')
+    }
+  } else if (noticedFields.length === 0) {
+    ask = 'What do you picture students doing during this lesson, and what should they walk away understanding?'
+  }
+
+  const notes: string[] = []
+  if (noticedLabels.length > 0) {
+    notes.push(`I picked up ${joinLabels(noticedLabels)} for your lesson form — review ${noticedLabels.length === 1 ? 'it' : 'them'} under “Suggested for your lesson form.”`)
+  }
+  if (stillOpen.length > 0) {
+    if (!ask && (noticedLabels.length > 0 || say.length === 0)) ask = stillOpen[0].question
+  } else if (requiredAwaitingReview > 0) {
+    notes.push('Once you apply the suggestions, all seven required fields will be filled and you can generate the lesson.')
+  } else {
+    notes.push('All seven required fields are in your form, so you can generate the lesson anytime.')
+  }
+  return chatReply({ say, notes, ask })
 }
 
 // The seven fields Generate Lesson requires. Completion uses the same
-// check as the Form Completion summary, so both always agree.
+// check as Brainstorm's Lesson Planning Notes, so both always agree.
 const requiredLessonFields: { field: BrainstormField; label: string }[] = [
   { field: 'gradeLevel', label: 'Grade Level' },
   { field: 'topic', label: 'Topic' },
@@ -3400,41 +5398,62 @@ function RequiredFieldsAlert({ show, missing, hint }: { show: boolean; missing: 
   )
 }
 
-function brainstormReply(request: Parameters<typeof mockBrainstormReply>[0]): string {
-  return callAiModel('lesson-brainstorm', request, mockBrainstormReply)
+function brainstormReply(request: BrainstormReplyRequest): string {
+  return callAiModel('lesson-brainstorm', { instructions: brainstormReplyInstructions, request }, (input) => mockBrainstormReply(input.request))
 }
 
-// A brainstorm chat message; a teacher answer the assistant accepted
-// records which form field it filled, so it can be edited later.
-type BrainstormMessage = ChatMessage & { field?: BrainstormField }
-
-// The assistant's opening message and first question for the form as it is.
-function createBrainstormIntro(form: LessonFormSnapshot): { field: BrainstormStage; message: BrainstormMessage } {
-  const field = nextBrainstormStage(form, null, [])
+// The assistant's opening message for the chosen focus and the form as it is.
+function createBrainstormIntro(form: LessonFormSnapshot, focus: BrainstormFocus, activityContext: ActivityContext): ChatMessage {
   const keptExistingAnswers = brainstormSteps.some((step) => isBrainstormFieldFilled(step.field, form))
-  return {
-    field,
-    message: {
-      role: 'ai',
-      text: brainstormReply({ outcome: 'start', fieldLabel: '', summary: '', nextQuestion: brainstormQuestion(field, form), keptExistingAnswers }),
-    },
-  }
+  return { role: 'ai', text: brainstormReply({ kind: 'start', focus, keptExistingAnswers, activityContext }) }
 }
+
+// A class's grade level ("8", "10") as an activity grade, when it names one.
+const classActivityGrade = (gradeLevel: string | null): ActivityGrade | null =>
+  gradeLevel ? extractActivityGrade(/^\d+$/.test(gradeLevel.trim()) ? `grade ${gradeLevel.trim()}` : gradeLevel) : null
+
+// Whether a teacher message names a science practice.
+const namesPractice = (text: string) => Object.values(practiceCoaching).some((coaching) => coaching.mentions.test(text.toLowerCase()))
 
 function LessonPlanningPanel({
   planningTab,
   setPlanningTab,
   revisionEditor,
   defaultFramework,
+  formSeed,
+  savedLessonOpen,
+  classGradeLevel,
   onGenerate,
   onUploadLesson,
+  brainstormFocus,
+  setBrainstormFocus,
+  practiceActivity,
+  lockedMethod,
+  onStartNew,
 }: {
+  // The option that generated the lesson or activity: the others are
+  // grayed out until the teacher starts something new.
+  lockedMethod: PlanningMethod | null
+  onStartNew: () => void
   planningTab: PlanningTab
   setPlanningTab: (tab: PlanningTab) => void
   revisionEditor: RevisionWorkflow
   // The teacher's state framework (from their profile), or NGSS.
   defaultFramework: StandardsFrameworkId
+  // A saved demo lesson's form to start from (null: a blank form). Read once;
+  // the page remounts this panel when a different lesson is loaded.
+  formSeed: PlanningFormSeed | null
+  // A saved demo lesson is shown as saved (opened, not generated here).
+  savedLessonOpen: boolean
+  // The grade level of the class the activity is for, when there is one.
+  classGradeLevel: string | null
   onGenerate?: (details: PlanningLessonDetails) => void
+  // What the teacher chose to plan in Brainstorm with AI — lifted to the
+  // page, which shows the Activity workspace for a practice activity.
+  brainstormFocus: BrainstormFocus | null
+  setBrainstormFocus: (focus: BrainstormFocus) => void
+  // The Activity Draft on the right (Science Practice Activity mode).
+  practiceActivity: { hasDraft: boolean; isGenerating: boolean; onGenerate: (request: ActivityDraftRequest) => void }
   // Only provided when the page was opened from a class's Add Lesson; without
   // it, Upload file stays the same placeholder button as before.
   onUploadLesson?: (file: File, details: PlanningLessonDetails) => void
@@ -3453,39 +5472,39 @@ function LessonPlanningPanel({
   // example only ever appears as the GENERATED output once the teacher
   // clicks Generate Lesson (see lessonSteps and friends below), never as
   // pre-filled input here.
-  const [selectedPractices, setSelectedPractices] = useState<string[]>([])
+  const [selectedPractices, setSelectedPractices] = useState<string[]>(formSeed?.practices ?? [])
   // Every field below lives above the three start options so a teacher's
   // entries survive switching between them (Brainstorm with AI fills these
   // same fields), and survive clicking Generate Lesson (which no longer
   // unmounts this panel at all).
-  const [topic, setTopic] = useState('')
-  const [learningObjectives, setLearningObjectives] = useState('')
-  const [priorInstruction, setPriorInstruction] = useState('')
-  const [materialsAndEquipment, setMaterialsAndEquipment] = useState('')
-  const [instructionalSequence, setInstructionalSequence] = useState('')
+  const [topic, setTopic] = useState(formSeed?.topic ?? '')
+  const [learningObjectives, setLearningObjectives] = useState(formSeed?.learningObjectives ?? '')
+  const [priorInstruction, setPriorInstruction] = useState(formSeed?.priorInstruction ?? '')
+  const [materialsAndEquipment, setMaterialsAndEquipment] = useState(formSeed?.materialsAndEquipment ?? '')
+  const [instructionalSequence, setInstructionalSequence] = useState(formSeed?.instructionalSequence ?? '')
   // Additional Customization (all optional). Collapsing the section only
   // hides these — their values stay.
   const [isCustomizationOpen, setIsCustomizationOpen] = useState(false)
-  const [subsequentInstruction, setSubsequentInstruction] = useState('')
-  const [differentiation, setDifferentiation] = useState('')
+  const [subsequentInstruction, setSubsequentInstruction] = useState(formSeed?.subsequentInstruction ?? '')
+  const [differentiation, setDifferentiation] = useState(formSeed?.differentiation ?? '')
   // Uploaded files are only selected and shown for now; nothing reads them.
   const [lessonTemplateFile, setLessonTemplateFile] = useState<File | null>(null)
   const [rubricFile, setRubricFile] = useState<File | null>(null)
 
   // The form's own Grade level selector doubles as the Standards filter —
   // teachers aren't asked to pick a grade a second time.
-  const [gradeLevel, setGradeLevel] = useState('')
+  const [gradeLevel, setGradeLevel] = useState(formSeed?.gradeLevel ?? '')
   const selectedGradeBand = gradeLevelToStandardsBand[gradeLevel]
-  const [framework, setFramework] = useState<StandardsFrameworkId>(defaultFramework)
+  const [framework, setFramework] = useState<StandardsFrameworkId>(formSeed?.framework ?? defaultFramework)
 
   // Standards search: a teacher can type a keyword — without needing to
   // already know a standard's code — and pick any number of matching
   // standards (automatically scoped to the selected grade level), which
   // then show as removable chips.
   const [standardsQuery, setStandardsQuery] = useState('')
-  const [selectedStandardCodes, setSelectedStandardCodes] = useState<string[]>([])
+  const [selectedStandardCodes, setSelectedStandardCodes] = useState<string[]>(formSeed?.standards ?? [])
   // Standards the teacher typed in themselves (not from the verified list).
-  const [customStandards, setCustomStandards] = useState<string[]>([])
+  const [customStandards, setCustomStandards] = useState<string[]>(formSeed?.customStandards ?? [])
 
   const togglePractice = (practiceId: string) => {
     setSelectedPractices((prev) =>
@@ -3576,10 +5595,10 @@ function LessonPlanningPanel({
     setSelectedStandardCodes((prev) => prev.filter((item) => item !== code))
   }
 
-  const [pacingSelection, setPacingSelection] = useState('')
+  const [pacingSelection, setPacingSelection] = useState(formSeed?.pacingSelection ?? '')
   // Kept while switching between presets and Custom, so switching back to
   // Custom restores what the teacher typed.
-  const [customPacingMinutes, setCustomPacingMinutes] = useState('')
+  const [customPacingMinutes, setCustomPacingMinutes] = useState(formSeed?.customPacingMinutes ?? '')
 
   // The method to return to when a revision conversation is closed.
   const [lastMethod, setLastMethod] = useState<PlanningTab>(planningTab === 'revision' ? 'none' : planningTab)
@@ -3602,10 +5621,10 @@ function LessonPlanningPanel({
     lessonTemplateName: lessonTemplateFile?.name ?? '',
     rubricName: rubricFile?.name ?? '',
   }
-  // The summary's progress counts required fields; optional ones are shown
-  // separately and never affect it or validation.
-  const requiredFilledCount = requiredBrainstormSteps.filter((step) => isBrainstormFieldFilled(step.field, formSnapshot)).length
-  const optionalFilledCount = optionalBrainstormSteps.filter((step) => isBrainstormFieldFilled(step.field, formSnapshot)).length
+  // How many lesson planning fields have something in them — shown in
+  // Brainstorm's Lesson Planning Notes for information only. Only Generate
+  // Lesson checks the required fields (see missingRequired).
+  const addedFieldCount = brainstormSteps.filter((step) => isBrainstormFieldFilled(step.field, formSnapshot)).length
 
   // Required-field validation for Generate Lesson. Errors only show after a
   // Generate attempt, and each one clears as soon as its field is filled.
@@ -3656,27 +5675,48 @@ function LessonPlanningPanel({
     onGenerate?.(lessonDetails)
   }
 
-  // Brainstorm with AI: the conversation and the form field it's asking
-  // about (null until started, 'done' once every field has been covered).
-  // The chosen option outlives this panel (it's App state) but the form and
-  // conversation don't, so a panel that mounts with Brainstorm already
-  // chosen starts a fresh conversation for its (empty) form.
-  const [brainstormStart] = useState(() => (planningTab === 'brainstorm' ? createBrainstormIntro(formSnapshot) : null))
-  const [brainstormMessages, setBrainstormMessages] = useState<BrainstormMessage[]>(brainstormStart ? [brainstormStart.message] : [])
-  const [brainstormField, setBrainstormField] = useState<BrainstormStage | null>(brainstormStart?.field ?? null)
-  // The teacher's answer to "customize your lesson?" (null until asked), and
-  // optional questions they skipped — skipped ones aren't asked again unless
-  // they choose Customize lesson later.
-  const [customizeChoice, setCustomizeChoice] = useState<'yes' | 'no' | null>(null)
-  const [skippedOptional, setSkippedOptional] = useState<BrainstormField[]>([])
+  // Brainstorm with AI: what the teacher chose to plan, the conversation,
+  // and the suggestions picked up from it that the teacher hasn't applied or
+  // dismissed yet. The conversation starts once a focus is chosen; changing
+  // the focus later keeps both the conversation and the suggestions.
+  const [isChoosingFocus, setIsChoosingFocus] = useState(false)
+  const [brainstormMessages, setBrainstormMessages] = useState<ChatMessage[]>([])
+  const [brainstormSuggestions, setBrainstormSuggestions] = useState<BrainstormSuggestions>({})
+  // A practice activity doesn't fill the lesson form: what the AI picks up
+  // there (e.g. the topic) is kept here as context for the conversation and
+  // the Activity Draft, and never offered as Apply to Form suggestions.
+  const [activityNotes, setActivityNotes] = useState<BrainstormSuggestions>({})
+  // Where the practice-activity part of the conversation starts — only that
+  // part shapes the Activity Draft.
+  const [practiceStartIndex, setPracticeStartIndex] = useState(0)
+  // The grade level and topic the teacher gave in the conversation.
+  // Starts with the class's grade, when the class gives one, so it isn't asked again.
+  const [activityContext, setActivityContext] = useState<ActivityContext>(() => ({
+    ...emptyActivityContext,
+    grade: classActivityGrade(classGradeLevel),
+  }))
+  // The practices the assistant last suggested for the topic — marked on the
+  // bubbles, never selected for the teacher.
+  const [suggestedPracticeIds, setSuggestedPracticeIds] = useState<string[]>([])
+  // Where the teacher last chose practices with the bubbles; practices named
+  // in chat before that no longer count, so a new choice replaces them.
+  const [practiceChosenAt, setPracticeChosenAt] = useState(-1)
+  const isPracticeFocus = brainstormFocus === 'practice'
+  // A text suggestion the teacher is editing before applying it.
+  const [editingSuggestion, setEditingSuggestion] = useState<{ field: BrainstormTextField; draft: string } | null>(null)
+  // What the last apply or dismiss did, announced under the suggestions.
+  const [suggestionStatus, setSuggestionStatus] = useState<string | null>(null)
   const [brainstormDraft, setBrainstormDraft] = useState('')
+  // Science Practice Activity: the practice bubbles are offered until the
+  // teacher continues or types; what they continue with is sent with every
+  // later message so the brainstorm keeps integrating those practices.
+  const [showPracticeBubbles, setShowPracticeBubbles] = useState(false)
+  const [practiceSelection, setPracticeSelection] = useState<string[]>([])
+  const [focusPracticeIds, setFocusPracticeIds] = useState<string[]>([])
   const [isBrainstormThinking, setIsBrainstormThinking] = useState(false)
-  // Set while the teacher is changing an earlier answer (via its Edit
-  // button); the next message replaces that field's value.
-  const [editingField, setEditingField] = useState<BrainstormField | null>(null)
   const brainstormInputRef = useRef<HTMLInputElement>(null)
   const brainstormTimeoutRef = useRef<number | null>(null)
-  // Keeps the newest question in view as the conversation grows.
+  // Keeps the newest message in view as the conversation grows.
   const brainstormThreadRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const thread = brainstormThreadRef.current
@@ -3688,265 +5728,295 @@ function LessonPlanningPanel({
     }
   }, [])
 
-  const startBrainstorm = () => {
-    const intro = createBrainstormIntro(formSnapshot)
-    setBrainstormField(intro.field)
-    setBrainstormMessages([intro.message])
-  }
-
   const chooseMethod = (method: PlanningMethod) => {
-    const next: PlanningTab = planningTab === method ? 'none' : method
+    if (lockedMethod && method !== lockedMethod) return
+    // After generation the option that made it stays open.
+    const next: PlanningTab = planningTab === method && !lockedMethod ? 'none' : method
     setPlanningTab(next)
     setLastMethod(next)
-    if (next !== 'brainstorm') return
-    if (brainstormField === null) {
-      startBrainstorm()
-    } else if (isBrainstormField(brainstormField) && isBrainstormFieldFilled(brainstormField, formSnapshot) && !isBrainstormThinking) {
-      // The teacher filled in the field being asked about (in the form, e.g.
-      // by attaching a file) — acknowledge it and move on.
-      const step = brainstormStepFor(brainstormField)
-      const nextStage = nextBrainstormStage(formSnapshot, customizeChoice, skippedOptional)
-      const detail = step.upload ? ` (${brainstormAnswerText(brainstormField, formSnapshot)})` : ''
-      const note = step.upload ? ' I can’t read uploaded files yet, but it stays attached to your lesson form.' : ''
-      setBrainstormMessages((prev) => [
-        ...prev,
-        {
-          role: 'ai',
-          text: brainstormReply({
-            outcome: 'after-done',
-            fieldLabel: step.label,
-            summary: '',
-            nextQuestion: `I see ${step.label} is filled in now${detail}.${note} ${brainstormQuestion(nextStage, formSnapshot)}`,
-            keptExistingAnswers: false,
-          }),
-        },
-      ])
-      setBrainstormField(nextStage)
-    }
   }
 
-  // Which upload is open under the Form Completion Summary (opened from the
-  // Template/Rubric bubble or the assistant's "Upload File" action).
+  // Starts the conversation for the chosen focus, or — when switching —
+  // carries it on under the new focus.
+  const chooseBrainstormFocus = (focus: BrainstormFocus) => {
+    setIsChoosingFocus(false)
+    if (focus === brainstormFocus) return
+    setBrainstormFocus(focus)
+    // The practice bubbles come once the grade and topic are known.
+    const teaching = focus === 'practice' ? activityTeaching(activityContext) : null
+    setShowPracticeBubbles(Boolean(teaching) && focusPracticeIds.length === 0)
+    setSuggestedPracticeIds(teaching ? suggestedPracticesFor(teaching) : [])
+    setPracticeSelection([])
+    if (focus === 'practice') setPracticeStartIndex(brainstormMessages.length)
+    setBrainstormMessages((prev) =>
+      prev.length === 0
+        ? [createBrainstormIntro(formSnapshot, focus, activityContext)]
+        : [
+            ...prev,
+            {
+              role: 'ai',
+              text: brainstormReply({ kind: 'switch', focus, lesson: brainstormLessonView(formSnapshot, brainstormSuggestions), activityContext }),
+            },
+          ],
+    )
+  }
+
+  // Which upload is open under the Lesson Planning Notes (opened from the
+  // Template/Rubric bubble). Attaching there updates the same file state as
+  // the form.
   const [brainstormUpload, setBrainstormUpload] = useState<LessonUploadField | null>(null)
   const uploadFiles: Record<LessonUploadField, File | null> = { lessonTemplate: lessonTemplateFile, rubric: rubricFile }
   const setUploadFile = (field: LessonUploadField, file: File | null) =>
     field === 'lessonTemplate' ? setLessonTemplateFile(file) : setRubricFile(file)
 
-  // Attaching from the chat updates the same file state as the form. If the
-  // assistant was asking for this file, it acknowledges it and moves on.
-  const attachBrainstormFile = (field: LessonUploadField, file: File | null) => {
-    setUploadFile(field, file)
-    if (!file || brainstormField !== field || isBrainstormThinking) return
-    setBrainstormUpload(null)
-    const updated: LessonFormSnapshot = {
-      ...formSnapshot,
-      ...(field === 'lessonTemplate' ? { lessonTemplateName: file.name } : { rubricName: file.name }),
-    }
-    const nextStage = nextBrainstormStage(updated, customizeChoice, skippedOptional)
-    setBrainstormMessages((prev) => [
-      ...prev,
-      {
-        role: 'ai',
-        text: brainstormReply({
-          outcome: 'after-done',
-          fieldLabel: lessonUploads[field].label,
-          summary: '',
-          nextQuestion: `Thanks — “${file.name}” is attached as your ${lessonUploads[field].label}. I can’t read uploaded files yet, but it stays with your lesson form. ${brainstormQuestion(nextStage, updated)}`,
-          keptExistingAnswers: false,
-        }),
-      },
-    ])
-    setBrainstormField(nextStage)
-  }
-
-  // Standards chosen in the chat but not yet confirmed. They're written to
-  // the form (and counted in the summary) only on Confirm Selection.
-  const [pendingStandards, setPendingStandards] = useState<string[]>([])
-  // Which suggested standard's description is open, and where (the form's
-  // suggestions or Brainstorm's) — one at a time, closed by default.
-  const [standardInfo, setStandardInfo] = useState<{ place: 'form' | 'brainstorm'; code: string } | null>(null)
-  const toggleStandardInfo = (place: 'form' | 'brainstorm', code: string) =>
+  // Which suggested standard's description is open in the form — one at a
+  // time, closed by default.
+  const [standardInfo, setStandardInfo] = useState<{ place: 'form'; code: string } | null>(null)
+  const toggleStandardInfo = (place: 'form', code: string) =>
     setStandardInfo((current) => (current?.place === place && current.code === code ? null : { place, code }))
-  const infoStandard = standardInfo ? scienceStandardsBank.find((standard) => standard.code === standardInfo.code) : undefined
-  const formInfoStandard = standardInfo?.place === 'form' ? infoStandard : undefined
-  const brainstormInfoStandard = standardInfo?.place === 'brainstorm' ? infoStandard : undefined
-  const togglePendingStandard = (code: string) =>
-    setPendingStandards((prev) => (prev.includes(code) ? prev.filter((item) => item !== code) : [...prev, code]))
-  const confirmStandards = () => {
-    if (pendingStandards.length === 0) return
-    sendBrainstormAnswer(pendingStandards.join(', '))
+  const formInfoStandard = standardInfo ? scienceStandardsBank.find((standard) => standard.code === standardInfo.code) : undefined
+
+  // Suggestions still to review, in form order. One the form already
+  // matches (e.g. the teacher typed it in themselves) drops out.
+  const pendingSuggestions = brainstormSteps.flatMap((step) => {
+    const suggestion = brainstormSuggestions[step.field]
+    return suggestion && !isSuggestionInForm(suggestion, formSnapshot) ? [suggestion] : []
+  })
+  const suggestedFields = new Set(pendingSuggestions.map((suggestion) => suggestion.field))
+
+  const textFieldSetters: Record<BrainstormTextField, Dispatch<SetStateAction<string>>> = {
+    topic: setTopic,
+    learningObjectives: setLearningObjectives,
+    instructionalSequence: setInstructionalSequence,
+    priorInstruction: setPriorInstruction,
+    subsequentInstruction: setSubsequentInstruction,
+    differentiation: setDifferentiation,
+    materialsAndEquipment: setMaterialsAndEquipment,
   }
 
-  const startEditingAnswer = (field: BrainstormField) => {
-    setEditingField(field)
-    setBrainstormDraft(brainstormAnswerText(field, formSnapshot))
-    // Editing standards starts from the current selection.
-    setPendingStandards(field === 'standards' ? [...formSnapshot.standards] : [])
-    brainstormInputRef.current?.focus()
+  // The text a suggestion would put in the form — the teacher's edit, if
+  // they're editing it.
+  const suggestionDraft = (suggestion: BrainstormSuggestion) =>
+    editingSuggestion?.field === suggestion.field ? editingSuggestion.draft.trim() : suggestionText(suggestion)
+  const canApplySuggestion = (suggestion: BrainstormSuggestion) =>
+    suggestion.field === 'standards' || suggestion.field === 'practices' ? suggestion.value.length > 0 : suggestionDraft(suggestion) !== ''
+
+  const dropSuggestion = (field: BrainstormField) => {
+    setBrainstormSuggestions((prev) => {
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+    setEditingSuggestion((current) => (current?.field === field ? null : current))
   }
 
-  const cancelEditingAnswer = () => {
-    setEditingField(null)
-    setBrainstormDraft('')
-    setPendingStandards([])
-  }
-
-  const sendBrainstormAnswer = (text: string) => {
-    const answerText = text.trim()
-    const isEdit = editingField !== null
-    const stage = editingField ?? brainstormField
-    if (!answerText || stage === null || isBrainstormThinking) return
-    setBrainstormDraft('')
-    setPendingStandards([])
-
-    let outcome: 'filled' | 'updated' | 'skipped' | 'retry' | 'after-done' = 'after-done'
-    let summary = ''
-    let nextStage: BrainstormStage = brainstormField ?? 'done'
-    let nextQuestion: string
-    let answeredField: BrainstormField | undefined
-    let choice = customizeChoice
-    let skipped = skippedOptional
-    const lower = answerText.toLowerCase()
-
-    if (stage === 'customize-offer') {
-      if (/^(y(es)?|yeah|sure|ok(ay)?|please)\b|customi[sz]e/.test(lower) && !/^no\b/.test(lower)) {
-        choice = 'yes'
-        nextStage = nextBrainstormStage(formSnapshot, choice, skipped)
-        nextQuestion = `Great — let’s add some details. These are all optional, so you can skip any of them. ${brainstormQuestion(nextStage, formSnapshot)}`
-      } else if (/^(no|nope|not now|continue|skip)\b|no,? continue/.test(lower)) {
-        choice = 'no'
-        nextStage = nextBrainstormStage(formSnapshot, choice, skipped)
-        nextQuestion = `No problem. ${brainstormQuestion(nextStage, formSnapshot)}`
-      } else {
-        outcome = 'retry'
-        nextQuestion = `Please choose “Yes, customize” or “No, continue”. ${brainstormQuestion('customize-offer', formSnapshot)}`
+  // Writes a reviewed suggestion to the form. 'add' fills an empty field or
+  // adds to what's there (standards and practices are combined, text is
+  // appended); 'replace' — only ever the teacher's explicit choice —
+  // overwrites the field.
+  const applySuggestion = (suggestion: BrainstormSuggestion, mode: 'add' | 'replace') => {
+    if (!canApplySuggestion(suggestion)) return
+    const label = brainstormStepFor(suggestion.field).label
+    const wasFilled = isBrainstormFieldFilled(suggestion.field, formSnapshot)
+    switch (suggestion.field) {
+      case 'gradeLevel':
+        setGradeLevel(suggestion.value)
+        break
+      case 'pacing':
+        setPacingSelection(suggestion.value.selection)
+        setCustomPacingMinutes(suggestion.value.customMinutes)
+        break
+      case 'standards': {
+        const codes = suggestion.value
+        setSelectedStandardCodes((prev) => [...prev, ...codes.filter((code) => !prev.includes(code))])
+        break
       }
-    } else if (stage === 'done') {
-      if (/customi[sz]e|optional|add (more )?details/.test(lower) && hasOptionalFieldsLeft(formSnapshot)) {
-        // Back to the optional questions, including ones skipped earlier.
-        choice = 'yes'
-        skipped = []
-        nextStage = nextBrainstormStage(formSnapshot, choice, skipped)
-        nextQuestion = `Let’s add those optional details — skip any you don’t need. ${brainstormQuestion(nextStage, formSnapshot)}`
-      } else {
-        // If a field was cleared in the form since, go back and ask for it.
-        nextStage = nextBrainstormStage(formSnapshot, choice, skipped)
-        nextQuestion =
-          isBrainstormField(nextStage) && !brainstormStepFor(nextStage).optional
-            ? `${brainstormStepFor(nextStage).label} is empty in the form again, so let’s fill it in. ${brainstormQuestion(nextStage, formSnapshot)}`
-            : brainstormQuestion(nextStage, formSnapshot)
+      case 'practices': {
+        const ids = suggestion.value
+        setSelectedPractices((prev) => [...prev, ...ids.filter((id) => !prev.includes(id))])
+        break
       }
-    } else if (brainstormStepFor(stage).upload && !isEdit) {
-      // Lesson Template / Rubric: the file itself is attached in the form.
-      const label = brainstormStepFor(stage).label
-      if (skipPattern.test(answerText)) {
-        outcome = 'skipped'
-        skipped = [...skipped, stage]
-        nextStage = nextBrainstormStage(formSnapshot, choice, skipped)
-        nextQuestion = brainstormQuestion(nextStage, formSnapshot)
-      } else if (isBrainstormFieldFilled(stage, formSnapshot)) {
-        nextStage = nextBrainstormStage(formSnapshot, choice, skipped)
-        nextQuestion = `Thanks — “${brainstormAnswerText(stage, formSnapshot)}” is attached as your ${label}. I can’t read uploaded files yet, but it stays with your lesson form. ${brainstormQuestion(nextStage, formSnapshot)}`
-      } else {
-        outcome = 'retry'
-        nextQuestion = `I don’t see a ${label} file yet. Choose “Upload File” to attach it, or skip this one.`
-      }
-    } else {
-      // An edit replaces the field's value, so it's interpreted as if the
-      // field were empty.
-      const context = isEdit ? withoutBrainstormField(formSnapshot, stage) : formSnapshot
-      const result = interpretBrainstormAnswer(stage, answerText, context)
-      if (result.kind === 'retry') {
-        outcome = 'retry'
-        nextQuestion = result.hint
-      } else if (result.kind === 'skip') {
-        outcome = 'skipped'
-        skipped = [...skipped, stage]
-        if (isEdit) setEditingField(null)
-        nextStage = nextBrainstormStage(formSnapshot, choice, skipped)
-        nextQuestion = brainstormQuestion(nextStage, formSnapshot)
-      } else {
-        outcome = isEdit ? 'updated' : 'filled'
-        summary = result.summary
-        answeredField = stage
-        // Apply the answer to the form now, and work out the next question
-        // from the updated form.
-        const updated: LessonFormSnapshot = { ...context }
-        switch (result.field) {
-          case 'gradeLevel':
-            setGradeLevel(result.value)
-            updated.gradeLevel = result.value
-            break
-          case 'topic':
-            setTopic(result.value)
-            updated.topic = result.value
-            break
-          case 'learningObjectives':
-            setLearningObjectives(result.value)
-            updated.learningObjectives = result.value
-            break
-          case 'instructionalSequence':
-            setInstructionalSequence(result.value)
-            updated.instructionalSequence = result.value
-            break
-          case 'priorInstruction':
-            setPriorInstruction(result.value)
-            updated.priorInstruction = result.value
-            break
-          case 'subsequentInstruction':
-            setSubsequentInstruction(result.value)
-            updated.subsequentInstruction = result.value
-            break
-          case 'differentiation':
-            setDifferentiation(result.value)
-            updated.differentiation = result.value
-            break
-          case 'materialsAndEquipment':
-            setMaterialsAndEquipment(result.value)
-            updated.materialsAndEquipment = result.value
-            break
-          case 'standards':
-            setSelectedStandardCodes(result.value.codes)
-            setCustomStandards(result.value.custom)
-            updated.standards = result.value.codes
-            updated.customStandards = result.value.custom
-            break
-          case 'pacing':
-            setPacingSelection(result.value.selection)
-            setCustomPacingMinutes(result.value.customMinutes)
-            updated.pacingSelection = result.value.selection
-            updated.customPacingMinutes = result.value.customMinutes
-            break
-          case 'practices':
-            setSelectedPractices(result.value)
-            updated.practices = result.value
-            break
-        }
-        if (isEdit) setEditingField(null)
-        nextStage = nextBrainstormStage(updated, choice, skipped)
-        nextQuestion = brainstormQuestion(nextStage, updated)
+      default: {
+        const value = suggestionDraft(suggestion)
+        textFieldSetters[suggestion.field]((prev) => (mode === 'replace' || !prev.trim() ? value : `${prev.trim()} ${value}`))
       }
     }
-    setCustomizeChoice(choice)
-    setSkippedOptional(skipped)
-    // Only accepted answers get an Edit button.
-    setBrainstormMessages((prev) => [...prev, { role: 'teacher', text: answerText, field: answeredField }])
+    dropSuggestion(suggestion.field)
+    setSuggestionStatus(
+      mode === 'replace' ? `Replaced ${label} in the form.` : wasFilled ? `Added to ${label} in the form.` : `Added ${label} to the form.`,
+    )
+  }
 
-    const fieldLabel = isBrainstormField(stage) ? brainstormStepFor(stage).label : ''
+  // Applies every ready suggestion whose form field is still empty — never
+  // one that would change something already in the form.
+  const emptyFieldSuggestions = pendingSuggestions.filter(
+    (suggestion) => !isBrainstormFieldFilled(suggestion.field, formSnapshot) && canApplySuggestion(suggestion),
+  )
+  const applyAllToEmptyFields = () => {
+    emptyFieldSuggestions.forEach((suggestion) => applySuggestion(suggestion, 'add'))
+    setSuggestionStatus(`Added ${pluralize(emptyFieldSuggestions.length, 'suggestion')} to empty fields in the form.`)
+  }
+
+  const dismissSuggestion = (suggestion: BrainstormSuggestion) => {
+    dropSuggestion(suggestion.field)
+    setSuggestionStatus(`Dismissed the ${brainstormStepFor(suggestion.field).label} suggestion. The form is unchanged.`)
+  }
+
+  const toggleSuggestedOption = (field: 'standards' | 'practices', option: string) =>
+    setBrainstormSuggestions((prev) => {
+      const suggestion = prev[field]
+      if (!suggestion || (suggestion.field !== 'standards' && suggestion.field !== 'practices')) return prev
+      const value = suggestion.value.includes(option)
+        ? suggestion.value.filter((item) => item !== option)
+        : suggestion.options.filter((item) => item === option || suggestion.value.includes(item))
+      return { ...prev, [field]: { ...suggestion, value } }
+    })
+
+  // The summary's bubbles for suggested fields jump to that suggestion.
+  const focusSuggestion = (field: BrainstormField) => {
+    const row = document.getElementById(`brainstorm-suggestion-${field}`)
+    row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    row?.focus({ preventScroll: true })
+  }
+
+  // `selectedPractices` is set only when the message comes from the
+  // practice bubbles' Continue.
+  const sendBrainstormMessage = (text: string, selectedPractices?: string[]) => {
+    const message = text.trim()
+    if (!message || isBrainstormThinking || !brainstormFocus) return
+    setBrainstormDraft('')
+    setShowPracticeBubbles(false)
+    // Practices chosen with the bubbles or named in chat since then.
+    const practiceFocus = selectedPractices ?? activityPracticeIds
+    if (selectedPractices) {
+      setFocusPracticeIds(selectedPractices)
+      setPracticeChosenAt(brainstormMessages.length)
+    }
+    const current = isPracticeFocus ? activityNotes : brainstormSuggestions
+    const found = extractLessonSuggestions(message, formSnapshot, current)
+    // A practice activity's grade and topic: the newest mention wins, so the
+    // teacher can change either. A bare answer counts as the topic only
+    // right after the assistant asked for it.
+    let nextContext = activityContext
+    let contextUpdate = { grade: false, topic: false }
+    if (isPracticeFocus) {
+      const lastAiText = [...brainstormMessages].reverse().find((item) => item.role === 'ai')?.text ?? ''
+      const grade = extractActivityGrade(message)
+      const { topic: newTopic, phenomenon } = extractActivityTopic(message, /are you teaching\b[^.!?]*\?/.test(lastAiText))
+      const topicValue = newTopic ?? (phenomenon && !activityContext.topic ? titleCaseTopic(phenomenon) : null)
+      contextUpdate = {
+        grade: Boolean(grade && grade.label !== activityContext.grade?.label),
+        topic: Boolean(topicValue && topicValue !== activityContext.topic),
+      }
+      nextContext = {
+        grade: grade ?? activityContext.grade,
+        topic: topicValue ?? activityContext.topic,
+        phenomenon: phenomenon ?? (newTopic ? null : activityContext.phenomenon),
+      }
+      setActivityContext(nextContext)
+    }
+    const merged = { ...current }
+    for (const suggestion of found) merged[suggestion.field] = mergeSuggestion(merged[suggestion.field], suggestion)
+    if (isPracticeFocus) {
+      setActivityNotes(merged)
+    } else {
+      setBrainstormSuggestions(merged)
+      if (found.length > 0) setSuggestionStatus(null)
+    }
+    setBrainstormMessages((prev) => [...prev, { role: 'teacher', text: message }])
+
+    const request = brainstormReplyRequest(brainstormFocus, message, found, formSnapshot, merged, {
+      focusPracticeIds: practiceFocus,
+      fromPracticeSelection: Boolean(selectedPractices),
+      hasActivityDraft: practiceActivity.hasDraft,
+      activityContext: nextContext,
+      contextUpdate,
+    })
+    // Once the grade and topic are known and no practice is chosen yet, the
+    // reply suggests practices and the bubbles appear for the teacher to pick.
+    const teaching = isPracticeFocus ? activityTeaching(nextContext) : null
+    const offerPractices = Boolean(teaching) && practiceFocus.length === 0 && ![...practiceMentionMessages, message].some(namesPractice)
     setIsBrainstormThinking(true)
     brainstormTimeoutRef.current = window.setTimeout(() => {
-      const reply = brainstormReply({ outcome, fieldLabel, summary, nextQuestion, keptExistingAnswers: false })
-      setBrainstormMessages((prev) => [...prev, { role: 'ai', text: reply }])
-      setBrainstormField(nextStage)
+      setBrainstormMessages((prev) => [...prev, { role: 'ai', text: brainstormReply(request) }])
       setIsBrainstormThinking(false)
+      if (offerPractices && teaching) {
+        setSuggestedPracticeIds(suggestedPracticesFor(teaching))
+        setPracticeSelection([])
+        setShowPracticeBubbles(true)
+      }
     }, 600)
   }
 
-  // The latest accepted answer for each field — the one its Edit button sits on.
-  const latestAnswerIndex = new Map<BrainstormField, number>()
-  brainstormMessages.forEach((message, index) => {
-    if (message.field) latestAnswerIndex.set(message.field, index)
-  })
+  // Bubbles toggle on and off; the selection stays in bubble order.
+  const togglePracticeBubble = (id: string) =>
+    setPracticeSelection((prev) =>
+      practiceFocusBubbles.map((bubble) => bubble.id).filter((item) => (item === id ? !prev.includes(id) : prev.includes(item))),
+    )
+  const continueWithPractices = () => {
+    if (practiceSelection.length === 0) return
+    const names = practiceSelection.map((id) => practiceCoaching[id].name)
+    sendBrainstormMessage(`I’d like to focus on ${joinLabels(names)}.`, practiceSelection)
+  }
+  // Reopens the bubbles with the current practices selected, to change them.
+  const changePractices = () => {
+    setPracticeSelection(activityPracticeIds)
+    setShowPracticeBubbles(true)
+  }
+
+  // Generate Activity Draft needs the grade and topic, at least one
+  // practice (selected or named in the conversation), and some discussion
+  // of the activity beyond that context. It sends those and what the
+  // teacher said.
+  const teacherMessages = brainstormMessages
+    .slice(practiceStartIndex)
+    .filter((message) => message.role === 'teacher')
+    .map((message) => message.text)
+  // Practices named in chat count from the latest bubble choice on.
+  const practiceMentionMessages = brainstormMessages
+    .slice(Math.max(practiceStartIndex, practiceChosenAt + 1))
+    .filter((message) => message.role === 'teacher')
+    .map((message) => message.text)
+  const activityPracticeIds = practiceFocusBubbles
+    .map((bubble) => bubble.id)
+    .filter((id) => focusPracticeIds.includes(id) || practiceMentionMessages.some((text) => practiceCoaching[id].mentions.test(text.toLowerCase())))
+  // Brainstorming the activity itself is optional: the grade, topic, and a
+  // practice are enough to generate a draft.
+  const missingForActivity = [
+    !activityContext.grade && 'grade level',
+    !activityContext.topic && 'science topic',
+    activityPracticeIds.length === 0 && 'a science practice',
+  ].filter((item): item is string => Boolean(item))
+  const canGenerateActivity = missingForActivity.length === 0 && !practiceActivity.isGenerating
+  // Asked in the chat when Generate Activity Draft is clicked too early:
+  // one short question about the first thing still missing.
+  const missingActivityPrompt = () => {
+    const contextQuestion = missingContextQuestion(activityContext)
+    if (contextQuestion) return `Before I draft the activity: ${contextQuestion.charAt(0).toLowerCase()}${contextQuestion.slice(1)}`
+    return 'Before I draft the activity: which science practice should it build — developing and using models, constructing explanations, or engaging in argument from evidence?'
+  }
+  const generateActivity = () => {
+    if (practiceActivity.isGenerating || isBrainstormThinking) return
+    if (!canGenerateActivity || !activityContext.grade || !activityContext.topic) {
+      setShowPracticeBubbles(false)
+      setBrainstormMessages((prev) => [...prev, { role: 'ai', text: missingActivityPrompt() }])
+      brainstormInputRef.current?.focus()
+      return
+    }
+    practiceActivity.onGenerate({
+      practiceIds: activityPracticeIds,
+      context: { grade: activityContext.grade, topic: activityContext.topic, phenomenon: activityContext.phenomenon },
+      teacherMessages,
+    })
+  }
+
+  // Conversation starters for the whole-lesson focus, until the teacher has
+  // said something. (A practice activity starts from the practice bubbles.)
+  const brainstormStarters =
+    brainstormMessages.some((message) => message.role === 'teacher') || brainstormFocus === 'practice'
+      ? []
+      : ['Help me find a phenomenon for my topic', 'What makes a strong learning objective?', 'Give me feedback on my lesson idea']
+  const brainstormFocusOption = brainstormFocusOptions.find((option) => option.id === brainstormFocus)
 
   // Shown in the collapsed Additional Customization header.
   const customizationCount =
@@ -3954,26 +6024,13 @@ function LessonPlanningPanel({
     (lessonTemplateFile ? 1 : 0) +
     (rubricFile ? 1 : 0)
 
-  const brainstormChips = isBrainstormThinking
-    ? []
-    : editingField
-      ? brainstormQuickReplies(editingField, withoutBrainstormField(formSnapshot, editingField))
-      : brainstormQuickReplies(brainstormField, formSnapshot)
-  const standardsStage = (editingField ?? brainstormField) === 'standards' && !isBrainstormThinking
-  // Selected codes stay listed even if they aren't among the suggestions.
-  const brainstormStandardOptions = standardsStage
-    ? [
-        ...pendingStandards
-          .filter((code) => !brainstormChips.some((chip) => chip.value === code))
-          .map((code) => ({ label: code, value: code })),
-        ...brainstormChips,
-      ]
-    : []
   const completionSummary = formCompletionSummary(formSnapshot)
-  // The Form Completion summary above the input starts collapsed to its
-  // one-line progress header.
+  // The Lesson Planning Notes above the input start collapsed to their
+  // one-line header.
   const [isSummaryOpen, setIsSummaryOpen] = useState(false)
   const revisionState = revisionEditor.activeLabel ? revisionEditor.statesByLabel[revisionEditor.activeLabel] : undefined
+  // Start New clears the current work, so it asks first.
+  const [isConfirmingStartNew, setIsConfirmingStartNew] = useState(false)
 
   return (
     <aside className="lesson-sidebar planning-panel">
@@ -3985,6 +6042,8 @@ function LessonPlanningPanel({
             className={`planning-method ${planningTab === method.id ? 'active' : ''}`}
             aria-pressed={planningTab === method.id}
             aria-controls="planning-method-content"
+            disabled={Boolean(lockedMethod && method.id !== lockedMethod)}
+            title={lockedMethod && method.id !== lockedMethod ? 'Start a new lesson or activity to use this option.' : undefined}
             onClick={() => chooseMethod(method.id)}
           >
             <span className="planning-method-icon" aria-hidden="true">
@@ -3997,6 +6056,46 @@ function LessonPlanningPanel({
           </button>
         ))}
       </div>
+
+      {(lockedMethod || savedLessonOpen) && (
+        <div className="planning-start-new" role="status">
+          {isConfirmingStartNew ? (
+            <>
+              <p>
+                {lockedMethod
+                  ? 'Start over? This clears the current lesson or activity, the form, and the conversation.'
+                  : 'Start a new, blank lesson? The saved lesson stays as it is in your Library.'}
+              </p>
+              <div className="planning-start-new-actions">
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => {
+                    setIsConfirmingStartNew(false)
+                    onStartNew()
+                  }}
+                >
+                  Start New
+                </button>
+                <button type="button" className="secondary-button" onClick={() => setIsConfirmingStartNew(false)}>
+                  Cancel
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p>
+                {lockedMethod
+                  ? 'Other planning options are locked while you work on what you generated.'
+                  : 'You’re viewing a saved lesson. Its form and plan are shown as saved.'}
+              </p>
+              <button type="button" className="ghost-button planning-start-new-button" onClick={() => setIsConfirmingStartNew(true)}>
+                Start a New Lesson or Activity
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       <div id="planning-method-content" className="planning-method-content">
         {planningTab === 'upload' && (
@@ -4444,112 +6543,251 @@ function LessonPlanningPanel({
         {planningTab === 'brainstorm' && (
           <div className="planning-chat brainstorm-chat">
             <div className="brainstorm-intro">
-              <h3>Plan Your Lesson with AI</h3>
-              <p>
-                Your AI assistant will guide you through the lesson planning form, one question at a time. Your answers will help
-                fill in the form automatically.
-              </p>
+              <h3>Brainstorm with AI</h3>
+              <p>Chat with AI to plan an activity or lesson.</p>
             </div>
 
-            <div className="planning-thread brainstorm-thread" ref={brainstormThreadRef}>
-              <div className="chat-thread">
-                {brainstormMessages.map((message, index) => (
-                  <div key={index} className={`chat-message ${message.role === 'teacher' ? 'teacher-message' : 'ai-message'}`}>
-                    <p className="chat-message-label">{message.role === 'teacher' ? 'You' : 'AI'}</p>
-                    {message.text}
-                    {message.field && latestAnswerIndex.get(message.field) === index && editingField !== message.field && (
-                      <button
-                        type="button"
-                        className="brainstorm-edit-answer"
-                        disabled={isBrainstormThinking}
-                        aria-label={`Edit your answer for ${brainstormStepFor(message.field).label}`}
-                        onClick={() => message.field && startEditingAnswer(message.field)}
-                      >
-                        Edit
-                      </button>
-                    )}
-                  </div>
-                ))}
+            {!brainstormFocusOption || isChoosingFocus ? (
+              <section className="brainstorm-focus-picker" aria-labelledby="brainstorm-focus-heading">
+                <h4 id="brainstorm-focus-heading">What would you like to plan?</h4>
+                <div className="brainstorm-focus-options" role="group" aria-labelledby="brainstorm-focus-heading">
+                  {brainstormFocusOptions.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className={`planning-method brainstorm-focus-option ${brainstormFocus === option.id ? 'active' : ''}`}
+                      aria-pressed={brainstormFocus === option.id}
+                      onClick={() => chooseBrainstormFocus(option.id)}
+                    >
+                      <span className="planning-method-icon" aria-hidden="true">
+                        {option.icon}
+                      </span>
+                      <span className="planning-method-text">
+                        <strong>{option.label}</strong>
+                        <small>{option.description}</small>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {isChoosingFocus && (
+                  <button type="button" className="ghost-button brainstorm-focus-cancel" onClick={() => setIsChoosingFocus(false)}>
+                    Cancel
+                  </button>
+                )}
+              </section>
+            ) : (
+              <div className="brainstorm-focus-bar">
+                <span className="brainstorm-focus-current">
+                  <span className="card-label">Planning focus</span>
+                  <strong>{brainstormFocusOption.label}</strong>
+                </span>
+                <button type="button" className="ghost-button brainstorm-focus-change" onClick={() => setIsChoosingFocus(true)}>
+                  Change Focus
+                </button>
               </div>
-              {isBrainstormThinking && <p className="empty-state-support">AI is thinking…</p>}
-              {standardsStage && brainstormStandardOptions.length > 0 ? (
-                <div className="brainstorm-standards-picker">
-                  <div className="brainstorm-quick-replies" role="group" aria-label="Suggested standards">
-                    {brainstormStandardOptions.map((option) => {
-                      const selected = pendingStandards.includes(option.value)
-                      const standard = scienceStandardsBank.find((item) => item.code === option.value)
-                      return (
-                        <span key={option.value} className="standard-bubble-group">
+            )}
+
+            {brainstormFocus && (
+              <div className="planning-thread brainstorm-thread" ref={brainstormThreadRef}>
+                <div className="chat-thread">
+                  {brainstormMessages.map((message, index) => (
+                    <div key={index} className={`chat-message ${message.role === 'teacher' ? 'teacher-message' : 'ai-message'}`}>
+                      <p className="chat-message-label">{message.role === 'teacher' ? 'You' : 'AI'}</p>
+                      {message.text}
+                    </div>
+                  ))}
+                </div>
+                {isBrainstormThinking && <p className="empty-state-support">AI is thinking…</p>}
+                {!isBrainstormThinking && brainstormFocus === 'practice' && showPracticeBubbles && (
+                  <div className="brainstorm-practice-picker">
+                    <div className="brainstorm-quick-replies" role="group" aria-label="Science practices to focus on">
+                      {practiceFocusBubbles.map((bubble) => {
+                        const selected = practiceSelection.includes(bubble.id)
+                        const suggested = suggestedPracticeIds.includes(bubble.id)
+                        return (
                           <button
+                            key={bubble.id}
                             type="button"
-                            className={`practice-chip ${selected ? 'selected' : ''}`}
+                            className={`practice-chip ${selected ? 'selected' : ''} ${suggested ? 'suggested' : ''}`}
                             aria-pressed={selected}
-                            title={standard?.description}
-                            onClick={() => togglePendingStandard(option.value)}
+                            onClick={() => togglePracticeBubble(bubble.id)}
                           >
                             {selected && (
                               <span className="chip-check" aria-hidden="true">
                                 ✓
                               </span>
                             )}
-                            {option.label}
+                            {bubble.label}
+                            {suggested && <span className="chip-suggested-tag">Suggested</span>}
                           </button>
-                          {standard && (
-                            <StandardInfoButton
-                              standard={standard}
-                              panelId="brainstorm-standard-info"
-                              isOpen={standardInfo?.place === 'brainstorm' && standardInfo.code === standard.code}
-                              onToggle={() => toggleStandardInfo('brainstorm', standard.code)}
-                            />
-                          )}
-                        </span>
-                      )
-                    })}
-                  </div>
-                  {brainstormInfoStandard && (
-                    <StandardInfoPanel
-                      standard={brainstormInfoStandard}
-                      panelId="brainstorm-standard-info"
-                      onClose={() => setStandardInfo(null)}
-                    />
-                  )}
-                  <div className="brainstorm-standards-confirm">
-                    <button type="button" className="primary-button" disabled={pendingStandards.length === 0} onClick={confirmStandards}>
-                      Confirm Selection
+                        )
+                      })}
+                    </div>
+                    <button
+                      type="button"
+                      className="primary-button brainstorm-practice-continue"
+                      disabled={practiceSelection.length === 0}
+                      onClick={continueWithPractices}
+                    >
+                      Continue
                     </button>
-                    <span className="library-class-note" role="status">
-                      {pendingStandards.length === 0
-                        ? 'Select at least one standard to continue.'
-                        : `${pluralize(pendingStandards.length, 'standard')} selected`}
-                    </span>
                   </div>
-                </div>
-              ) : (
-                brainstormChips.length > 0 && (
-                  <div className="brainstorm-quick-replies" aria-label="Suggested answers">
-                    {brainstormChips.map((chip) => (
-                      <button
-                        key={chip.label}
-                        type="button"
-                        className="practice-chip"
-                        onClick={() => (chip.openUpload ? setBrainstormUpload(chip.openUpload) : sendBrainstormAnswer(chip.value))}
-                      >
-                        {chip.label}
+                )}
+                {!isBrainstormThinking && brainstormFocus === 'practice' && !showPracticeBubbles && activityPracticeIds.length > 0 && (
+                  <p className="brainstorm-practice-current">
+                    Practices: {joinLabels(activityPracticeIds.map((id) => practiceFocusBubbles.find((bubble) => bubble.id === id)!.label))}
+                    <button type="button" className="practice-change-button" onClick={changePractices}>
+                      Change practices
+                    </button>
+                  </p>
+                )}
+                {!isBrainstormThinking && brainstormStarters.length > 0 && (
+                  <div className="brainstorm-quick-replies" aria-label="Conversation starters">
+                    {brainstormStarters.map((starter) => (
+                      <button key={starter} type="button" className="practice-chip" onClick={() => sendBrainstormMessage(starter)}>
+                        {starter}
                       </button>
                     ))}
                   </div>
-                )
-              )}
-              {editingField && (
-                <p className="brainstorm-editing-note" role="status">
-                  Editing your answer for <strong>{brainstormStepFor(editingField).label}</strong>.{' '}
-                  <button type="button" className="ghost-button" onClick={cancelEditingAnswer}>
-                    Cancel
-                  </button>
-                </p>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
+            {!isPracticeFocus && pendingSuggestions.length > 0 && (
+              <section className="brainstorm-suggestions" aria-labelledby="brainstorm-suggestions-heading">
+                <div className="brainstorm-suggestions-header">
+                  <div>
+                    <h4 id="brainstorm-suggestions-heading">
+                      Suggested for your lesson form <span className="brainstorm-suggestions-count">({pendingSuggestions.length})</span>
+                    </h4>
+                    <p>Picked up from your conversation. Review each one — nothing is added to the form until you apply it.</p>
+                  </div>
+                  {emptyFieldSuggestions.length >= 2 && (
+                    <button type="button" className="secondary-button" onClick={applyAllToEmptyFields}>
+                      Apply All to Empty Fields
+                    </button>
+                  )}
+                </div>
+                <ul className="brainstorm-suggestion-list">
+                  {pendingSuggestions.map((suggestion) => {
+                    const step = brainstormStepFor(suggestion.field)
+                    const filled = isBrainstormFieldFilled(suggestion.field, formSnapshot)
+                    const isEditing = editingSuggestion?.field === suggestion.field
+                    const canApply = canApplySuggestion(suggestion)
+                    const isMultiSelect = suggestion.field === 'standards' || suggestion.field === 'practices'
+                    const isText = !isMultiSelect && suggestion.field !== 'gradeLevel' && suggestion.field !== 'pacing'
+                    let body: ReactNode
+                    if (suggestion.field === 'standards' || suggestion.field === 'practices') {
+                      const multi = suggestion
+                      body = (
+                        <div className="brainstorm-quick-replies" role="group" aria-label={`Suggested ${step.label}`}>
+                          {multi.options.map((option) => {
+                            const selected = multi.value.includes(option)
+                            const standard =
+                              multi.field === 'standards' ? scienceStandardsBank.find((item) => item.code === option) : undefined
+                            return (
+                              <button
+                                key={option}
+                                type="button"
+                                className={`practice-chip ${selected ? 'selected' : ''}`}
+                                aria-pressed={selected}
+                                title={standard ? shortenStandardDescription(standard.description, 200) : undefined}
+                                onClick={() => toggleSuggestedOption(multi.field, option)}
+                              >
+                                {selected && (
+                                  <span className="chip-check" aria-hidden="true">
+                                    ✓
+                                  </span>
+                                )}
+                                {multi.field === 'practices' ? practiceLabels([option])[0] : option}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )
+                    } else if (isEditing) {
+                      body = (
+                        <textarea
+                          rows={3}
+                          aria-label={`Edit suggested ${step.label}`}
+                          value={editingSuggestion.draft}
+                          autoFocus
+                          onChange={(event) => setEditingSuggestion({ field: editingSuggestion.field, draft: event.target.value })}
+                        />
+                      )
+                    } else {
+                      body = <p className="brainstorm-suggestion-value">{suggestionText(suggestion)}</p>
+                    }
+                    return (
+                      <li
+                        key={suggestion.field}
+                        id={`brainstorm-suggestion-${suggestion.field}`}
+                        className="brainstorm-suggestion"
+                        tabIndex={-1}
+                        aria-label={`${step.label} suggestion`}
+                      >
+                        <div className="brainstorm-suggestion-head">
+                          <span className="brainstorm-suggestion-label">{step.label}</span>
+                          <span className="brainstorm-suggestion-badge">✦ Suggested</span>
+                        </div>
+                        {body}
+                        {filled && (
+                          <p className="brainstorm-suggestion-current">
+                            Already in your form: {shortenStandardDescription(brainstormAnswerText(suggestion.field, formSnapshot), 90)}
+                          </p>
+                        )}
+                        <div className="brainstorm-suggestion-actions">
+                          {(!filled || isMultiSelect || isText) && (
+                            <button
+                              type="button"
+                              className="primary-button"
+                              disabled={!canApply}
+                              onClick={() => applySuggestion(suggestion, 'add')}
+                            >
+                              {filled ? 'Add to Form' : 'Apply to Form'}
+                            </button>
+                          )}
+                          {filled && !isMultiSelect && (
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              disabled={!canApply}
+                              onClick={() => applySuggestion(suggestion, 'replace')}
+                            >
+                              Replace
+                            </button>
+                          )}
+                          {isText && (
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              onClick={() =>
+                                setEditingSuggestion(
+                                  isEditing ? null : { field: suggestion.field as BrainstormTextField, draft: suggestionText(suggestion) },
+                                )
+                              }
+                            >
+                              {isEditing ? 'Cancel Edit' : 'Edit'}
+                            </button>
+                          )}
+                          <button type="button" className="ghost-button brainstorm-suggestion-dismiss" onClick={() => dismissSuggestion(suggestion)}>
+                            Dismiss
+                          </button>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </section>
+            )}
+            {!isPracticeFocus && suggestionStatus && (
+              <p className="brainstorm-suggestion-status" role="status">
+                {suggestionStatus}
+              </p>
+            )}
+
+            {/* The lesson form's notes don't apply to a practice activity. */}
+            {!isPracticeFocus && (
             <section className={`form-summary${isSummaryOpen ? ' open' : ''}`} aria-labelledby="form-summary-heading">
               <h4 className="form-summary-heading" id="form-summary-heading">
                 <button
@@ -4559,14 +6797,12 @@ function LessonPlanningPanel({
                   aria-controls="form-summary-content"
                   onClick={() => setIsSummaryOpen((open) => !open)}
                 >
-                  <span className="form-summary-title">Form Completion</span>
-                  <span className="form-summary-count" title="Required fields completed">
-                    {requiredFilledCount}/{requiredBrainstormSteps.length}
+                  <span className="form-summary-title">Lesson Planning Notes</span>
+                  <span className="form-summary-count" title="Lesson planning fields added so far">
+                    {pluralize(addedFieldCount, 'field')} added
                   </span>
-                  <span className="form-summary-progress" aria-hidden="true">
-                    <span style={{ width: `${(requiredFilledCount / requiredBrainstormSteps.length) * 100}%` }} />
-                  </span>
-                  {optionalFilledCount > 0 && <span className="form-summary-optional">+{optionalFilledCount} optional</span>}
+                  <span className="form-summary-spacer" aria-hidden="true" />
+                  {suggestedFields.size > 0 && <span className="form-summary-suggested">{suggestedFields.size} suggested</span>}
                   <span className="form-summary-chevron" aria-hidden="true">
                     {isSummaryOpen ? '▴' : '▾'}
                   </span>
@@ -4574,75 +6810,98 @@ function LessonPlanningPanel({
               </h4>
               {isSummaryOpen && (
                 <div className="form-summary-content" id="form-summary-content">
-                  {(['required', 'optional'] as const).map((group) => {
-                    const items = completionSummary.filter((item) => item.optional === (group === 'optional'))
-                    return (
-                      <div key={group} className="form-summary-group">
-                        <p className="form-summary-group-label">
-                          {group === 'required' ? 'Required' : 'Optional'} · {items.filter((item) => item.value).length}/{items.length}
-                        </p>
-                        <ul className="form-summary-bubbles" aria-label={group === 'required' ? 'Required fields' : 'Optional fields'}>
-                          {items.map((item) => {
-                            const content = (
-                              <>
-                                <span className="form-summary-icon" aria-hidden="true">
-                                  {item.value ? '✓' : ''}
-                                </span>
-                                <span className="visually-hidden">{item.value ? 'Completed: ' : 'Not completed: '}</span>
-                                {item.value ? (
-                                  <>
-                                    <span className="form-summary-label">{item.label}:</span> {item.value}
-                                  </>
-                                ) : (
-                                  item.label
-                                )}
-                              </>
-                            )
-                            const title = item.value
-                              ? `${brainstormStepFor(item.field).label}: ${brainstormAnswerText(item.field, formSnapshot)}`
-                              : `${brainstormStepFor(item.field).label} — not completed`
-                            // Template and Rubric open their upload right here.
-                            if (item.field === 'lessonTemplate' || item.field === 'rubric') {
-                              const field = item.field
-                              return (
-                                <li key={field}>
-                                  <button
-                                    type="button"
-                                    className={`form-summary-bubble form-summary-bubble-button ${item.value ? 'complete' : ''}`}
-                                    title={`${title} — click to ${item.value ? 'view or replace the file' : 'upload a file'}`}
-                                    aria-expanded={brainstormUpload === field}
-                                    aria-controls="brainstorm-upload"
-                                    onClick={() => setBrainstormUpload((open) => (open === field ? null : field))}
-                                  >
-                                    {content}
-                                  </button>
-                                </li>
-                              )
-                            }
-                            return (
-                              <li key={item.field} className={`form-summary-bubble ${item.value ? 'complete' : ''}`} title={title}>
-                                {content}
-                              </li>
-                            )
-                          })}
-                        </ul>
-                      </div>
-                    )
-                  })}
+                  <p className="form-summary-legend">
+                    <span>✓ In your form</span>
+                    <span aria-hidden="true">·</span>
+                    <span>✦ Suggested by AI — review to apply</span>
+                  </p>
+                  <ul className="form-summary-bubbles" aria-label="Lesson planning fields">
+                    {completionSummary.map((item) => {
+                      const pending = pendingSuggestions.find((suggestion) => suggestion.field === item.field)
+                      const content = (
+                        <>
+                          <span className="form-summary-icon" aria-hidden="true">
+                            {item.value ? '✓' : pending ? '✦' : ''}
+                          </span>
+                          <span className="visually-hidden">
+                            {item.value ? 'In your form: ' : pending ? 'Suggested by AI, not yet applied: ' : 'Not added yet: '}
+                          </span>
+                          {item.value ? (
+                            <>
+                              <span className="form-summary-label">{item.label}:</span> {item.value}
+                            </>
+                          ) : pending ? (
+                            <>
+                              <span className="form-summary-label">{item.label}:</span> {shortenSummaryText(suggestionText(pending))}
+                            </>
+                          ) : (
+                            item.label
+                          )}
+                          {item.value && pending && (
+                            <span className="form-summary-new" aria-label="New suggestion to review">
+                              ✦
+                            </span>
+                          )}
+                        </>
+                      )
+                      const title = item.value
+                        ? `${brainstormStepFor(item.field).label}: ${brainstormAnswerText(item.field, formSnapshot)}`
+                        : `${brainstormStepFor(item.field).label} — not added yet`
+                      // Template and Rubric open their upload right here.
+                      if (item.field === 'lessonTemplate' || item.field === 'rubric') {
+                        const field = item.field
+                        return (
+                          <li key={field}>
+                            <button
+                              type="button"
+                              className={`form-summary-bubble form-summary-bubble-button ${item.value ? 'complete' : ''}`}
+                              title={`${title} — click to ${item.value ? 'view or replace the file' : 'upload a file'}`}
+                              aria-expanded={brainstormUpload === field}
+                              aria-controls="brainstorm-upload"
+                              onClick={() => setBrainstormUpload((open) => (open === field ? null : field))}
+                            >
+                              {content}
+                            </button>
+                          </li>
+                        )
+                      }
+                      // A field with a suggestion waiting jumps to it for review.
+                      if (pending) {
+                        return (
+                          <li key={item.field}>
+                            <button
+                              type="button"
+                              className={`form-summary-bubble form-summary-bubble-button ${item.value ? 'complete' : 'suggested'}`}
+                              title={`${item.value ? `${title}. ` : ''}AI suggestion: ${suggestionText(pending)} — click to review`}
+                              onClick={() => focusSuggestion(item.field)}
+                            >
+                              {content}
+                            </button>
+                          </li>
+                        )
+                      }
+                      return (
+                        <li key={item.field} className={`form-summary-bubble ${item.value ? 'complete' : ''}`} title={title}>
+                          {content}
+                        </li>
+                      )
+                    })}
+                  </ul>
                   <button type="button" className="ghost-button form-summary-review" onClick={() => chooseMethod('create')}>
                     Review the form
                   </button>
                 </div>
               )}
             </section>
+            )}
 
-            {brainstormUpload && (
+            {!isPracticeFocus && brainstormUpload && (
               <div className="brainstorm-upload" id="brainstorm-upload">
                 <OptionalFileUpload
                   id={`brainstorm-upload-${brainstormUpload}`}
                   {...lessonUploads[brainstormUpload]}
                   file={uploadFiles[brainstormUpload]}
-                  onChange={(file) => attachBrainstormFile(brainstormUpload, file)}
+                  onChange={(file) => setUploadFile(brainstormUpload, file)}
                 />
                 <div className="brainstorm-upload-footer">
                   <p className="customization-note">Also shown in the form’s Additional Customization. Files aren’t read by the AI yet.</p>
@@ -4653,43 +6912,61 @@ function LessonPlanningPanel({
               </div>
             )}
 
-            <form
-              className="composer-box brainstorm-composer"
-              onSubmit={(event) => {
-                event.preventDefault()
-                sendBrainstormAnswer(brainstormDraft)
-              }}
-            >
-              <input
-                type="text"
-                ref={brainstormInputRef}
-                aria-label="Your answer"
-                placeholder={
-                  editingField
-                    ? `Edit your answer for ${brainstormStepFor(editingField).label}…`
-                    : brainstormField === 'done'
-                      ? 'Ask a follow-up…'
-                      : 'Type your answer…'
-                }
-                value={brainstormDraft}
-                onChange={(event) => setBrainstormDraft(event.target.value)}
-                disabled={isBrainstormThinking}
-              />
-              <button type="submit" className="primary-button" disabled={isBrainstormThinking || !brainstormDraft.trim()}>
-                {editingField ? 'Update' : 'Send'}
-              </button>
-            </form>
+            {brainstormFocus && (
+              <form
+                className="composer-box brainstorm-composer"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  sendBrainstormMessage(brainstormDraft)
+                }}
+              >
+                <input
+                  type="text"
+                  ref={brainstormInputRef}
+                  id="brainstorm-message-input"
+                  aria-label="Your message"
+                  placeholder="Share an idea, or ask for feedback…"
+                  value={brainstormDraft}
+                  onChange={(event) => setBrainstormDraft(event.target.value)}
+                  disabled={isBrainstormThinking}
+                />
+                <button type="submit" className="primary-button" disabled={isBrainstormThinking || !brainstormDraft.trim()}>
+                  Send
+                </button>
+              </form>
+            )}
 
-            <RequiredFieldsAlert
-              show={showValidation}
-              missing={missingRequired}
-              hint="Keep answering, or open “Create a new lesson” to fill them in."
-            />
-            <div className="brainstorm-actions">
-              <button type="button" className="primary-button generate-button" onClick={handleGenerate}>
-                Generate Lesson Plan
-              </button>
-            </div>
+            {isPracticeFocus ? (
+              <div className="brainstorm-actions">
+                {/* Missing grade, topic, practice, or idea is asked for in
+                    the chat when the button is clicked, not listed here. */}
+                <button
+                  type="button"
+                  className="primary-button generate-button"
+                  disabled={practiceActivity.isGenerating || isBrainstormThinking}
+                  onClick={generateActivity}
+                >
+                  {practiceActivity.isGenerating
+                    ? 'Drafting Activity…'
+                    : practiceActivity.hasDraft
+                      ? 'Regenerate Activity Draft'
+                      : 'Generate Activity Draft'}
+                </button>
+              </div>
+            ) : (
+              <>
+                <RequiredFieldsAlert
+                  show={showValidation}
+                  missing={missingRequired}
+                  hint="Apply the AI’s suggestions, or choose “Review the form” to fill them in."
+                />
+                <div className="brainstorm-actions">
+                  <button type="button" className="primary-button generate-button" onClick={handleGenerate}>
+                    Generate Lesson Plan
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -4934,6 +7211,8 @@ type LibraryLesson = {
   // Science practice ids the lesson emphasizes.
   sciencePractices: string[]
   durationMinutes: number | null
+  // Shown in the Library but not openable: its mock content isn't ready.
+  demoUnavailable?: boolean
 }
 
 // Where a Library navigation came from — the lesson, and the class it was
@@ -4943,13 +7222,17 @@ type LibraryContext = {
   className?: string
   page: PageId
   assignmentTitle?: string
+  // Where the lesson was opened from: the Library (default), or a demo
+  // class chosen in Class Setup.
+  source?: 'library' | 'class-setup'
 }
 
 // A class owns its roster, so assigning another lesson to the class reuses
 // the same students without uploading the roster again. A lesson can be
-// assigned to any number of classes. The roster is a list of Student IDs
-// from the shared student registry (see Student), so one student can be in
-// several classes under the same ID.
+// assigned to any number of classes. `studentIds` are internal keys from the
+// shared student registry (see Student), so one student can be in several
+// classes. What students and teachers see is the class Student ID in
+// `studentCodes` ("SB-001"), which is unique within this class only.
 type LibraryClass = {
   id: string
   name: string
@@ -4957,21 +7240,32 @@ type LibraryClass = {
   // Optional period or section as the teacher typed it ("2", "Period 2",
   // "Section B"); empty when not given.
   period: string
+  // The class's teacher as entered in Class Setup; its first letter starts
+  // the class's Student IDs.
+  teacherName: string
   ownerEmail: string
   bannerColor: string
   studentIds: string[]
+  // Each student's class Student ID, by internal key. An entry stays after
+  // the student is removed, so the number is never given to anyone else
+  // (and comes back if they rejoin). Only enrolled students' IDs are active.
+  studentCodes: Record<string, string>
+  // The number the next new Student ID gets; it never goes down.
+  nextStudentNumber: number
+  // Set when the first Student ID is assigned, so renaming the class or its
+  // teacher afterwards never changes the IDs students already have.
+  studentIdPrefix: string | null
   lessonIds: string[]
 }
 
-// A student in the shared registry. `id` is the PARTNERS Student ID and
-// `pseudonym` the generated name shown wherever a student shouldn't be
-// identified; both are assigned once and reused in every class. `name` is
-// a first name or initials only (see rosterNameProblem) — no other personal
-// information is stored.
+// A student in the shared registry. `id` is an internal key, never shown;
+// students are identified to teachers and to the Student Feedback login by
+// their class Student ID (see LibraryClass). `name` is the student's name
+// as the teacher entered it (see rosterNameProblem), shown only on teacher
+// pages — no other personal information is stored.
 type Student = {
   id: string
   name: string
-  pseudonym: string
 }
 
 // A bare number is shown as "Period 2"; anything else as typed.
@@ -4980,7 +7274,7 @@ function formatPeriod(period: string): string {
 }
 
 // How a class is labeled everywhere outside Class Setup — e.g. the Library
-// card title "Period 2 · Earth Science".
+// card title "Period 4 · Earth Science".
 function classDisplayName(classroom: Pick<LibraryClass, 'name' | 'period'>): string {
   return classroom.period ? `${formatPeriod(classroom.period)} · ${classroom.name}` : classroom.name
 }
@@ -4995,6 +7289,7 @@ type LessonNavHandlers = {
     classroom: LibraryClass | null,
   ) => void
   onOpenClassFeedback: (lesson: LibraryLesson, classroom: LibraryClass | null) => void
+  onOpenStudentReports: (lesson: LibraryLesson, classroom: LibraryClass | null) => void
 }
 
 // The class a lesson is being created for on Lesson Planning (via a class
@@ -5010,20 +7305,60 @@ type LibraryViewState = { expandedClassIds: string[]; openLessonKey: string | nu
 // created from a class's Add Lesson can be saved alongside them.
 const initialLibraryLessons: LibraryLesson[] = [
   {
-    id: 'climate-carbon-cycle',
-    title: 'Climate Change and Carbon Cycle',
+    id: 'zombie-fires',
+    title: 'Zombie Fires: Matter and Energy Flow',
     grade: '10',
     topic: 'Earth Science',
     bannerColor: '#5b7f95',
     lessonPlan: { hasDemoContent: true },
+    // One assignment with both student products (Model and Explanation),
+    // opened from one Student Feedback link. Confirming the products on
+    // Lesson Planning updates this same link.
     studentFeedback: [
-      { id: 'climate-descriptive', title: 'Descriptive Model', modelTab: 'descriptive' },
-      { id: 'climate-mechanistic', title: 'Mechanistic Model', modelTab: 'mechanistic' },
+      {
+        id: 'zombie-fires-assignment',
+        title: 'Model and Explanation',
+        modelTab: 'descriptive',
+        link: {
+          lessonId: 'zombie-fires',
+          lessonTitle: 'Zombie Fires: Matter and Energy Flow',
+          activities: studentProductsFor('zombie-fires').map(({ name, submission }) => ({ name, submission })),
+        },
+      },
     ],
     classFeedback: { available: true },
     ownerEmail: DEMO_TEACHER_EMAIL,
     standards: [],
     sciencePractices: [],
+    durationMinutes: null,
+  },
+  {
+    // The COVID-19 handwashing activity Student Feedback demonstrates: two
+    // assignments, one per model.
+    id: 'covid-virus',
+    title: 'COVID Virus',
+    grade: '8',
+    topic: 'Life Science',
+    bannerColor: '#9a7b5b',
+    lessonPlan: { hasDemoContent: true, document: covidLessonDocument },
+    studentFeedback: [
+      // One assignment with both student products (Descriptive and
+      // Mechanistic), opened from one Student Feedback link.
+      {
+        id: 'covid-virus-assignment',
+        title: 'Descriptive and Mechanistic',
+        modelTab: 'descriptive',
+        link: {
+          lessonId: 'covid-virus',
+          lessonTitle: 'COVID Virus: Structure and Function of Soap',
+          activities: studentProductsFor('covid-virus').map(({ name, submission }) => ({ name, submission })),
+        },
+      },
+    ],
+    classFeedback: { available: true },
+    ownerEmail: DEMO_TEACHER_EMAIL,
+    standards: [],
+    sciencePractices: ['modeling', 'explanation'],
     durationMinutes: null,
   },
   {
@@ -5033,8 +7368,9 @@ const initialLibraryLessons: LibraryLesson[] = [
     topic: 'Life Science',
     bannerColor: '#6f8f6a',
     lessonPlan: { hasDemoContent: false },
-    studentFeedback: [{ id: 'ecosystem-descriptive', title: 'Descriptive Model', modelTab: 'descriptive' }],
+    studentFeedback: [],
     classFeedback: { available: false },
+    demoUnavailable: true,
     ownerEmail: DEMO_TEACHER_EMAIL,
     standards: [],
     sciencePractices: [],
@@ -5049,6 +7385,7 @@ const initialLibraryLessons: LibraryLesson[] = [
     lessonPlan: { hasDemoContent: false },
     studentFeedback: [],
     classFeedback: { available: false },
+    demoUnavailable: true,
     ownerEmail: DEMO_TEACHER_EMAIL,
     standards: [],
     sciencePractices: [],
@@ -5106,90 +7443,181 @@ const mockRosterNames = [0, 1].flatMap((round) =>
   mockRosterFirstNames.map((first, index) => `${first} ${String.fromCharCode(65 + ((index * 7 + round * 11) % 26))}.`),
 )
 
-const pseudonymAdjectives = [
-  'Bright', 'Calm', 'Clever', 'Curious', 'Daring', 'Eager', 'Gentle', 'Happy', 'Keen', 'Kind', 'Lively', 'Lucky',
-  'Merry', 'Nimble', 'Patient', 'Quick', 'Quiet', 'Swift', 'Sunny', 'Steady', 'Brave', 'Bold', 'Witty', 'Zesty',
-]
-const pseudonymAnimals = [
-  'Otter', 'Falcon', 'Panda', 'Heron', 'Fox', 'Badger', 'Dolphin', 'Lynx', 'Owl', 'Koala', 'Robin', 'Turtle',
-  'Bison', 'Crane', 'Gecko', 'Ibis', 'Jaguar', 'Lemur', 'Marmot', 'Newt', 'Orca', 'Puffin', 'Quokka', 'Wren',
-]
+// The seeded classes' teacher, used for their Student IDs ("DE-001").
+const DEMO_TEACHER_NAME = 'Demo Teacher'
 
-function formatStudentId(studentNumber: number): string {
-  return `S-${String(studentNumber).padStart(4, '0')}`
+function createStudent(keyNumber: number, name: string): Student {
+  return { id: `student-${keyNumber}`, name }
 }
 
-function nextStudentNumber(students: readonly Student[]): number {
+function nextStudentKeyNumber(students: readonly Student[]): number {
   return students.reduce((max, student) => Math.max(max, Number(student.id.replace(/\D/g, '')) || 0), 0) + 1
 }
 
-// Picks an unused "Adjective Animal" pseudonym. Stepping through the
-// combinations by a large prime keeps consecutive students from getting
-// near-identical pseudonyms.
-function createPseudonym(studentNumber: number, used: ReadonlySet<string>): string {
-  const total = pseudonymAdjectives.length * pseudonymAnimals.length
-  for (let attempt = 0; attempt < total; attempt++) {
-    const index = (studentNumber * 97 + attempt) % total
-    const pseudonym = `${pseudonymAdjectives[index % pseudonymAdjectives.length]} ${pseudonymAnimals[Math.floor(index / pseudonymAdjectives.length)]}`
-    if (!used.has(pseudonym)) return pseudonym
-  }
-  return `Student ${studentNumber}`
+// First letter of a name, uppercased; X when it has none.
+function initialOf(text: string): string {
+  return /\p{L}/u.exec(text)?.[0].toUpperCase() ?? 'X'
 }
 
-function createStudent(studentNumber: number, name: string, used: ReadonlySet<string>): Student {
-  return { id: formatStudentId(studentNumber), name, pseudonym: createPseudonym(studentNumber, used) }
+// [Teacher Initial][Course Initial], e.g. Shunki + Biology → "SB".
+function studentIdPrefixFor(teacherName: string, className: string): string {
+  return `${initialOf(teacherName)}${initialOf(className)}`
+}
+
+function classStudentIdPrefix(classroom: Pick<LibraryClass, 'studentIdPrefix' | 'teacherName' | 'name'>): string {
+  return classroom.studentIdPrefix ?? studentIdPrefixFor(classroom.teacherName, classroom.name)
+}
+
+// Three digits, growing past 999 when a class needs more.
+function formatClassStudentId(prefix: string, studentNumber: number): string {
+  return `${prefix}-${String(studentNumber).padStart(3, '0')}`
+}
+
+// Reads a typed or uploaded Student ID loosely ("sb001", "SB-1", "sb - 001"
+// all mean SB-001), or null if it isn't one.
+function normalizeClassStudentId(raw: string): string | null {
+  const match = /^(\p{L}{2})\s*-?\s*(\d+)$/u.exec(raw.trim())
+  return match ? formatClassStudentId(match[1].toUpperCase(), Number(match[2])) : null
+}
+
+// Enrolls students in the class (skipping ones already in it). Each gets the
+// class Student ID they had before, if they were ever in the class, or the
+// next unused number.
+function withEnrolledStudents(classroom: LibraryClass, studentKeys: readonly string[]): LibraryClass {
+  const prefix = classStudentIdPrefix(classroom)
+  const studentIds = [...classroom.studentIds]
+  const studentCodes = { ...classroom.studentCodes }
+  let nextStudentNumber = classroom.nextStudentNumber
+  for (const key of studentKeys) {
+    if (studentIds.includes(key)) continue
+    studentIds.push(key)
+    studentCodes[key] ??= formatClassStudentId(prefix, nextStudentNumber++)
+  }
+  return {
+    ...classroom,
+    studentIds,
+    studentCodes,
+    nextStudentNumber,
+    studentIdPrefix: nextStudentNumber > 1 ? prefix : null,
+  }
+}
+
+// The class Student IDs students can currently sign in with.
+function activeStudentCodes(classroom: LibraryClass): string[] {
+  return classroom.studentIds.map((key) => classroom.studentCodes[key]).filter(Boolean)
+}
+
+// "Biology_Period_2_Student_Roster_With_IDs.csv"
+function rosterDownloadFileName(classroom: Pick<LibraryClass, 'name' | 'period'>): string {
+  const label = [classroom.name, classroom.period ? formatPeriod(classroom.period) : '']
+    .join(' ')
+    .replace(/[^\p{L}\p{N}]+/gu, '_')
+    .replace(/^_+|_+$/g, '')
+  return `${label || 'Class'}_Student_Roster_With_IDs.csv`
 }
 
 // Built lazily (and once — App's student and class state both read it)
-// because the Period 2 roster reuses the Class Feedback demo's student
+// because the Period 4 roster reuses the Class Feedback demo's student
 // names, which are defined further down this file.
 let initialLibraryData: { students: Student[]; classes: LibraryClass[] } | null = null
 
 function getInitialLibraryData() {
   if (initialLibraryData) return initialLibraryData
   const students: Student[] = []
-  const used = new Set<string>()
-  const enroll = (names: readonly string[]) =>
+  const register = (names: readonly string[]) =>
     names.map((name) => {
-      const student = createStudent(students.length + 1, name, used)
-      used.add(student.pseudonym)
+      const student = createStudent(students.length + 1, name)
       students.push(student)
       return student.id
     })
+  const seedClass = (
+    classroom: Omit<LibraryClass, 'studentIds' | 'studentCodes' | 'nextStudentNumber' | 'studentIdPrefix'>,
+    names: readonly string[],
+  ) => withEnrolledStudents({ ...classroom, studentIds: [], studentCodes: {}, nextStudentNumber: 1, studentIdPrefix: null }, register(names))
   const classes: LibraryClass[] = [
-    {
-      id: 'period-2-earth-science',
-      name: 'Earth Science',
-      gradeLevel: '10',
-      period: '2',
-      ownerEmail: DEMO_TEACHER_EMAIL,
-      bannerColor: classBannerColors[0],
-      studentIds: enroll(assignmentStudentRoster),
-      lessonIds: ['climate-carbon-cycle'],
-    },
-    {
-      id: 'period-4-earth-science',
-      name: 'Earth Science',
-      gradeLevel: '10',
-      period: '4',
-      ownerEmail: DEMO_TEACHER_EMAIL,
-      bannerColor: classBannerColors[1],
-      studentIds: enroll(mockRosterNames.slice(0, 22)),
-      lessonIds: ['climate-carbon-cycle'],
-    },
-    {
-      id: 'period-1-life-science',
-      name: 'Life Science',
-      gradeLevel: '8',
-      period: '1',
-      ownerEmail: DEMO_TEACHER_EMAIL,
-      bannerColor: classBannerColors[2],
-      studentIds: enroll(mockRosterNames.slice(22, 48)),
-      lessonIds: ['ecosystem-interactions'],
-    },
+    seedClass(
+      {
+        id: 'period-4-earth-science',
+        name: 'Earth Science',
+        gradeLevel: '10',
+        period: '4',
+        teacherName: DEMO_TEACHER_NAME,
+        ownerEmail: DEMO_TEACHER_EMAIL,
+        bannerColor: classBannerColors[1],
+        lessonIds: ['zombie-fires'],
+      },
+      assignmentStudentRoster,
+    ),
+    seedClass(
+      {
+        id: 'period-1-life-science',
+        name: 'Life Science',
+        gradeLevel: '8',
+        period: '1',
+        teacherName: DEMO_TEACHER_NAME,
+        ownerEmail: DEMO_TEACHER_EMAIL,
+        bannerColor: classBannerColors[2],
+        lessonIds: ['ecosystem-interactions', 'covid-virus'],
+      },
+      mockRosterNames.slice(22, 48),
+    ),
   ]
   initialLibraryData = { students, classes }
   return initialLibraryData
+}
+
+// ---------------------------------------------------------------------------
+// Student login (prototype)
+//
+// Students open a class's Student Feedback link and enter their class
+// Student ID; it's matched only against that class's roster, since IDs are
+// unique within a class, not across classes. A link usually opens in a new
+// tab, which starts from the seeded prototype state, so each class's active
+// Student IDs — IDs and the class label only, never names — are mirrored to
+// this browser's localStorage. This is a demo stand-in, not secure or
+// persistent storage: a backend replaces it.
+// ---------------------------------------------------------------------------
+
+type ClassLoginRoster = { label: string; studentIds: string[] }
+
+const classLoginStorageKey = 'partners.prototype.classStudentIds'
+
+// The class the main nav's Student Feedback page belongs to: its demo
+// student work comes from this class.
+const demoStudentFeedbackClassId = 'period-4-earth-science'
+
+function readStoredLoginRosters(): Record<string, ClassLoginRoster> {
+  try {
+    const data: unknown = JSON.parse(window.localStorage.getItem(classLoginStorageKey) ?? '{}')
+    if (!data || typeof data !== 'object') return {}
+    return Object.fromEntries(
+      Object.entries(data).filter(
+        (entry): entry is [string, ClassLoginRoster] =>
+          typeof entry[1]?.label === 'string' && Array.isArray(entry[1]?.studentIds),
+      ),
+    )
+  } catch {
+    return {}
+  }
+}
+
+function storeLoginRosters(classes: readonly LibraryClass[]) {
+  const current = Object.fromEntries(
+    classes.map((classroom) => [classroom.id, { label: classDisplayName(classroom), studentIds: activeStudentCodes(classroom) }]),
+  )
+  try {
+    window.localStorage.setItem(classLoginStorageKey, JSON.stringify({ ...readStoredLoginRosters(), ...current }))
+  } catch {
+    // Storage unavailable (private mode, blocked): login falls back to this tab's classes.
+  }
+}
+
+// The latest roster a teacher saved in this browser, else this tab's own.
+function findLoginRoster(classId: string, classes: readonly LibraryClass[]): ClassLoginRoster | null {
+  const stored = readStoredLoginRosters()[classId]
+  if (stored) return stored
+  const classroom = classes.find((other) => other.id === classId)
+  return classroom ? { label: classDisplayName(classroom), studentIds: activeStudentCodes(classroom) } : null
 }
 
 function matchesLibraryKeyword(lesson: LibraryLesson, keyword: string): boolean {
@@ -5205,7 +7633,9 @@ function pluralize(count: number, singular: string, plural = `${singular}s`) {
 function LibraryContextBanner({ context, onDismiss }: { context: LibraryContext; onDismiss: () => void }) {
   const { lesson, className, page, assignmentTitle } = context
   let note: string
-  if (page === 'lesson-generator') {
+  if (page === 'lesson-generator' && context.source === 'class-setup') {
+    note = 'Choose Create a new lesson to see the form filled in with this demo class’s saved lesson, then click Generate Lesson Plan (prototype demo content). Use Add Lesson in the Library to start a new, blank lesson.'
+  } else if (page === 'lesson-generator') {
     note = lesson.lessonPlan.hasDemoContent
       ? 'Showing the saved lesson plan (prototype demo content).'
       : 'Saved content for this lesson isn’t connected in the prototype yet — the planning form is shown so you can draft it.'
@@ -5219,7 +7649,9 @@ function LibraryContextBanner({ context, onDismiss }: { context: LibraryContext;
     <div className="library-context-banner" role="status">
       <span className="library-context-swatch" style={{ background: lesson.bannerColor }} aria-hidden="true" />
       <p>
-        <strong>Opened from My Lesson Library: {lesson.title}</strong>
+        <strong>
+          {context.source === 'class-setup' ? 'Demo class lesson' : 'Opened from My Lesson Library'}: {lesson.title}
+        </strong>
         {className ? ` · ${className}` : ''} · {formatLessonGrade(lesson.grade)}
         <br />
         <span>{note}</span>
@@ -5503,6 +7935,22 @@ function LibraryClassCard({
                   {visibleLessons.map((lesson) => {
                     const lessonKey = `${classroom.id}:${lesson.id}`
                     const isOpen = openLessonKey === lessonKey
+                    if (lesson.demoUnavailable) {
+                      return (
+                        <li key={lesson.id} className="library-class-lesson unavailable">
+                          <div className="library-class-lesson-toggle" aria-disabled="true">
+                            <span className="library-context-swatch" style={{ background: lesson.bannerColor }} aria-hidden="true" />
+                            <span className="library-class-lesson-text">
+                              <strong>{lesson.title}</strong>
+                              <small>
+                                {formatLessonGrade(lesson.grade)} · {lesson.topic}
+                              </small>
+                            </span>
+                            <span className="library-demo-unavailable">Not available in demo</span>
+                          </div>
+                        </li>
+                      )
+                    }
                     return (
                       <li key={lesson.id} className={`library-class-lesson${isOpen ? ' open' : ''}`}>
                         <button
@@ -5545,7 +7993,7 @@ function LibraryClassCard({
 // Unassigned lessons keep the original lesson-card layout.
 function LibraryLessonCard({ lesson, nav }: { lesson: LibraryLesson; nav: LessonNavHandlers }) {
   return (
-    <article className="library-card">
+    <article className={`library-card${lesson.demoUnavailable ? ' unavailable' : ''}`} aria-disabled={lesson.demoUnavailable || undefined}>
       <div className="library-card-banner" style={{ background: lesson.bannerColor }} aria-hidden="true" />
       <div className="library-card-body">
         <h3>{lesson.title}</h3>
@@ -5561,7 +8009,11 @@ function LibraryLessonCard({ lesson, nav }: { lesson: LibraryLesson; nav: Lesson
         </dl>
       </div>
       <div className="library-card-actions">
-        <LessonNavActions lesson={lesson} classroom={null} nav={nav} />
+        {lesson.demoUnavailable ? (
+          <span className="library-demo-unavailable">Not available in demo</span>
+        ) : (
+          <LessonNavActions lesson={lesson} classroom={null} nav={nav} />
+        )}
       </div>
     </article>
   )
@@ -5651,6 +8103,12 @@ function LessonNavActions({
         <span>Class Feedback</span>
         {!lesson.classFeedback.available && <small>No analysis yet</small>}
       </button>
+
+      {/* Opens the selector for this lesson and class; with no analyzed
+          submissions it shows an empty state, never another class's data. */}
+      <button type="button" className="library-action" onClick={() => nav.onOpenStudentReports(lesson, classroom)}>
+        <span>Individual Student Reports</span>
+      </button>
     </div>
   )
 }
@@ -5662,7 +8120,7 @@ function LessonNavActions({
 // "models" are the local mock*Reply functions; a real API client must be
 // passed in the same way, never called directly.) Before the model sees a
 // request, the gateway replaces every student identifier it knows — roster
-// names and their first-name part, Student IDs, pseudonyms, and the demo
+// names and their first-name part, class Student IDs ("SB-001"), and the demo
 // Class Feedback student names — with neutral placeholders ("Student A"),
 // anywhere in the request (nested objects, arrays, free text a teacher or
 // student typed). It then re-scans the redacted request and refuses to send
@@ -5674,6 +8132,7 @@ type AiPurpose =
   | 'lesson-generation'
   | 'lesson-revision'
   | 'lesson-brainstorm'
+  | 'practice-activity'
   | 'student-feedback'
   | 'class-feedback-analysis'
   | 'class-feedback-summary'
@@ -5684,7 +8143,8 @@ type AiPurpose =
 // always included because that page's evidence carries student names.
 let aiRosterIdentifiers: string[] = []
 
-const studentIdPattern = /S-\d{4,}/giu
+// Any class Student ID: two letters, a hyphen, three or more digits.
+const studentIdPattern = /(?<![\p{L}\p{N}])\p{L}{2}-\d{3,}(?![\p{L}\p{N}])/giu
 
 function syncAiRosterGuard(students: readonly Student[]) {
   const identifiers = new Set<string>()
@@ -5697,14 +8157,12 @@ function syncAiRosterGuard(students: readonly Student[]) {
     const trimmed = name.trim()
     if (!trimmed) return
     add(trimmed)
-    // The first-name part on its own ("Jordan" for "Jordan P.") identifies
-    // the student too; single letters are skipped so ordinary words survive.
-    add(trimmed.split(' ')[0].replace(/\.$/, ''))
+    // Each part of the name on its own ("Jordan" or "Smith" for "Jordan
+    // Smith") identifies the student too; single letters are skipped so
+    // ordinary words survive.
+    for (const part of trimmed.split(/[\s,]+/)) add(part.replace(/\.$/, ''))
   }
-  for (const student of students) {
-    addName(student.name)
-    add(student.pseudonym)
-  }
+  for (const student of students) addName(student.name)
   for (const name of assignmentStudentRoster) addName(name)
   aiRosterIdentifiers = [...identifiers].sort((a, b) => b.length - a.length)
 }
@@ -6435,13 +8893,19 @@ function generateLessonDocument(details: PlanningLessonDetails): LessonDocument 
 // ---------------------------------------------------------------------------
 // Class Setup
 //
-// Classes (name, grade level, optional period/section) and their student
-// rosters, shared with the Library. Rosters hold first names or initials
-// only. Students live in one registry: each new student gets a PARTNERS
-// Student ID and a pseudonym, and an existing ID is reused only when the
-// upload reliably identifies the student — by that Student ID. A matching
-// first name is never linked automatically; at most it's offered for the
-// teacher to confirm. All of this is frontend state until there's a backend.
+// Classes (name, grade level, optional period/section, teacher) and their
+// student rosters, shared with the Library. Rosters hold student names (full
+// names allowed), which only the teacher sees: in Class Setup and the
+// downloaded roster. Students see only their Student ID, and names never
+// reach an AI model (see callAiModel). Each student in a class gets a class
+// Student ID — [Teacher Initial][Course Initial]-[Number], e.g. SB-001 —
+// that students use to sign in to Student Feedback. Uploading an updated roster keeps
+// existing IDs: a row keeps its student's ID when it carries that Student
+// ID, or when its name matches exactly one student already in the class.
+// Only new students get new numbers, and numbers are never reused. A
+// matching name in another class is never linked automatically; at most
+// it's offered for the teacher to confirm. All of this is frontend state
+// until there's a backend.
 // ---------------------------------------------------------------------------
 
 // High school grades only.
@@ -6452,24 +8916,17 @@ function formatClassGrade(gradeLevel: string): string {
   return gradeLevel === 'K' ? 'Kindergarten' : `Grade ${gradeLevel}`
 }
 
-function normalizeStudentId(raw: string): string | null {
-  const match = /^s?-?\s*(\d{1,})$/i.exec(raw.trim())
-  return match ? formatStudentId(Number(match[1])) : null
-}
-
-// Why a roster name can't be stored, or null if it's a first name or
-// initials (optionally followed by one initial, e.g. "Jordan P.").
+// Why a roster name can't be stored, or null if it reads as a person's
+// name — full names ("Jordan Smith", "María José O’Neil-Ruiz"), first names
+// or initials. Anything else (emails, IDs, other data) stays out.
 function rosterNameProblem(name: string): string | null {
-  if (name.includes('@')) return 'Looks like an email address — use a first name or initials only.'
-  if (/\d/.test(name)) return 'Contains numbers — use a first name or initials only.'
-  if (!/^[\p{L}\s.'’-]+$/u.test(name)) return 'Contains characters that aren’t part of a first name or initials.'
-  if (name.length > 30) return 'Too long — use a first name or initials only.'
-  const words = name.split(' ')
-  const isInitial = (word: string) => /^\p{L}\.?$/u.test(word)
-  const isFirstOrInitials = (word: string) => /^\p{L}[\p{L}'’-]*$/u.test(word) || /^(\p{L}\.?){1,3}$/u.test(word)
-  if (words.length === 1 && isFirstOrInitials(words[0])) return null
-  if (words.length === 2 && isFirstOrInitials(words[0]) && isInitial(words[1])) return null
-  return 'Looks like it includes a last name — use the first name or initials only.'
+  if (!name) return 'Enter the student’s name.'
+  if (name.includes('@')) return 'Looks like an email address — enter the student’s name.'
+  if (/\d/.test(name)) return 'Contains numbers — enter the student’s name only.'
+  if (!/^[\p{L}\p{M}\s.,'’-]+$/u.test(name)) return 'Contains characters that aren’t part of a name.'
+  if (!/\p{L}/u.test(name)) return 'Enter the student’s name.'
+  if (name.length > 60) return 'Too long — enter the student’s name only.'
+  return null
 }
 
 function normalizeStudentName(name: string): string {
@@ -6613,46 +9070,68 @@ async function readRosterFile(file: File): Promise<string[][]> {
   throw new Error('Upload a .csv or .xlsx file.')
 }
 
-// One student row from an upload or the Add Student form. Only these two
-// fields are ever read out of a roster file.
-type RosterUploadRow = { name: string; studentId: string | null }
+// The file's other columns for one row, by header — kept only so the
+// teacher's downloaded roster can include them (see RosterUploadRow).
+type RosterExtraCell = { header: string; value: string }
 
-const rosterNameHeader = /^(student\s*)?(first\s*name|first|name|initials?)(\s*(or|\/)\s*initials?)?$/
+// One student row from an upload. `name` and `studentId` are the only
+// fields that can join the roster.
+type RosterUploadRow = { name: string; studentId: string | null; extra: RosterExtraCell[] }
+
+const rosterFullNameHeader = /^(student\s*)?(full\s*)?name$/
+const rosterFirstNameHeader = /^(student\s*)?(first\s*name|first|given\s*name|initials?)(\s*(or|\/)\s*initials?)?$/
+const rosterLastNameHeader = /^(student\s*)?(last\s*name|last|surname|family\s*name)$/
 const rosterIdHeader = /^(partners\s*)?(student\s*)?id$/
 
-// Maps spreadsheet rows to students, importing only a First Name / Initials
-// column and an optional Student ID column. Every other column (last names,
-// emails, birthdays…) is dropped here and never enters app state; its
-// header is returned so the teacher can be told it was ignored.
+// Maps spreadsheet rows to students, importing the student's name — a
+// Student Name / Name column, or First Name plus an optional Last Name —
+// and an optional Student ID column. Every other column (emails,
+// birthdays…) never joins the roster: its values ride along with the
+// upload's review only, so the teacher's "Roster with Student IDs" download
+// can keep them, and are dropped when that upload is done with. Its header
+// is returned so the teacher can be told it wasn't imported.
 function rosterRowsFromTable(table: string[][]): { rows: RosterUploadRow[]; ignoredColumns: string[] } {
   if (table.length === 0) return { rows: [], ignoredColumns: [] }
   const header = table[0].map((cell) => cell.trim().toLowerCase())
-  let nameColumn = header.findIndex((cell) => rosterNameHeader.test(cell))
-  const idColumn = header.findIndex((cell) => rosterIdHeader.test(cell))
-  const hasHeader = nameColumn >= 0 || idColumn >= 0
+  const columnOf = (pattern: RegExp) => header.findIndex((cell) => pattern.test(cell))
+  const fullNameColumn = columnOf(rosterFullNameHeader)
+  const firstNameColumn = columnOf(rosterFirstNameHeader)
+  const lastNameColumn = columnOf(rosterLastNameHeader)
+  let nameColumns =
+    fullNameColumn >= 0 ? [fullNameColumn] : firstNameColumn >= 0 ? [firstNameColumn, lastNameColumn].filter((index) => index >= 0) : []
+  const idColumn = columnOf(rosterIdHeader)
+  const hasHeader = nameColumns.length > 0 || idColumn >= 0 || lastNameColumn >= 0
+  const columnCount = Math.max(...table.map((cells) => cells.length))
+  const isImported = (index: number) => nameColumns.includes(index) || index === idColumn
   let ignoredColumns: string[]
   if (hasHeader) {
-    if (nameColumn < 0) throw new Error('Couldn’t find a “First Name or Initials” column in this file.')
-    ignoredColumns = table[0].filter((cell, index) => index !== nameColumn && index !== idColumn && cell.trim() !== '')
+    if (nameColumns.length === 0) throw new Error('Couldn’t find a “Student Name” (or “First Name”) column in this file.')
+    ignoredColumns = table[0].filter((cell, index) => !isImported(index) && cell.trim() !== '')
   } else {
     // No recognizable header: only the first column is read.
-    nameColumn = 0
-    const extraColumns = Math.max(...table.map((cells) => cells.length)) - 1
-    ignoredColumns = extraColumns > 0 ? [`${pluralize(extraColumns, 'unlabeled column')} after the first`] : []
+    nameColumns = [0]
+    ignoredColumns = columnCount > 1 ? [`${pluralize(columnCount - 1, 'unlabeled column')} after the first`] : []
   }
+  const extraColumns = Array.from({ length: columnCount }, (_, index) => index).filter((index) => !isImported(index))
+  const extraHeader = (index: number) => (hasHeader ? table[0][index]?.trim() : '') || `Column ${index + 1}`
 
   const rows = (hasHeader ? table.slice(1) : table)
     .map((cells) => ({
-      name: (cells[nameColumn] ?? '').trim().replace(/\s+/g, ' '),
+      name: nameColumns
+        .map((index) => cells[index] ?? '')
+        .join(' ')
+        .trim()
+        .replace(/\s+/g, ' '),
       studentId: idColumn >= 0 ? (cells[idColumn] ?? '').trim() || null : null,
+      extra: extraColumns.map((index) => ({ header: extraHeader(index), value: cells[index] ?? '' })),
     }))
     .filter((row) => row.name !== '' || row.studentId)
   return { rows, ignoredColumns }
 }
 
 // A row waiting for the teacher's review before it joins the roster.
-// `existing` is set only when the row's Student ID matched a registered
-// student; `linkTo` is a link the teacher chose by hand.
+// `existing` is set only when the row's Student ID matched one of this
+// class's Student IDs; `linkTo` is a link the teacher chose by hand.
 type RosterReviewRow = {
   key: string
   name: string
@@ -6660,12 +9139,29 @@ type RosterReviewRow = {
   existing: Student | null
   unknownId: boolean
   linkTo: string | null
+  extra: RosterExtraCell[]
 }
 
-// Two cards: Class Management (Add Class, then a collapsible Edit Existing
-// Class) and Student Roster Management (class picker, privacy notice and
-// upload, then a collapsible Check & Edit Student Roster). Both collapsible
-// parts start collapsed.
+// The roster as of the teacher's last confirmed upload, for the preview
+// and the "Roster with Student IDs" download.
+type RosterUploadResult = { rows: { name: string; studentId: string; extra: RosterExtraCell[] }[] }
+
+function rosterResultCsv(result: RosterUploadResult): string[][] {
+  const extraHeaders = [...new Set(result.rows.flatMap((row) => row.extra.map((cell) => cell.header)))]
+  return [
+    ['Student Name', 'Student ID', ...extraHeaders],
+    ...result.rows.map((row) => [
+      row.name,
+      row.studentId,
+      ...extraHeaders.map((header) => row.extra.find((cell) => cell.header === header)?.value ?? ''),
+    ]),
+  ]
+}
+
+// Two cards: Class Management (choose Add Class or Edit Existing Class;
+// only that form is shown) and Student Roster Management (class picker,
+// privacy notice and upload, then a collapsible Check & Edit Student
+// Roster, which starts collapsed).
 function ClassSetupPage({
   classes,
   setClasses,
@@ -6693,7 +9189,14 @@ function ClassSetupPage({
   onViewInLibrary: (classId: string) => void
 }) {
   const [editClassId, setEditClassId] = useState<string | null>(classes[0]?.id ?? null)
-  const [isEditOpen, setIsEditOpen] = useState(false)
+  // Class Management shows one form at a time: the teacher picks Add Class
+  // or Edit Existing Class (null: neither yet). Opening from the Library's
+  // "+ Create a Class", or a first-time teacher with no class, starts on Add.
+  const [classMode, setClassMode] = useState<'add' | 'edit' | null>(() =>
+    startCreating || (onboarding && classes.length === 0) ? 'add' : null,
+  )
+  // Whether the open form has edits that aren't saved yet.
+  const [isClassFormDirty, setIsClassFormDirty] = useState(false)
   const [isRosterOpen, setIsRosterOpen] = useState(false)
   const [createdClassId, setCreatedClassId] = useState<string | null>(null)
   const [updatedClassId, setUpdatedClassId] = useState<string | null>(null)
@@ -6721,6 +9224,9 @@ function ClassSetupPage({
         ownerEmail,
         bannerColor: classBannerColors[prev.length % classBannerColors.length],
         studentIds: [],
+        studentCodes: {},
+        nextStudentNumber: 1,
+        studentIdPrefix: null,
         lessonIds: [],
       },
     ])
@@ -6728,12 +9234,32 @@ function ClassSetupPage({
     onSelectClass(id)
     setCreatedClassId(id)
     setAddFormKey((key) => key + 1)
+    setIsClassFormDirty(false)
   }
 
   const updateClass = (values: ClassFormValues) => {
     if (!editClass) return
     setClasses((prev) => prev.map((classroom) => (classroom.id === editClass.id ? { ...classroom, ...values } : classroom)))
     setUpdatedClassId(editClass.id)
+    setIsClassFormDirty(false)
+  }
+
+  // Leaving a form with unsaved edits (switching mode, closing it, or
+  // picking another class to edit) asks first; the saved class data is
+  // never touched either way.
+  const confirmDiscard = () =>
+    !isClassFormDirty || window.confirm('You have unsaved changes to this class. Discard them?')
+  const resetClassForms = () => {
+    setIsClassFormDirty(false)
+    setAddFormKey((key) => key + 1)
+    setEditFormKey((key) => key + 1)
+    setCreatedClassId(null)
+    setUpdatedClassId(null)
+  }
+  const chooseClassMode = (mode: 'add' | 'edit' | null) => {
+    if (mode === classMode || !confirmDiscard()) return
+    resetClassForms()
+    setClassMode(mode)
   }
 
   const hasClass = classes.length > 0
@@ -6778,15 +9304,58 @@ function ClassSetupPage({
           Class Management
         </h3>
 
+        {/* Pick what to do; only that form is shown. */}
+        <div className="class-mode-options" role="group" aria-label="Class Management action">
+          {(
+            [
+              { id: 'add', label: 'Add Class', description: 'Create a new class', icon: '+' },
+              {
+                id: 'edit',
+                label: 'Edit Existing Class',
+                description: hasClass ? `Update ${pluralize(classes.length, 'class', 'classes')}` : 'No classes yet',
+                icon: '✎',
+              },
+            ] as const
+          ).map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              className={`planning-method class-mode-option ${classMode === option.id ? 'active' : ''}`}
+              aria-pressed={classMode === option.id}
+              aria-controls="class-mode-content"
+              disabled={option.id === 'edit' && !hasClass}
+              onClick={() => chooseClassMode(option.id)}
+            >
+              <span className="planning-method-icon" aria-hidden="true">
+                {option.icon}
+              </span>
+              <span className="planning-method-text">
+                <strong>{option.label}</strong>
+                <small>{option.description}</small>
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <div id="class-mode-content">
+        {classMode === 'add' && (
         <div className="setup-subsection" role="group" aria-labelledby="add-class-heading">
-          <h4 className="setup-subsection-title" id="add-class-heading">
-            Add Class
-          </h4>
+          <div className="class-mode-header">
+            <h4 className="setup-subsection-title" id="add-class-heading">
+              Add Class
+            </h4>
+            <button type="button" className="ghost-button class-mode-close" onClick={() => chooseClassMode(null)}>
+              Close
+            </button>
+          </div>
           <ClassSetupForm
             key={addFormKey}
+            // Prefilled from the teacher's most recent class.
+            defaultTeacherName={classes.at(-1)?.teacherName ?? ''}
             submitLabel="Create Class"
             autoFocus={startCreating || (onboarding && !hasClass)}
             onSave={createClass}
+            onDirtyChange={setIsClassFormDirty}
           />
           {createdClass && (
             <div className="class-mgmt-notice" role="status">
@@ -6799,14 +9368,18 @@ function ClassSetupPage({
             </div>
           )}
         </div>
+        )}
 
-        <CollapsibleSubsection
-          id="edit-class"
-          title="Edit Existing Class"
-          summary={pluralize(classes.length, 'class', 'classes')}
-          isOpen={isEditOpen}
-          onToggle={() => setIsEditOpen((open) => !open)}
-        >
+        {classMode === 'edit' && (
+        <div className="setup-subsection" role="group" aria-labelledby="edit-class-heading">
+          <div className="class-mode-header">
+            <h4 className="setup-subsection-title" id="edit-class-heading">
+              Edit Existing Class
+            </h4>
+            <button type="button" className="ghost-button class-mode-close" onClick={() => chooseClassMode(null)}>
+              Close
+            </button>
+          </div>
           {editClass ? (
             <>
               <div className="setup-picker-row">
@@ -6815,6 +9388,8 @@ function ClassSetupPage({
                   <select
                     value={editClass.id}
                     onChange={(event) => {
+                      if (!confirmDiscard()) return
+                      setIsClassFormDirty(false)
                       setEditClassId(event.target.value)
                       setUpdatedClassId(null)
                     }}
@@ -6839,7 +9414,9 @@ function ClassSetupPage({
                 onCancel={() => {
                   setEditFormKey((key) => key + 1)
                   setUpdatedClassId(null)
+                  setIsClassFormDirty(false)
                 }}
+                onDirtyChange={setIsClassFormDirty}
               />
               {updatedClass && (
                 <div className="class-mgmt-notice" role="status">
@@ -6853,9 +9430,11 @@ function ClassSetupPage({
               )}
             </>
           ) : (
-            <p className="library-class-note">No classes yet. Add one above.</p>
+            <p className="library-class-note">No classes yet. Choose Add Class to create one.</p>
           )}
-        </CollapsibleSubsection>
+        </div>
+        )}
+        </div>
       </section>
 
       <section className="setup-section" aria-labelledby="roster-heading">
@@ -6879,7 +9458,10 @@ function ClassSetupPage({
 
         <aside className="privacy-notice" aria-labelledby="student-privacy-heading">
           <h4 id="student-privacy-heading">Student Privacy</h4>
-          <p>Use only students’ first names or initials. Do not include last names or other identifying information.</p>
+          <p>
+            Student names are shown only to you — in Class Setup and in your downloaded roster. Students see only their
+            Student ID. Do not include other identifying information such as emails or birthdates.
+          </p>
           <p>Student roster data will not be sent to AI models.</p>
         </aside>
 
@@ -7009,21 +9591,28 @@ function CollapsibleSubsection({
   )
 }
 
-type ClassFormValues = { name: string; gradeLevel: string; period: string }
+type ClassFormValues = { name: string; gradeLevel: string; period: string; teacherName: string }
 
 function ClassSetupForm({
   initial,
+  defaultTeacherName = '',
   submitLabel,
   autoFocus = false,
   onSave,
   onCancel,
+  onDirtyChange,
 }: {
   initial?: LibraryClass
+  defaultTeacherName?: string
   submitLabel: string
   autoFocus?: boolean
   onSave: (values: ClassFormValues) => void
   onCancel?: () => void
+  // Told whether the fields differ from what the form started with (the
+  // class's saved values, or a blank new class), as the teacher edits.
+  onDirtyChange?: (dirty: boolean) => void
 }) {
+  const [teacherName, setTeacherName] = useState(initial?.teacherName ?? defaultTeacherName)
   const [name, setName] = useState(initial?.name ?? '')
   // A class saved with a grade that's no longer offered starts blank, so the
   // teacher picks one of the current options before saving.
@@ -7031,27 +9620,68 @@ function ClassSetupForm({
     initial && classGradeOptions.includes(initial.gradeLevel) ? initial.gradeLevel : '',
   )
   const [period, setPeriod] = useState(initial?.period ?? '')
-  const canSave = name.trim() !== '' && gradeLevel !== ''
-  const preview = { name: name.trim(), period: period.trim() }
+  const canSave = teacherName.trim() !== '' && name.trim() !== '' && gradeLevel !== ''
+  const preview = { name: name.trim(), period: period.trim(), teacherName: teacherName.trim() }
   const isUnchanged =
-    initial !== undefined && preview.name === initial.name && gradeLevel === initial.gradeLevel && preview.period === initial.period
+    initial !== undefined &&
+    preview.name === initial.name &&
+    gradeLevel === initial.gradeLevel &&
+    preview.period === initial.period &&
+    preview.teacherName === initial.teacherName
+  // The values the form started with, to tell whether anything is unsaved.
+  const startingValues: ClassFormValues = {
+    teacherName: initial?.teacherName ?? defaultTeacherName,
+    name: initial?.name ?? '',
+    gradeLevel: initial && classGradeOptions.includes(initial.gradeLevel) ? initial.gradeLevel : '',
+    period: initial?.period ?? '',
+  }
+  const reportDirty = (next: ClassFormValues) =>
+    onDirtyChange?.(
+      (Object.keys(startingValues) as (keyof ClassFormValues)[]).some((field) => next[field].trim() !== startingValues[field].trim()),
+    )
+  const current: ClassFormValues = { teacherName, name, gradeLevel, period }
+  // IDs already given out keep their prefix (see LibraryClass.studentIdPrefix).
+  const idPrefix = initial?.studentIdPrefix ?? studentIdPrefixFor(preview.teacherName, preview.name)
 
   return (
     <form
       className="setup-class-form"
       onSubmit={(event) => {
         event.preventDefault()
-        if (canSave) onSave({ name: preview.name, gradeLevel, period: preview.period })
+        if (canSave) onSave({ name: preview.name, gradeLevel, period: preview.period, teacherName: preview.teacherName })
       }}
     >
       <div className="setup-class-fields">
         <label>
+          <span>Teacher Name (required)</span>
+          <input
+            type="text"
+            placeholder="Alex Rivera"
+            autoComplete="name"
+            value={teacherName}
+            onChange={(event) => {
+              setTeacherName(event.target.value)
+              reportDirty({ ...current, teacherName: event.target.value })
+            }}
+          />
+        </label>
+        <label>
           <span>Class Name (required)</span>
-          <input type="text" placeholder="Biology" value={name} autoFocus={autoFocus} onChange={(event) => setName(event.target.value)} />
+          <input type="text" placeholder="Biology" value={name} autoFocus={autoFocus} onChange={(event) => {
+              setName(event.target.value)
+              reportDirty({ ...current, name: event.target.value })
+            }}
+          />
         </label>
         <label>
           <span>Grade Level (required)</span>
-          <select value={gradeLevel} onChange={(event) => setGradeLevel(event.target.value)}>
+          <select
+            value={gradeLevel}
+            onChange={(event) => {
+              setGradeLevel(event.target.value)
+              reportDirty({ ...current, gradeLevel: event.target.value })
+            }}
+          >
             <option value="" disabled>
               Select grade
             </option>
@@ -7064,7 +9694,15 @@ function ClassSetupForm({
         </label>
         <label>
           <span>Period / Section (optional)</span>
-          <input type="text" placeholder="Period 2" value={period} onChange={(event) => setPeriod(event.target.value)} />
+          <input
+            type="text"
+            placeholder="Period 2"
+            value={period}
+            onChange={(event) => {
+              setPeriod(event.target.value)
+              reportDirty({ ...current, period: event.target.value })
+            }}
+          />
         </label>
         <div className="setup-class-actions">
           {onCancel && (
@@ -7077,14 +9715,32 @@ function ClassSetupForm({
           </button>
         </div>
       </div>
-      {preview.name && <p className="library-class-note">Shows in the Library as “{classDisplayName(preview)}”.</p>}
+      {(preview.name || preview.teacherName) && (
+        <p className="library-class-note">
+          {preview.name && <>Shows in the Library as “{classDisplayName(preview)}”. </>}
+          {preview.name && preview.teacherName && (
+            <>
+              Student IDs {initial?.studentIdPrefix ? 'stay in the format' : 'will look like'}{' '}
+              <span className="roster-id">{formatClassStudentId(idPrefix, 1)}</span>.
+            </>
+          )}
+        </p>
+      )}
     </form>
   )
 }
 
+// Excel-friendly CSV: a UTF-8 BOM so accented names display correctly, CRLF
+// line endings, and an apostrophe before any cell Excel would otherwise run
+// as a formula.
 function downloadCsv(fileName: string, rows: string[][]) {
-  const escape = (cell: string) => (/[",\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell)
-  const blob = new Blob([rows.map((row) => row.map(escape).join(',')).join('\n') + '\n'], { type: 'text/csv' })
+  const escape = (raw: string) => {
+    const cell = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw
+    return /[",\r\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell
+  }
+  const blob = new Blob(['﻿' + rows.map((row) => row.map(escape).join(',')).join('\r\n') + '\r\n'], {
+    type: 'text/csv;charset=utf-8',
+  })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
@@ -7102,29 +9758,26 @@ type RosterSectionProps = {
   setStudents: Dispatch<SetStateAction<Student[]>>
 }
 
-// Registers any new students and adds the given Student IDs to the class
-// (skipping ones already in it).
+// Registers any new students and enrolls the given ones in the class, which
+// gives each its class Student ID (skipping ones already in it). Returns
+// the class as it will be after the update.
 function addStudentsToClass(
   { classroom, setClasses, setStudents }: Pick<RosterSectionProps, 'classroom' | 'setClasses' | 'setStudents'>,
-  studentIds: readonly string[],
+  studentKeys: readonly string[],
   created: readonly Student[],
-) {
+): LibraryClass {
   if (created.length > 0) setStudents((prev) => [...prev, ...created])
-  setClasses((prev) =>
-    prev.map((other) =>
-      other.id === classroom.id
-        ? { ...other, studentIds: [...other.studentIds, ...studentIds.filter((id) => !other.studentIds.includes(id))] }
-        : other,
-    ),
-  )
+  setClasses((prev) => prev.map((other) => (other.id === classroom.id ? withEnrolledStudents(other, studentKeys) : other)))
+  return withEnrolledStudents(classroom, studentKeys)
 }
 
 function otherClassesFor(classes: readonly LibraryClass[], classroom: LibraryClass, studentId: string) {
   return classes.filter((other) => other.id !== classroom.id && other.studentIds.includes(studentId))
 }
 
-// Upload → review → add. Nothing joins the roster until the teacher has
-// reviewed it and clicked Add.
+// Upload → review (with each student's Student ID) → save, then a preview of
+// the roster with Student IDs to download. Nothing joins the roster until
+// the teacher has reviewed it and saved.
 function RosterUpload(props: RosterSectionProps) {
   const { classroom, classes, students, studentsById } = props
   const [reviewRows, setReviewRows] = useState<RosterReviewRow[]>([])
@@ -7133,24 +9786,29 @@ function RosterUpload(props: RosterSectionProps) {
   const [ignoredColumns, setIgnoredColumns] = useState<string[]>([])
   const [isReading, setIsReading] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  const [result, setResult] = useState<RosterUploadResult | null>(null)
   const nextRowKey = useRef(0)
 
   const roster = classroom.studentIds.map((id) => studentsById[id]).filter(Boolean)
   // Only this teacher's own classes are ever shown or offered as matches.
   const ownStudentIds = new Set(classes.flatMap((other) => other.studentIds))
+  // This class's Student IDs (removed students' included) → student.
+  const studentKeyByCode = new Map(Object.entries(classroom.studentCodes).map(([key, code]) => [code, key]))
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return
     setUploadError(null)
     setNotice(null)
+    setResult(null)
     setIgnoredColumns([])
     setIsReading(true)
     try {
       const { rows, ignoredColumns: ignored } = rosterRowsFromTable(await readRosterFile(file))
       if (rows.length === 0) throw new Error('No students were found in this file.')
       const added = rows.map((row): RosterReviewRow => {
-        const normalizedId = row.studentId ? normalizeStudentId(row.studentId) : null
-        const existing = normalizedId ? (studentsById[normalizedId] ?? null) : null
+        const normalizedId = row.studentId ? normalizeClassStudentId(row.studentId) : null
+        const existingKey = normalizedId ? studentKeyByCode.get(normalizedId) : undefined
+        const existing = existingKey ? (studentsById[existingKey] ?? null) : null
         nextRowKey.current += 1
         return {
           key: `row-${nextRowKey.current}`,
@@ -7159,6 +9817,7 @@ function RosterUpload(props: RosterSectionProps) {
           existing,
           unknownId: row.studentId !== null && !existing,
           linkTo: null,
+          extra: row.extra,
         }
       })
       setReviewRows((prev) => [...prev, ...added])
@@ -7180,30 +9839,50 @@ function RosterUpload(props: RosterSectionProps) {
   for (const row of reviewRows) {
     if (!row.existing) nameCounts.set(normalizeStudentName(row.name), (nameCounts.get(normalizeStudentName(row.name)) ?? 0) + 1)
   }
+  const claimed = new Set(reviewRows.flatMap((row) => (row.existing ? [row.existing.id] : [])))
+  const idPrefix = classStudentIdPrefix(classroom)
+  let nextNumber = classroom.nextStudentNumber
   const reviewed = reviewRows.map((row) => {
-    const resolvedId = row.existing?.id ?? row.linkTo
-    // Same first name/initials in the teacher's other classes: offered as a
+    // An updated roster without Student IDs: a name that matches exactly one
+    // student already in this class is that student, and keeps their ID.
+    const sameNameInRoster =
+      row.existing || row.linkTo ? [] : roster.filter((student) => normalizeStudentName(student.name) === normalizeStudentName(row.name))
+    const nameMatch = sameNameInRoster.length === 1 && !claimed.has(sameNameInRoster[0].id) ? sameNameInRoster[0] : null
+    if (nameMatch) claimed.add(nameMatch.id)
+    const resolvedId = row.existing?.id ?? row.linkTo ?? nameMatch?.id ?? null
+    // Same name in the teacher's other classes: offered as a
     // possible link, never applied automatically.
-    const possibleMatches = row.existing
-      ? []
-      : students.filter(
-          (student) =>
-            ownStudentIds.has(student.id) &&
-            !classroom.studentIds.includes(student.id) &&
-            normalizeStudentName(student.name) === normalizeStudentName(row.name),
-        )
+    const possibleMatches =
+      row.existing || nameMatch
+        ? []
+        : students.filter(
+            (student) =>
+              ownStudentIds.has(student.id) &&
+              !classroom.studentIds.includes(student.id) &&
+              normalizeStudentName(student.name) === normalizeStudentName(row.name),
+          )
+    const problem = row.existing || nameMatch ? null : rosterNameProblem(row.name)
+    // The Student ID the student has, or will get: new numbers go out in row
+    // order, the same way withEnrolledStudents assigns them on save.
+    const studentId = problem
+      ? null
+      : (resolvedId ? classroom.studentCodes[resolvedId] : undefined) ?? formatClassStudentId(idPrefix, nextNumber++)
     return {
       row,
-      problem: row.existing ? null : rosterNameProblem(row.name),
+      resolvedId,
+      studentId,
+      problem,
+      nameMatch,
       alreadyInClass: resolvedId !== null && classroom.studentIds.includes(resolvedId),
       possibleMatches,
-      sameNameInClass:
-        !row.existing && roster.some((student) => normalizeStudentName(student.name) === normalizeStudentName(row.name)),
-      duplicateInUpload: !row.existing && (nameCounts.get(normalizeStudentName(row.name)) ?? 0) > 1,
+      sameNameInClass: !nameMatch && sameNameInRoster.length > 0,
+      duplicateInUpload: !row.existing && !nameMatch && (nameCounts.get(normalizeStudentName(row.name)) ?? 0) > 1,
     }
   })
-  const rowsToAdd = reviewed.filter((item) => !item.problem && !item.alreadyInClass)
-  const blockedCount = reviewed.filter((item) => item.problem).length
+  const savable = reviewed.filter((item) => !item.problem)
+  const rowsToAdd = savable.filter((item) => !item.alreadyInClass)
+  const keptCount = savable.length - rowsToAdd.length
+  const blockedCount = reviewed.length - savable.length
 
   const clearReview = () => {
     setReviewRows([])
@@ -7212,29 +9891,35 @@ function RosterUpload(props: RosterSectionProps) {
   }
 
   const confirmReview = () => {
-    const used = new Set(students.map((student) => student.pseudonym))
-    let nextNumber = nextStudentNumber(students)
+    let keyNumber = nextStudentKeyNumber(students)
     const created: Student[] = []
-    const idsToAdd: string[] = []
-    for (const { row } of rowsToAdd) {
-      const reuseId = row.existing?.id ?? row.linkTo
-      if (reuseId) {
-        idsToAdd.push(reuseId)
-        continue
+    const keyByRow = new Map<string, string>()
+    for (const item of savable) {
+      let key = item.resolvedId
+      if (!key) {
+        const student = createStudent(keyNumber++, item.row.name)
+        created.push(student)
+        key = student.id
       }
-      const student = createStudent(nextNumber, row.name, used)
-      nextNumber++
-      used.add(student.pseudonym)
-      created.push(student)
-      idsToAdd.push(student.id)
+      keyByRow.set(item.row.key, key)
     }
-    addStudentsToClass(props, idsToAdd, created)
-    const reused = idsToAdd.length - created.length
-    setNotice(
-      `Added ${pluralize(idsToAdd.length, 'student')} to ${classDisplayName(classroom)}: ${created.length} new` +
-        (reused > 0 ? `, ${reused} kept an existing Student ID.` : '.') +
-        ' Open “Check & Edit Student Roster” to review them.',
+    const updated = addStudentsToClass(
+      props,
+      rowsToAdd.map((item) => keyByRow.get(item.row.key)!),
+      created,
     )
+    const nameOf = (key: string) => studentsById[key]?.name ?? created.find((student) => student.id === key)?.name ?? ''
+    setResult({
+      rows: savable.map((item) => {
+        const key = keyByRow.get(item.row.key)!
+        return { name: nameOf(key), studentId: updated.studentCodes[key], extra: item.row.extra }
+      }),
+    })
+    const parts = [
+      ...(rowsToAdd.length > 0 ? [`added ${pluralize(rowsToAdd.length, 'student')} (${created.length} new)`] : []),
+      ...(keptCount > 0 ? [`${pluralize(keptCount, 'student')} already on the roster kept their Student IDs`] : []),
+    ]
+    setNotice(`Roster saved for ${classDisplayName(classroom)}: ${parts.join('; ')}.`)
     // Rows that still need a fix stay in review; everything else is done.
     setReviewRows((prev) => prev.filter((row) => reviewed.some((item) => item.row.key === row.key && item.problem)))
     setUploadName(null)
@@ -7247,19 +9932,10 @@ function RosterUpload(props: RosterSectionProps) {
         <div>
           <h4>Upload Student Roster</h4>
           <p className="roster-upload-hint">
-            {isReading ? 'Reading file…' : (uploadName ?? 'CSV or Excel (.xlsx) · First names or initials only')}
+            {isReading ? 'Reading file…' : (uploadName ?? 'CSV or Excel (.xlsx) · Student names')}
           </p>
         </div>
         <div className="roster-upload-actions">
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() =>
-              downloadCsv('partners-roster-template.csv', [['Student ID', 'First Name or Initials'], ['', 'Jordan'], ['', 'M.K.']])
-            }
-          >
-            Download Template
-          </button>
           <label className="primary-button library-file-button roster-choose-file">
             Choose File
             <input
@@ -7273,6 +9949,10 @@ function RosterUpload(props: RosterSectionProps) {
           </label>
         </div>
       </div>
+      <p className="library-class-note">
+        Each student receives a unique Student ID (e.g., <span className="roster-id">{formatClassStudentId(idPrefix, 1)}</span>).
+        Students use this ID to sign in to Student Feedback assignments. Existing IDs remain unchanged when the roster is updated.
+      </p>
       {uploadError && (
         <p className="roster-error" role="alert">
           {uploadError}
@@ -7280,7 +9960,8 @@ function RosterUpload(props: RosterSectionProps) {
       )}
       {ignoredColumns.length > 0 && (
         <p className="roster-warning" role="status">
-          Not imported: {ignoredColumns.join(', ')}. Only first names or initials are kept.
+          Not imported: {ignoredColumns.join(', ')}. Only student names are kept in PARTNERS; these columns are included
+          only in your downloaded roster with Student IDs.
         </p>
       )}
       {notice && (
@@ -7292,13 +9973,17 @@ function RosterUpload(props: RosterSectionProps) {
       {reviewRows.length > 0 && (
         <div className="roster-review">
           <div className="roster-section-header">
-            <h4>Review before adding ({pluralize(rowsToAdd.length, 'student')} ready)</h4>
+            <h4>
+              Review before saving ({pluralize(rowsToAdd.length, 'student')} to add
+              {keptCount > 0 ? `, ${keptCount} already on the roster` : ''})
+            </h4>
+            <p>Student IDs are generated automatically. Students already in this class keep their IDs.</p>
           </div>
           <div className="class-mgmt-table-wrap">
             <table className="class-mgmt-table">
               <thead>
                 <tr>
-                  <th scope="col">First Name or Initials</th>
+                  <th scope="col">Student Name</th>
                   <th scope="col">Student ID</th>
                   <th scope="col">Status</th>
                   <th scope="col">
@@ -7307,84 +9992,83 @@ function RosterUpload(props: RosterSectionProps) {
                 </tr>
               </thead>
               <tbody>
-                {reviewed.map(({ row, problem, alreadyInClass, possibleMatches, sameNameInClass, duplicateInUpload }) => (
-                  <tr key={row.key} className={problem ? 'blocked' : undefined}>
-                    <th scope="row">
-                      {row.existing ? (
-                        <>
-                          {row.existing.name}
-                          {normalizeStudentName(row.name) !== normalizeStudentName(row.existing.name) && row.name && (
-                            <small className="roster-also-in">Name in file: {row.name} (registered name kept)</small>
-                          )}
-                        </>
-                      ) : (
-                        <input
-                          type="text"
-                          aria-label="First name or initials"
-                          aria-invalid={problem ? true : undefined}
-                          value={row.name}
-                          onChange={(event) => updateRow(row.key, { name: event.target.value, linkTo: null })}
-                        />
-                      )}
-                    </th>
-                    <td className="roster-id">{row.existing?.id ?? row.linkTo ?? <em>New ID</em>}</td>
-                    <td>
-                      {problem ? (
-                        <span className="roster-problem">
-                          {problem}{' '}
-                          {row.name.includes(' ') && (
-                            <button
-                              type="button"
-                              className="ghost-button roster-inline-fix"
-                              onClick={() => updateRow(row.key, { name: row.name.split(' ')[0] })}
-                            >
-                              Use “{row.name.split(' ')[0]}”
-                            </button>
-                          )}
-                        </span>
-                      ) : alreadyInClass ? (
-                        <span className="roster-status muted">Already in this class — skipped</span>
-                      ) : row.existing ? (
-                        <span className="roster-status">Existing student — Student ID kept</span>
-                      ) : (
-                        <div className="roster-status-stack">
-                          <span className="roster-status">{row.linkTo ? 'Linked to an existing student' : 'New student'}</span>
-                          {row.unknownId && (
-                            <small>Student ID “{row.studentId}” isn’t registered, so a new ID will be created.</small>
-                          )}
-                          {duplicateInUpload && <small>This name appears more than once — add an initial to tell them apart.</small>}
-                          {sameNameInClass && <small>A student with this name is already in this class.</small>}
-                          {possibleMatches.length > 0 && (
-                            <label className="roster-link-select">
-                              <span>Same student as someone in your other classes?</span>
-                              <select
-                                value={row.linkTo ?? ''}
-                                onChange={(event) => updateRow(row.key, { linkTo: event.target.value || null })}
-                              >
-                                <option value="">No — create a new student</option>
-                                {possibleMatches.map((student) => (
-                                  <option key={student.id} value={student.id}>
-                                    Yes — {student.id} ({otherClassesFor(classes, classroom, student.id).map(classDisplayName).join(', ')})
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        className="ghost-button roster-icon-button"
-                        aria-label={`Remove ${row.name || 'row'} from review`}
-                        onClick={() => setReviewRows((prev) => prev.filter((other) => other.key !== row.key))}
-                      >
-                        ×
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {reviewed.map(
+                  ({ row, studentId, problem, nameMatch, alreadyInClass, possibleMatches, sameNameInClass, duplicateInUpload }) => (
+                    <tr key={row.key} className={problem ? 'blocked' : undefined}>
+                      <th scope="row">
+                        {row.existing || nameMatch ? (
+                          <>
+                            {(row.existing ?? nameMatch)!.name}
+                            {row.existing &&
+                              normalizeStudentName(row.name) !== normalizeStudentName(row.existing.name) &&
+                              row.name && <small className="roster-also-in">Name in file: {row.name} (roster name kept)</small>}
+                          </>
+                        ) : (
+                          <input
+                            type="text"
+                            aria-label="Student name"
+                            aria-invalid={problem ? true : undefined}
+                            value={row.name}
+                            onChange={(event) => updateRow(row.key, { name: event.target.value, linkTo: null })}
+                          />
+                        )}
+                      </th>
+                      <td className="roster-id">{studentId ?? '—'}</td>
+                      <td>
+                        {problem ? (
+                          <span className="roster-problem">{problem}</span>
+                        ) : alreadyInClass ? (
+                          <span className="roster-status muted">Already in this class — Student ID kept</span>
+                        ) : row.existing ? (
+                          <span className="roster-status">Rejoining this class — previous Student ID kept</span>
+                        ) : (
+                          <div className="roster-status-stack">
+                            <span className="roster-status">{row.linkTo ? 'Linked to a student in your other classes' : 'New student'}</span>
+                            {row.unknownId && (
+                              <small>Student ID “{row.studentId}” isn’t in this class, so a new ID will be created.</small>
+                            )}
+                            {duplicateInUpload && <small>This name appears more than once — add an initial to tell them apart.</small>}
+                            {sameNameInClass && (
+                              <small>
+                                More than one student could match this name, so a new Student ID will be created. Include the
+                                Student ID column to keep an existing one.
+                              </small>
+                            )}
+                            {possibleMatches.length > 0 && (
+                              <label className="roster-link-select">
+                                <span>Same student as someone in your other classes?</span>
+                                <select
+                                  value={row.linkTo ?? ''}
+                                  onChange={(event) => updateRow(row.key, { linkTo: event.target.value || null })}
+                                >
+                                  <option value="">No — create a new student</option>
+                                  {possibleMatches.map((student) => (
+                                    <option key={student.id} value={student.id}>
+                                      Yes —{' '}
+                                      {otherClassesFor(classes, classroom, student.id)
+                                        .map((other) => `${other.studentCodes[student.id]} in ${classDisplayName(other)}`)
+                                        .join(', ')}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="ghost-button roster-icon-button"
+                          aria-label={`Remove ${row.name || 'row'} from review`}
+                          onClick={() => setReviewRows((prev) => prev.filter((other) => other.key !== row.key))}
+                        >
+                          ×
+                        </button>
+                      </td>
+                    </tr>
+                  ),
+                )}
               </tbody>
             </table>
           </div>
@@ -7397,9 +10081,51 @@ function RosterUpload(props: RosterSectionProps) {
             <button type="button" className="secondary-button" onClick={clearReview}>
               Discard
             </button>
-            <button type="button" className="primary-button" disabled={rowsToAdd.length === 0} onClick={confirmReview}>
-              Add {pluralize(rowsToAdd.length, 'Student')} to Roster
+            <button type="button" className="primary-button" disabled={savable.length === 0} onClick={confirmReview}>
+              {rowsToAdd.length > 0 ? `Add ${pluralize(rowsToAdd.length, 'Student')} to Roster` : 'Confirm Roster'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {result && (
+        <div className="roster-result" role="group" aria-labelledby="roster-result-heading">
+          <div className="roster-result-header">
+            <div className="roster-section-header">
+              <h4 id="roster-result-heading">Roster with Student IDs</h4>
+              <p>
+                Give each student their Student ID. They enter it to open Student Feedback assignments for{' '}
+                {classDisplayName(classroom)}.
+              </p>
+            </div>
+            <div className="roster-download">
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => downloadCsv(rosterDownloadFileName(classroom), rosterResultCsv(result))}
+              >
+                Download Roster with Student IDs
+              </button>
+              <p className="roster-download-note">Share each Student ID privately with the corresponding student.</p>
+            </div>
+          </div>
+          <div className="class-mgmt-table-wrap">
+            <table className="class-mgmt-table">
+              <thead>
+                <tr>
+                  <th scope="col">Student Name</th>
+                  <th scope="col">Student ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.rows.map((row, index) => (
+                  <tr key={`${row.studentId}-${index}`}>
+                    <th scope="row">{row.name}</th>
+                    <td className="roster-id">{row.studentId}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
@@ -7408,9 +10134,8 @@ function RosterUpload(props: RosterSectionProps) {
 }
 
 // The class's current roster: add one student, edit a name, remove a
-// student. Teachers only enter a first name or initials; every student
-// added here is new and gets an automatically generated Student ID and
-// pseudonym. Students are never matched to an existing record by name.
+// student. Every student added here is new and gets the class's next Student ID. Students are
+// never matched to an existing record by name.
 function RosterEditor(props: RosterSectionProps) {
   const { classroom, classes, students, studentsById, setClasses, setStudents } = props
   const [newName, setNewName] = useState('')
@@ -7429,12 +10154,11 @@ function RosterEditor(props: RosterSectionProps) {
       setAddError(problem)
       return
     }
-    const used = new Set(students.map((student) => student.pseudonym))
-    const student = createStudent(nextStudentNumber(students), name, used)
+    const student = createStudent(nextStudentKeyNumber(students), name)
     const sameName = roster.some((other) => normalizeStudentName(other.name) === normalizeStudentName(name))
-    addStudentsToClass(props, [student.id], [student])
+    const updated = addStudentsToClass(props, [student.id], [student])
     setNotice(
-      `Added ${name} as ${student.id} (${student.pseudonym}).` +
+      `Added ${name} as ${updated.studentCodes[student.id]}.` +
         (sameName ? ' Another student in this class has the same name — consider adding an initial.' : ''),
     )
     setAddError(null)
@@ -7451,12 +10175,15 @@ function RosterEditor(props: RosterSectionProps) {
   }
 
   const removeFromClass = (student: Student) => {
+    const studentId = classroom.studentCodes[student.id]
     setClasses((prev) =>
       prev.map((other) =>
         other.id === classroom.id ? { ...other, studentIds: other.studentIds.filter((id) => id !== student.id) } : other,
       ),
     )
-    setNotice(`Removed ${student.name} from ${classDisplayName(classroom)}. Their Student ID is kept for other classes.`)
+    setNotice(
+      `Removed ${student.name} (${studentId}) from ${classDisplayName(classroom)}. ${studentId} won’t be given to another student, and comes back if they rejoin.`,
+    )
   }
 
   return (
@@ -7466,20 +10193,6 @@ function RosterEditor(props: RosterSectionProps) {
           This roster is reused for every lesson in {classDisplayName(classroom)}. Name changes apply everywhere the student
           appears.
         </p>
-        {roster.length > 0 && (
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() =>
-              downloadCsv(`${classDisplayName(classroom).replace(/[^\w-]+/g, '-')}-roster.csv`, [
-                ['Student ID', 'First Name or Initials'],
-                ...roster.map((student) => [student.id, student.name]),
-              ])
-            }
-          >
-            Download Roster
-          </button>
-        )}
       </div>
 
       {notice && (
@@ -7497,7 +10210,6 @@ function RosterEditor(props: RosterSectionProps) {
               <tr>
                 <th scope="col">Student ID</th>
                 <th scope="col">Student Name</th>
-                <th scope="col">Pseudonym</th>
                 <th scope="col">
                   <span className="visually-hidden">Actions</span>
                 </th>
@@ -7505,17 +10217,18 @@ function RosterEditor(props: RosterSectionProps) {
             </thead>
             <tbody>
               {roster.map((student) => {
+                const studentId = classroom.studentCodes[student.id]
                 const otherClasses = otherClassesFor(classes, classroom, student.id)
                 const isEditing = editing?.id === student.id
                 return (
                   <tr key={student.id}>
-                    <td className="roster-id">{student.id}</td>
+                    <td className="roster-id">{studentId}</td>
                     <th scope="row">
                       {isEditing ? (
                         <>
                           <input
                             type="text"
-                            aria-label={`Name for ${student.id}`}
+                            aria-label={`Name for ${studentId}`}
                             aria-invalid={editProblem ? true : undefined}
                             value={editing.name}
                             autoFocus
@@ -7536,7 +10249,6 @@ function RosterEditor(props: RosterSectionProps) {
                         </>
                       )}
                     </th>
-                    <td>{student.pseudonym}</td>
                     <td className="class-mgmt-row-actions">
                       {isEditing ? (
                         <>
@@ -7579,10 +10291,10 @@ function RosterEditor(props: RosterSectionProps) {
         }}
       >
         <label>
-          <span>First name or initials</span>
+          <span>Student name</span>
           <input
             type="text"
-            placeholder="Jordan"
+            placeholder="Jordan Smith"
             value={newName}
             aria-invalid={addError ? true : undefined}
             onChange={(event) => {
@@ -7599,6 +10311,25 @@ function RosterEditor(props: RosterSectionProps) {
         <p className="roster-error" role="alert">
           {addError}
         </p>
+      )}
+
+      {/* After reviewing and editing the roster: download it to hand out IDs. */}
+      {roster.length > 0 && (
+        <div className="roster-download roster-download-footer">
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() =>
+              downloadCsv(rosterDownloadFileName(classroom), [
+                ['Student Name', 'Student ID'],
+                ...roster.map((student) => [student.name, classroom.studentCodes[student.id]]),
+              ])
+            }
+          >
+            Download Roster with Student IDs
+          </button>
+          <p className="roster-download-note">Share each Student ID privately with the corresponding student.</p>
+        </div>
       )}
     </div>
   )
@@ -7637,6 +10368,10 @@ type PlanningPanelProps = {
   setPlanningTab: (tab: PlanningTab) => void
   revisionEditor: RevisionWorkflow
   defaultFramework: StandardsFrameworkId
+  // A saved demo lesson's planning form to start from; null for a blank one.
+  formSeed: PlanningFormSeed | null
+  savedLessonOpen: boolean
+  classGradeLevel: string | null
 }
 
 function LessonPlanningPage({
@@ -7646,23 +10381,114 @@ function LessonPlanningPage({
   isGeneratingLesson,
   canvasProps,
   planningPanelProps,
+  activityClasses,
+  lessonGeneratedWith,
+  onStartNew,
 }: {
+  // The planning option that generated the workspace lesson, if any.
+  lessonGeneratedWith: PlanningMethod | null
+  // Clears everything for a new lesson or activity.
+  onStartNew: () => void
   onGenerateLessonPlan: (details: PlanningLessonDetails) => void
   onUploadLesson?: (file: File, details: PlanningLessonDetails) => void
   lessonGenerated: boolean
   isGeneratingLesson: boolean
   canvasProps: LessonWorkspaceCanvasProps
   planningPanelProps: PlanningPanelProps
+  // The class(es) an activity planned here belongs to — empty when Lesson
+  // Planning wasn't opened in a class's context.
+  activityClasses: readonly LinkClass[]
 }) {
+  // Brainstorm with AI's focus decides what the right side shows: a
+  // practice activity gets the Activity workspace instead of the lesson.
+  const [brainstormFocus, setBrainstormFocus] = useState<BrainstormFocus | null>(null)
+  const isPracticeMode = planningPanelProps.planningTab === 'brainstorm' && brainstormFocus === 'practice'
+
+  // The Activity Draft and the teacher's review of it. Nothing is confirmed
+  // until the teacher says so; regenerating starts the review over.
+  const [activityDraft, setActivityDraft] = useState<ActivityDraft | null>(null)
+  const [isGeneratingActivity, setIsGeneratingActivity] = useState(false)
+  const [activityConfirmed, setActivityConfirmed] = useState(false)
+  const [collection, setCollection] = useState<CollectionOpportunity[]>([])
+  const [collectionConfirmed, setCollectionConfirmed] = useState(false)
+  // Identifies this activity in its Student Feedback link.
+  const [activityLinkId] = useState(() => `activity-${Date.now()}`)
+  const activityTimeoutRef = useRef<number | null>(null)
+  useEffect(() => {
+    return () => {
+      if (activityTimeoutRef.current !== null) window.clearTimeout(activityTimeoutRef.current)
+    }
+  }, [])
+
+  // A regeneration waiting for the teacher's OK, because it would replace
+  // work they confirmed or edited.
+  const [pendingRegeneration, setPendingRegeneration] = useState<ActivityDraftRequest | null>(null)
+  const collectionEdited =
+    activityDraft !== null && JSON.stringify(collection) !== JSON.stringify(activityDraft.collection)
+
+  const generateActivity = (request: ActivityDraftRequest, confirmedOverwrite = false) => {
+    if (isGeneratingActivity) return
+    if (!confirmedOverwrite && activityDraft && (activityConfirmed || collectionConfirmed || collectionEdited)) {
+      setPendingRegeneration(request)
+      return
+    }
+    setPendingRegeneration(null)
+    setIsGeneratingActivity(true)
+    activityTimeoutRef.current = window.setTimeout(() => {
+      const draft = callAiModel('practice-activity', request, mockActivityDraft)
+      setActivityDraft(draft)
+      setCollection(draft.collection)
+      setActivityConfirmed(false)
+      setCollectionConfirmed(false)
+      setIsGeneratingActivity(false)
+    }, 900)
+  }
+
+  // Continue Refining: back to the conversation on the left.
+  const continueRefining = () => {
+    const input = document.getElementById('brainstorm-message-input')
+    input?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    input?.focus({ preventScroll: true })
+  }
+
   return (
     <div className="planning-layout">
       <LessonPlanningPanel
         {...planningPanelProps}
         onGenerate={onGenerateLessonPlan}
         onUploadLesson={onUploadLesson}
+        brainstormFocus={brainstormFocus}
+        setBrainstormFocus={setBrainstormFocus}
+        practiceActivity={{ hasDraft: activityDraft !== null, isGenerating: isGeneratingActivity, onGenerate: generateActivity }}
+        // An activity is always generated in Brainstorm with AI.
+        lockedMethod={activityDraft ? 'brainstorm' : lessonGeneratedWith}
+        onStartNew={onStartNew}
       />
 
-      {lessonGenerated ? (
+      {isPracticeMode ? (
+        <PracticeActivityWorkspace
+          draft={activityDraft}
+          isGenerating={isGeneratingActivity}
+          confirmed={activityConfirmed}
+          onConfirm={() => setActivityConfirmed(true)}
+          onContinueRefining={continueRefining}
+          collection={collection}
+          onCollectionChange={(next) => {
+            setCollection(next)
+            setCollectionConfirmed(false)
+          }}
+          collectionConfirmed={collectionConfirmed}
+          onConfirmCollection={() => setCollectionConfirmed(true)}
+          classes={activityClasses}
+          linkId={activityLinkId}
+          regenerationWarning={
+            pendingRegeneration && {
+              onRegenerate: () => generateActivity(pendingRegeneration, true),
+              onKeep: () => setPendingRegeneration(null),
+            }
+          }
+        />
+      ) : lessonGenerated ? (
         <LessonWorkspaceCanvas {...canvasProps} />
       ) : (
         <LessonWorkspacePlaceholder isGenerating={isGeneratingLesson} />
@@ -7671,14 +10497,210 @@ function LessonPlanningPage({
   )
 }
 
+// The right side in Science Practice Activity mode: the Activity Draft,
+// Continue Refining / Confirm Activity, then — once confirmed — its
+// student-work collection opportunities and the activity's Student
+// Feedback link for a class. Styled like the generated lesson workspace.
+function PracticeActivityWorkspace({
+  draft,
+  isGenerating,
+  confirmed,
+  onConfirm,
+  onContinueRefining,
+  collection,
+  onCollectionChange,
+  collectionConfirmed,
+  onConfirmCollection,
+  classes,
+  linkId,
+  regenerationWarning,
+}: {
+  // Shown when Regenerate would replace confirmed or edited work.
+  regenerationWarning: { onRegenerate: () => void; onKeep: () => void } | null
+  draft: ActivityDraft | null
+  isGenerating: boolean
+  confirmed: boolean
+  onConfirm: () => void
+  onContinueRefining: () => void
+  collection: readonly CollectionOpportunity[]
+  onCollectionChange: (next: CollectionOpportunity[]) => void
+  collectionConfirmed: boolean
+  onConfirmCollection: () => void
+  // The classes the activity belongs to (from where it was planned).
+  classes: readonly LinkClass[]
+  linkId: string
+}) {
+  if (!draft) {
+    return (
+      <section className="workspace-placeholder lesson-workspace-panel">
+        <div className="canvas-header">
+          <div>
+            <p className="card-label">Activity workspace</p>
+            <h3>Science practice activity</h3>
+          </div>
+        </div>
+        {isGenerating ? (
+          <div className="empty-state">
+            <p className="card-label">Drafting activity</p>
+            <h3>Building your activity draft…</h3>
+            <p className="empty-state-support">This will just take a moment.</p>
+          </div>
+        ) : (
+          <div className="empty-state">
+            <p className="card-label">Ready for activity output</p>
+            <h3>Your activity draft will appear here</h3>
+            <p className="empty-state-support">
+              Brainstorm the activity with AI, then click Generate Activity Draft. You don’t need to complete the lesson form.
+            </p>
+          </div>
+        )}
+      </section>
+    )
+  }
+
+  return (
+    <section className="workspace-canvas activity-workspace" aria-labelledby="activity-draft-heading">
+      <div className="canvas-header">
+        <div>
+          <p className="card-label">Activity workspace</p>
+          <h3 id="activity-draft-heading">Activity draft</h3>
+        </div>
+        <span className={`badge activity-status${confirmed ? ' confirmed' : ''}`} role="status">
+          {confirmed ? '✓ Teacher-approved' : 'Draft — not yet confirmed'}
+        </span>
+      </div>
+      {isGenerating && (
+        <p className="lesson-suggestion-summary" role="status">
+          Updating the draft with your conversation…
+        </p>
+      )}
+      {regenerationWarning && (
+        <div className="activity-regenerate-warning" role="alertdialog" aria-labelledby="activity-regenerate-warning-text">
+          <p id="activity-regenerate-warning-text">
+            Regenerating replaces this draft{confirmed ? ', your confirmation of it,' : ''} and your student-work collection
+            {collectionConfirmed ? ' confirmation' : ' edits'}. Regenerate anyway?
+          </p>
+          <div className="feedback-activity-actions">
+            <button type="button" className="primary-button" onClick={regenerationWarning.onRegenerate}>
+              Regenerate Anyway
+            </button>
+            <button type="button" className="secondary-button" onClick={regenerationWarning.onKeep}>
+              Keep Current Draft
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="lesson-plan-editor activity-draft">
+        <div className="lesson-plan-content">
+          <p className="card-label lesson-section-heading">Activity Title</p>
+          <p className="activity-title">{draft.title}</p>
+
+          <p className="card-label lesson-section-heading">Grade Level</p>
+          <p>{draft.gradeLabel}</p>
+
+          <p className="card-label lesson-section-heading">Teaching Topic</p>
+          <p>{draft.topic}</p>
+          <p className="activity-topic-note">
+            {draft.template !== 'generic'
+              ? `Prewritten mock activity for the ${activityTemplateLabels[draft.template]} demo lesson, with your grade level and selected practices. Prototype content — not AI-generated for your class.`
+              : `Generic mock activity template, filled in with your topic and selected practices — the prototype’s mock AI doesn’t evaluate the topic itself.${
+                  draft.topicNotesUsed ? ` Some wording comes from built-in notes on ${draft.topicNotesUsed}, matched by keyword.` : ''
+                }`}
+          </p>
+
+          <p className="card-label lesson-section-heading">Science Practices</p>
+          <div className="context-tags">
+            {practiceLabels(draft.practiceIds).map((label) => (
+              <span key={label} className="tag">
+                {label}
+              </span>
+            ))}
+          </div>
+
+          <p className="card-label lesson-section-heading">Activity Description</p>
+          <p>{draft.description}</p>
+
+          <p className="card-label lesson-section-heading">Activity Goal</p>
+          <p>{draft.goal}</p>
+
+          <p className="card-label lesson-section-heading">Activity Sequence</p>
+          <ol className="activity-sequence">
+            {draft.sequence.map((step) => (
+              <li key={step.name}>
+                <strong>{step.name}:</strong> {step.text}
+              </li>
+            ))}
+          </ol>
+
+          <p className="card-label lesson-section-heading">Grade-Level Supports</p>
+          <p>{draft.supports}</p>
+
+          <p className="card-label lesson-section-heading">Student Work to Collect (One Assignment)</p>
+          <ul className="activity-collection-preview">
+            {collection.map((item) => (
+              <li key={item.id}>
+                <strong>{item.name}</strong> — {item.submission}
+              </li>
+            ))}
+          </ul>
+
+          {draft.incorporated.length > 0 && (
+            <>
+              <p className="card-label lesson-section-heading">From Your Conversation</p>
+              <ul className="activity-incorporated">
+                {draft.incorporated.map((idea) => (
+                  <li key={idea}>“{idea}”</li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="activity-review-actions">
+        <button type="button" className="secondary-button" onClick={onContinueRefining}>
+          Continue Refining
+        </button>
+        {confirmed ? (
+          <p className="activity-confirmed-note" role="status">
+            ✓ Activity confirmed. To change it, keep refining and regenerate — the new draft will need your confirmation again.
+          </p>
+        ) : (
+          <button type="button" className="primary-button" disabled={isGenerating} onClick={onConfirm}>
+            Confirm Activity
+          </button>
+        )}
+      </div>
+
+      {confirmed && (
+        <StudentProductCollection
+          headingId="activity-collection-heading"
+          products={draft.products}
+          items={collection}
+          confirmed={collectionConfirmed}
+          onChange={onCollectionChange}
+          onConfirm={onConfirmCollection}
+        >
+          <ClassFeedbackLinks
+            link={{ lessonId: linkId, lessonTitle: draft.title, activities: collection.map(({ name, submission }) => ({ name, submission })) }}
+            classes={classes}
+            kind="activity"
+            contents={`the ${joinLabels(collection.map((item) => item.name))}`}
+          />
+        </StudentProductCollection>
+      )}
+    </section>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Student Feedback Activities
 //
-// At the bottom of the lesson: the Instructional Sequence activities where
-// students submit a model, explanation, or other science-practice artifact.
-// Teachers confirm, edit, add, or remove them; once every one is confirmed,
-// the lesson gets one Student Feedback link listing all of them in order.
-// There's no backend yet, so the link carries the confirmed activities
+// At the bottom of the lesson: the student work it collects — for the
+// prototype, a Model and an Explanation within one assignment. Teachers
+// review, edit, or remove them and confirm; the lesson then gets one Student
+// Feedback link for both. There's no backend yet, so the link carries them
 // itself (nothing about students is in it) — the Student Feedback page reads
 // them from the URL.
 // ---------------------------------------------------------------------------
@@ -7693,45 +10715,20 @@ type FeedbackActivity = {
   sourceLabel?: string
 }
 
-// The lesson-specific assignment a Student Feedback link opens.
+// The lesson-specific assignment a Student Feedback link opens. `classId`
+// is the class whose students may sign in to it; each class the lesson is
+// assigned to gets its own link.
 type StudentAssignmentLink = {
   lessonId: string
   lessonTitle: string
   activities: { name: string; submission: string }[]
+  classId?: string
 }
 
-// What counts as a submitted artifact, checked in order — the first match
-// describes the activity's submission.
-const submissionRules: { pattern: RegExp; submission: string }[] = [
-  { pattern: /revis\w* (?:their|the|a|its) models?/, submission: 'Their revised model, with a note on what they changed and why.' },
-  {
-    pattern: /\b(?:sketch|build|construct|develop|draw|create)\w*\b[^.]{0,40}\bmodels?\b/,
-    submission: 'A model (drawing or diagram) showing their current thinking.',
-  },
-  { pattern: /construct\w* an explanation|written explanation/, submission: 'A written explanation that connects a claim to evidence.' },
-  { pattern: /argument from evidence|make a claim|claims? about/, submission: 'A claim supported by evidence.' },
-  { pattern: /ask questions|generate\w* (?:their )?questions|questions are collected/, submission: 'The questions they still need to answer.' },
-  { pattern: /reflection|exit ticket/, submission: 'A short written reflection on what they learned.' },
-]
-
-// The Instructional Sequence steps: from its heading up to the next one.
-function instructionalSequenceSteps(lesson: LessonDocument): LessonStep[] {
-  const start = lesson.steps.findIndex((step) => step.sectionHeading === 'Instructional Sequence')
-  if (start < 0) return []
-  const end = lesson.steps.findIndex((step, index) => index > start && step.sectionHeading)
-  return lesson.steps.slice(start, end < 0 ? undefined : end)
-}
-
-function activityName(step: LessonStep): string {
-  return step.displayPrefix ? step.displayPrefix.replace(/^\d+\.\s*/, '').replace(/:$/, '').trim() || step.label : step.label
-}
-
-function identifyFeedbackActivities(lesson: LessonDocument): FeedbackActivity[] {
-  return instructionalSequenceSteps(lesson).flatMap((step) => {
-    const text = segmentsToText(step.segments).toLowerCase()
-    const rule = submissionRules.find((item) => item.pattern.test(text))
-    return rule ? [{ id: step.label, name: activityName(step), submission: rule.submission, confirmed: false, sourceLabel: step.label }] : []
-  })
+// For the prototype, a lesson collects its two student products (see
+// studentProductsFor) — the lesson's own sequence is left as it is.
+function identifyFeedbackActivities(lessonId: string | null): FeedbackActivity[] {
+  return studentProductsFor(lessonId).map((product) => ({ ...product, confirmed: false }))
 }
 
 // The link's assignment, or null until there's at least one activity and
@@ -7742,7 +10739,11 @@ function assignmentLinkFor(lessonId: string, lessonTitle: string, activities: re
 }
 
 function encodeAssignment(link: StudentAssignmentLink): string {
-  const json = JSON.stringify({ l: link.lessonId, t: link.lessonTitle, a: link.activities.map((item) => [item.name, item.submission]) })
+  const json = JSON.stringify({
+    l: link.lessonId,
+    t: link.lessonTitle,
+    a: link.activities.map((item) => [item.name, item.submission]),
+  })
   let binary = ''
   new TextEncoder().encode(json).forEach((byte) => {
     binary += String.fromCharCode(byte)
@@ -7766,206 +10767,329 @@ function decodeAssignment(value: string): StudentAssignmentLink | null {
   }
 }
 
+// Where a Student Feedback URL points: one lesson's assignment for one
+// class. The assignment is either a lesson's confirmed Student Feedback
+// Activities (`link`) or one of a Library lesson's demo assignments
+// (`taskId`), e.g.
+//   #student-feedback?lesson=zombie-fires&class=period-4-earth-science&assignment=…
+// Every lesson in a class has its own URL; students sign in to each with the
+// same class Student ID.
+type StudentFeedbackRoute = {
+  lessonId: string
+  classId: string | null
+  taskId: string | null
+  link: StudentAssignmentLink | null
+}
+
+function studentFeedbackHash(route: StudentFeedbackRoute): string {
+  const params = new URLSearchParams({ lesson: route.lessonId })
+  if (route.classId) params.set('class', route.classId)
+  if (route.taskId) params.set('task', route.taskId)
+  if (route.link) params.set('assignment', encodeAssignment(route.link))
+  return `student-feedback?${params.toString()}`
+}
+
 function studentAssignmentHash(link: StudentAssignmentLink): string {
-  return `student-feedback?lesson=${encodeURIComponent(link.lessonId)}&assignment=${encodeAssignment(link)}`
+  return studentFeedbackHash({ lessonId: link.lessonId, classId: link.classId ?? null, taskId: null, link })
 }
 
 function studentAssignmentUrl(link: StudentAssignmentLink): string {
   return `${window.location.origin}${window.location.pathname}#${studentAssignmentHash(link)}`
 }
 
-// A Student Feedback link in the current URL, if there is one.
-function readStudentAssignmentFromHash(): StudentAssignmentLink | null {
+// The Student Feedback route in the current URL, if there is one.
+function readStudentFeedbackRoute(): StudentFeedbackRoute | null {
   const [page, query] = window.location.hash.replace('#', '').split('?')
   if (page !== 'student-feedback' || !query) return null
-  return decodeAssignment(new URLSearchParams(query).get('assignment') ?? '')
+  const params = new URLSearchParams(query)
+  const classId = params.get('class')
+  const decoded = decodeAssignment(params.get('assignment') ?? '')
+  const link = decoded ? { ...decoded, ...(classId ? { classId } : {}) } : null
+  const lessonId = link?.lessonId ?? params.get('lesson')
+  if (!lessonId) return null
+  return { lessonId, classId, taskId: link ? null : params.get('task'), link }
+}
+
+// Where Individual Student Reports points: one lesson's submissions in one
+// class, the assignment (null: the lesson's first), optionally one student
+// (by class Student ID), and the model type, e.g.
+//   #student-reports?lesson=covid-virus&class=period-1-life-science&assignment=covid-mechanistic&student=DE-004&model=mechanistic
+type StudentReportsRoute = {
+  lessonId: string
+  classId: string | null
+  assignmentId: string | null
+  studentId: string | null
+  modelTab: ModelTab
+  // Which student product the report shows.
+  work: WorkType
+}
+
+function studentReportsHash(route: StudentReportsRoute): string {
+  const params = new URLSearchParams({ lesson: route.lessonId })
+  if (route.classId) params.set('class', route.classId)
+  if (route.assignmentId) params.set('assignment', route.assignmentId)
+  if (route.studentId) params.set('student', route.studentId)
+  params.set('model', route.modelTab)
+  params.set('work', route.work)
+  return `student-reports?${params.toString()}`
+}
+
+function readStudentReportsRoute(): StudentReportsRoute | null {
+  const [page, query] = window.location.hash.replace('#', '').split('?')
+  if (page !== 'student-reports' || !query) return null
+  const params = new URLSearchParams(query)
+  const lessonId = params.get('lesson')
+  if (!lessonId) return null
+  return {
+    lessonId,
+    classId: params.get('class'),
+    assignmentId: params.get('assignment'),
+    studentId: params.get('student'),
+    modelTab: params.get('model') === 'mechanistic' ? 'mechanistic' : 'descriptive',
+    work: params.get('work') === 'explanation' ? 'explanation' : 'model',
+  }
+}
+
+// A Library lesson's demo assignment by id (the `task` in its URL).
+function findDemoAssignment(lessonId: string, taskId: string | null): StudentFeedbackAssignment | null {
+  const lesson = initialLibraryLessons.find((item) => item.id === lessonId)
+  return lesson?.studentFeedback.find((assignment) => assignment.id === taskId) ?? null
+}
+
+// A class the lesson is assigned to, for its Student Feedback link.
+type LinkClass = { id: string; label: string }
+
+// The Student Feedback link for each class a lesson or activity belongs to.
+// The class comes from where the lesson or activity was planned — it's
+// shown as a read-only label, never picked, and never defaulted: with no
+// class, the teacher is told how to get one.
+function ClassFeedbackLinks({
+  link,
+  classes,
+  kind,
+  contents,
+}: {
+  // The assignment, without a class; each class's link adds its own.
+  link: StudentAssignmentLink
+  classes: readonly LinkClass[]
+  kind: 'lesson' | 'activity'
+  // What the link lists, e.g. "all 3 activities".
+  contents: string
+}) {
+  // The link just copied; a changed link shows Copy Link again.
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null)
+  if (classes.length === 0) {
+    return (
+      <p className="feedback-link-pending" role="status">
+        This {kind} isn’t associated with a class yet, so it has no Student Feedback link. Create a class in Class Setup, then plan
+        the {kind} from that class (Add Lesson in the Library, or Continue to Lesson Planning in Class Setup) — students sign in with
+        the Student IDs from its roster.
+      </p>
+    )
+  }
+  const copyLink = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopiedUrl(url)
+    } catch {
+      setCopiedUrl(null)
+    }
+  }
+  return (
+    <>
+      {classes.map((classroom) => {
+        const url = studentAssignmentUrl({ ...link, classId: classroom.id })
+        return (
+          <div key={classroom.id} className="feedback-link-class">
+            <p className="feedback-link-class-name">Class: {classroom.label}</p>
+            <div className="feedback-link-row">
+              <input
+                type="text"
+                readOnly
+                value={url}
+                aria-label={`Student Feedback link for ${classroom.label}`}
+                onFocus={(event) => event.target.select()}
+              />
+              <button type="button" className="secondary-button" onClick={() => void copyLink(url)}>
+                {copiedUrl === url ? 'Copied' : 'Copy Link'}
+              </button>
+              <a className="primary-button feedback-open-link" href={url} target="_blank" rel="noopener noreferrer">
+                Open Student Page
+              </a>
+            </div>
+          </div>
+        )
+      })}
+      <p className="feedback-link-note">
+        {classes.length > 1 ? `Each class has its own link to this ${kind}` : `This ${kind}’s link for ${classes[0].label}`} — one assignment
+        where students submit {contents}. Students sign in with their class Student ID — the same ID for every lesson in the class. Student
+        submissions aren’t saved yet in the prototype.
+      </p>
+    </>
+  )
+}
+
+// The student work one assignment collects — for the prototype, a Model and
+// an Explanation (see studentProducts). Teachers review each, can edit its
+// description or remove it (and add it back), and confirm them together;
+// the assignment then gets one Student Feedback link (`children`). Initial
+// and revised submissions are versions of these products, not new items.
+function StudentProductCollection({
+  headingId,
+  products,
+  items,
+  confirmed,
+  onChange,
+  onConfirm,
+  children,
+}: {
+  headingId: string
+  // The lesson's two product types, in order (what a removed one comes back as).
+  products: readonly CollectionOpportunity[]
+  items: readonly CollectionOpportunity[]
+  confirmed: boolean
+  onChange: (next: CollectionOpportunity[]) => void
+  onConfirm: () => void
+  // The Student Feedback link, shown once confirmed.
+  children: ReactNode
+}) {
+  const [editing, setEditing] = useState<{ id: string; submission: string } | null>(null)
+  const removed = products.filter((product) => !items.some((item) => item.id === product.id))
+  const names = joinLabels(items.map((item) => item.name))
+
+  const saveEdit = () => {
+    if (!editing?.submission.trim()) return
+    onChange(items.map((item) => (item.id === editing.id ? { ...item, submission: ensurePeriod(editing.submission.trim()) } : item)))
+    setEditing(null)
+  }
+  // Back in its usual place, in the lesson's product order.
+  const addBack = (product: CollectionOpportunity) =>
+    onChange(products.flatMap((option) => (option.id === product.id ? [{ ...product }] : items.filter((item) => item.id === option.id))))
+
+  return (
+    <section className="feedback-activities" aria-labelledby={headingId}>
+      <div className="feedback-activities-header">
+        <div>
+          <p className="card-label">Student Work Collection</p>
+          <h4 id={headingId}>{items.length > 0 ? `One assignment: ${names}` : 'One assignment'}</h4>
+        </div>
+        {items.length > 0 && (
+          <span className={`badge feedback-confirmed-count${confirmed ? ' all-confirmed' : ''}`}>{confirmed ? 'Confirmed' : 'Needs confirmation'}</span>
+        )}
+      </div>
+      <p className="feedback-activities-hint">
+        Students submit both products in the same assignment. When they revise, the new work is saved as a new version of it — not a
+        separate assignment.
+      </p>
+
+      {items.length > 0 && (
+        <ul className="feedback-activity-list student-product-list">
+          {items.map((item) => (
+            <li key={item.id} className={`feedback-activity${confirmed ? ' confirmed' : ''}`}>
+              <div className="feedback-activity-text collection-opportunity-text">
+                <p className="feedback-activity-name">{item.name}</p>
+                {editing?.id === item.id ? (
+                  <div className="feedback-activity-editor">
+                    <label>
+                      <span>Description</span>
+                      <textarea
+                        rows={2}
+                        value={editing.submission}
+                        autoFocus
+                        onChange={(event) => setEditing({ id: item.id, submission: event.target.value })}
+                      />
+                    </label>
+                    <div className="feedback-activity-actions">
+                      <button type="button" className="primary-button" disabled={!editing.submission.trim()} onClick={saveEdit}>
+                        Save
+                      </button>
+                      <button type="button" className="secondary-button" onClick={() => setEditing(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p>
+                    <span className="collection-field-label">Description:</span> {item.submission}
+                  </p>
+                )}
+              </div>
+              {editing?.id !== item.id && (
+                <div className="feedback-activity-actions">
+                  <button type="button" className="secondary-button" onClick={() => setEditing({ id: item.id, submission: item.submission })}>
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-button feedback-activity-remove"
+                    aria-label={`Remove ${item.name}`}
+                    onClick={() => onChange(items.filter((other) => other.id !== item.id))}
+                  >
+                    Remove
+                  </button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {removed.map((product) => (
+        <button key={product.id} type="button" className="secondary-button feedback-add-button" onClick={() => addBack(product)}>
+          + Add {product.name} back
+        </button>
+      ))}
+
+      {!confirmed && items.length > 0 && (
+        <button type="button" className="primary-button activity-collection-confirm" disabled={editing !== null} onClick={onConfirm}>
+          Confirm {names}
+        </button>
+      )}
+
+      <div className="feedback-link" aria-live="polite">
+        <p className="card-label">Student Feedback link</p>
+        {confirmed ? (
+          children
+        ) : (
+          <p className="feedback-link-pending" role="status">
+            {items.length === 0
+              ? `Pending — add the ${joinLabels(products.map((product) => product.name))} back to create the link.`
+              : `Pending — confirm the ${names} to create this assignment’s Student Feedback link.`}
+          </p>
+        )}
+      </div>
+    </section>
+  )
 }
 
 function StudentFeedbackActivities({
   lessonId,
   lessonTitle,
   activities,
+  linkClasses,
   onChange,
 }: {
   lessonId: string
   lessonTitle: string
   activities: readonly FeedbackActivity[]
+  linkClasses: readonly LinkClass[]
   onChange: (next: FeedbackActivity[]) => void
 }) {
-  // The activity being edited (or 'new' for one being added) and its draft.
-  const [editing, setEditing] = useState<{ id: string; name: string; submission: string } | null>(null)
-  const [copied, setCopied] = useState(false)
-
-  const confirmedCount = activities.filter((activity) => activity.confirmed).length
-  const remaining = activities.length - confirmedCount
   const link = assignmentLinkFor(lessonId, lessonTitle, activities)
-  const url = link ? studentAssignmentUrl(link) : null
-  const canSave = Boolean(editing?.name.trim() && editing.submission.trim())
-
-  const saveEdit = () => {
-    if (!editing || !canSave) return
-    const values = { name: editing.name.trim(), submission: ensurePeriod(editing.submission.trim()), confirmed: true }
-    onChange(
-      editing.id === 'new'
-        ? [...activities, { id: `custom-${Date.now()}`, ...values }]
-        : activities.map((activity) => (activity.id === editing.id ? { ...activity, ...values } : activity)),
-    )
-    setEditing(null)
-    setCopied(false)
-  }
-
-  const copyLink = async () => {
-    if (!url) return
-    try {
-      await navigator.clipboard.writeText(url)
-      setCopied(true)
-    } catch {
-      setCopied(false)
-    }
-  }
-
-  const editor = (
-    <div className="feedback-activity-editor">
-      <label>
-        <span>Activity name</span>
-        <input
-          type="text"
-          value={editing?.name ?? ''}
-          autoFocus
-          onChange={(event) => setEditing((prev) => (prev ? { ...prev, name: event.target.value } : prev))}
-        />
-      </label>
-      <label>
-        <span>What students submit</span>
-        <textarea
-          rows={2}
-          value={editing?.submission ?? ''}
-          onChange={(event) => setEditing((prev) => (prev ? { ...prev, submission: event.target.value } : prev))}
-        />
-      </label>
-      <div className="feedback-activity-actions">
-        <button type="button" className="primary-button" disabled={!canSave} onClick={saveEdit}>
-          {editing?.id === 'new' ? 'Add Activity' : 'Save'}
-        </button>
-        <button type="button" className="secondary-button" onClick={() => setEditing(null)}>
-          Cancel
-        </button>
-      </div>
-    </div>
-  )
-
   return (
-    <section className="feedback-activities" aria-labelledby="feedback-activities-heading">
-      <div className="feedback-activities-header">
-        <div>
-          <p className="card-label">Student Feedback Activities</p>
-          <h4 id="feedback-activities-heading">
-            {pluralize(activities.length, 'submission activity', 'submission activities')}
-          </h4>
-        </div>
-        {activities.length > 0 && (
-          <span className={`badge feedback-confirmed-count${remaining === 0 ? ' all-confirmed' : ''}`}>
-            {confirmedCount} of {activities.length} confirmed
-          </span>
-        )}
-      </div>
-      <p className="feedback-activities-hint">
-        Activities from the Instructional Sequence where students submit a model, explanation, or other science-practice
-        work for feedback. Confirm each one, or edit, add, and remove activities.
-      </p>
-
-      {activities.length > 0 && (
-        <ol className="feedback-activity-list">
-          {activities.map((activity, index) => (
-            <li key={activity.id} className={`feedback-activity${activity.confirmed ? ' confirmed' : ''}`}>
-              {editing?.id === activity.id ? (
-                editor
-              ) : (
-                <>
-                  <div className="feedback-activity-text">
-                    <p className="feedback-activity-name">
-                      <span className="feedback-activity-number">{index + 1}.</span> {activity.name}
-                      <span className={`feedback-activity-status${activity.confirmed ? ' confirmed' : ''}`}>
-                        {activity.confirmed ? '✓ Confirmed' : 'Needs confirmation'}
-                      </span>
-                    </p>
-                    <p>{activity.submission}</p>
-                  </div>
-                  <div className="feedback-activity-actions">
-                    {!activity.confirmed && (
-                      <button
-                        type="button"
-                        className="primary-button"
-                        onClick={() => {
-                          onChange(activities.map((item) => (item.id === activity.id ? { ...item, confirmed: true } : item)))
-                          setCopied(false)
-                        }}
-                      >
-                        Confirm
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => setEditing({ id: activity.id, name: activity.name, submission: activity.submission })}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      className="ghost-button feedback-activity-remove"
-                      aria-label={`Remove ${activity.name}`}
-                      onClick={() => {
-                        onChange(activities.filter((item) => item.id !== activity.id))
-                        if (editing?.id === activity.id) setEditing(null)
-                        setCopied(false)
-                      }}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </>
-              )}
-            </li>
-          ))}
-        </ol>
-      )}
-
-      {editing?.id === 'new' ? (
-        <div className="feedback-activity feedback-activity-new">{editor}</div>
-      ) : (
-        <button type="button" className="secondary-button feedback-add-button" onClick={() => setEditing({ id: 'new', name: '', submission: '' })}>
-          + Add Activity
-        </button>
-      )}
-
-      <div className="feedback-link" aria-live="polite">
-        <p className="card-label">Student Feedback link</p>
-        {url ? (
-          <>
-            <div className="feedback-link-row">
-              <input type="text" readOnly value={url} aria-label="Student Feedback link" onFocus={(event) => event.target.select()} />
-              <button type="button" className="secondary-button" onClick={() => void copyLink()}>
-                {copied ? 'Copied' : 'Copy Link'}
-              </button>
-              <a className="primary-button feedback-open-link" href={url} target="_blank" rel="noopener noreferrer">
-                Open Student Page
-              </a>
-            </div>
-            <p className="feedback-link-note">
-              One link for this lesson, with all {pluralize(activities.length, 'activity', 'activities')} in order. Student
-              submissions aren’t saved yet in the prototype.
-            </p>
-          </>
-        ) : (
-          <p className="feedback-link-pending" role="status">
-            {activities.length === 0
-              ? 'Pending — add at least one submission activity to create the link.'
-              : `Pending — confirm the remaining ${pluralize(remaining, 'activity', 'activities')} to create this lesson’s link.`}
-          </p>
-        )}
-      </div>
-    </section>
+    <StudentProductCollection
+      headingId="feedback-activities-heading"
+      products={studentProductsFor(lessonId)}
+      items={activities}
+      confirmed={link !== null}
+      // An edited product keeps its confirmation; one added back needs it.
+      onChange={(next) =>
+        onChange(next.map((item) => ({ ...item, confirmed: activities.find((activity) => activity.id === item.id)?.confirmed ?? false })))
+      }
+      onConfirm={() => onChange(activities.map((activity) => ({ ...activity, confirmed: true })))}
+    >
+      {link && <ClassFeedbackLinks link={link} classes={linkClasses} kind="lesson" contents={`the ${joinLabels(activities.map((activity) => activity.name))}`} />}
+    </StudentProductCollection>
   )
 }
 
@@ -7974,6 +11098,8 @@ type LessonWorkspaceCanvasProps = {
   lesson: LessonDocument
   // The id used in the lesson's Student Feedback link.
   lessonLinkId: string
+  // The classes the lesson is assigned to; each gets its own link.
+  linkClasses: readonly LinkClass[]
   feedbackActivities: readonly FeedbackActivity[]
   onFeedbackActivitiesChange: (next: FeedbackActivity[]) => void
   setPlanningTab: (tab: PlanningTab) => void
@@ -7999,6 +11125,7 @@ function LessonWorkspaceCanvas({
   editor,
   lesson,
   lessonLinkId,
+  linkClasses,
   feedbackActivities,
   onFeedbackActivitiesChange,
   setPlanningTab,
@@ -8431,6 +11558,7 @@ function LessonWorkspaceCanvas({
           lessonId={lessonLinkId}
           lessonTitle={lesson.title}
           activities={feedbackActivities}
+          linkClasses={linkClasses}
           onChange={onFeedbackActivitiesChange}
         />
       </section>
@@ -8504,10 +11632,47 @@ const modelTabLabels: Record<ModelTab, string> = {
   mechanistic: 'Mechanistic Model',
 }
 
-const studentTask = {
-  topic: 'COVID-19 & Handwashing: Structure and Function',
-  prompt:
-    "Develop and use models to think about the structures of the coronavirus and soap, then explain how the structure of soap helps it function when mixed with water.",
+// The two student products one assignment collects (see studentProducts).
+// Class Feedback and Individual Student Reports switch between them — the
+// type of work reviewed, never the assignment.
+type WorkType = 'model' | 'explanation'
+// What a report or evidence card shows of each submission.
+type WorkView = WorkType | 'both'
+
+// The switch between the assignment's two student products (Model /
+// Explanation, or the lesson's own, e.g. Descriptive / Mechanistic).
+function WorkTypeSwitch({ options, value, onChange }: { options: ProductSwitch['options']; value: string; onChange: (next: string) => void }) {
+  return (
+    <div className="work-type-switch">
+      <span>Student Work</span>
+      <div className="work-type-options" role="group" aria-label="Student work type">
+        {options.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            className={`work-type-option${value === option.id ? ' active' : ''}`}
+            aria-pressed={value === option.id}
+            onClick={() => onChange(option.id)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// What the switch's choice means for an assignment: a product's own entry
+// (`assignmentId`), or the work type within the same entry.
+function chooseProduct(
+  assignment: ClassFeedbackAssignment,
+  productId: string,
+): { assignment: ClassFeedbackAssignment; workType: WorkType | null } {
+  if (assignment.productId) {
+    const entry = classFeedbackAssignmentsFor(assignment.lessonId).find((item) => item.productId === productId) ?? assignment
+    return { assignment: entry, workType: null }
+  }
+  return { assignment, workType: productId === 'explanation' ? 'explanation' : 'model' }
 }
 
 // The Descriptive Model prompt has two lettered parts (virus, then soap),
@@ -8532,132 +11697,315 @@ const mechanisticModelPrompt =
 const initialStudentExplanation =
   "In my model I drew the soap's hydrophobic tail sticking into the virus's fatty envelope, since both of those are supposed to be attracted to fat. I think that's part of how soap breaks the virus apart, but I'm not totally sure yet how the hydrophilic end helps rinse it away with water — I want to add that to my mechanistic model."
 
-// Each model tab gets its own AI feedback conversation, not one shared
-// chatbot (see section 1/2/3 of the spec) — so the two are seeded
-// separately here, and StudentFeedbackPage keeps them in separate state
-// keyed by ModelTab. Both are seeded so the page always opens mid-
-// conversation, exactly like a student returning to feedback they've
-// already started.
+// ---------------------------------------------------------------------------
+// Student Feedback mock content, per lesson
 //
-// Descriptive: short, and stays focused on helping the student notice and
-// describe structures/components that are already in their DRAWING — what's
-// labeled, where things are positioned, and whether the relationships
-// between structures are actually visible on the page — never jumping ahead
-// to mechanism/why, and never just explaining the answer itself.
-const initialDescriptiveFeedback: ChatMessage[] = [
-  {
-    role: 'ai',
-    text: 'I see that you labeled the coronavirus’s fatty envelope and the two parts of the soap molecule. Where could you add water to your drawing so the relationship between the hydrophilic part and water is easier to see?',
-  },
-  { role: 'teacher', text: 'I could draw water molecules around the soap.' },
-  {
-    role: 'ai',
-    text: 'That could make the relationship clearer. Which part of the soap molecule should point toward the water in your drawing?',
-  },
-]
+// Everything the Student Feedback page shows — the task, the student
+// products (one tab each, with its own AI Feedback conversation), starter
+// model, explanation, and the mock AI's replies — comes from the lesson's
+// scenario, so a lesson never shows another lesson's content. COVID Virus
+// and Zombie Fires have their own demo content; any other lesson gets the
+// generic scenario, built from its title.
+// ---------------------------------------------------------------------------
 
-// Mechanistic: opens on what's in the student's mechanistic drawing and
-// pushes toward interactions and change (many soap molecules acting on the
-// envelope), then — the last word in the conversation — explicitly sends
-// the student back to their Descriptive Model, naming the specific
-// relationships they represented there (hydrophobic part ↔ fat,
-// hydrophilic part ↔ water), and asks how to use those as the foundation
-// for showing the mechanism with arrows, labels, or positioning. The
-// progression it models: what I represented descriptively helps me reason
-// about and improve my mechanistic model. Scaffolds with questions, never a
-// textbook explanation of why soap works.
-const initialMechanisticFeedback: ChatMessage[] = [
-  {
-    role: 'ai',
-    text: 'I see that you drew the hydrophobic part of the soap next to the virus’s fatty envelope. What could you add to show what happens when many soap molecules interact with the envelope?',
-  },
-  { role: 'teacher', text: 'Maybe I could show the fatty layer starting to break apart?' },
-  {
-    role: 'ai',
-    text: 'Look back at your Descriptive Model: you showed that the hydrophobic part of soap interacts with fat while the hydrophilic part interacts with water. How could you use arrows, labels, or positioning in your Mechanistic Model to show how these interactions contribute to the change in the fatty envelope?',
-  },
-]
+type StudentFeedbackScenarioId = 'covid-virus' | 'zombie-fires' | 'generic'
 
-const initialFeedbackByTab: Record<ModelTab, ChatMessage[]> = {
-  descriptive: initialDescriptiveFeedback,
-  mechanistic: initialMechanisticFeedback,
+// One student product's tab.
+type StudentFeedbackTab = {
+  id: string
+  label: string
+  // A model tab shows the model area (starter image, Add Model, a name);
+  // an explanation tab shows its prompt above the explanation.
+  kind: 'model' | 'explanation'
+  // The product's prompt: a heading and its text, or labeled parts.
+  promptLabel: string
+  prompt: string | { heading: string; instruction: string; labels: string[] }[]
+  // The starter model shown until the student adds their own, if any.
+  starterImage: string | null
+  starterAlt: string
+  // The AI panel's tint (see .ai-panel-descriptive / .ai-panel-mechanistic).
+  tint: 'descriptive' | 'mechanistic'
+  subtitle: string
+  // Links this product to the one before it, e.g. "Building on your Model".
+  progressionNote?: string
+  initialFeedback: ChatMessage[]
+  // A scaffolding question for the student's message — never the answer.
+  reply: (message: string, followUpCount: number) => string
 }
 
-// Shown as a small contextual label above the Mechanistic Model AI
-// conversation (spec section 4) — makes the connection to the Descriptive
-// Model explicit to the student, not just implicit in the AI's wording.
-const mechanisticProgressionNote = 'Building on your Descriptive Model'
+type StudentFeedbackScenario = {
+  id: StudentFeedbackScenarioId
+  // Shown when the page opens without an assignment link.
+  task: { topic: string; prompt: string }
+  tabs: StudentFeedbackTab[]
+  initialExplanation: string
+  explanationPlaceholder: string
+  // What the mock microphone "hears".
+  micExplanation: string
+  micReply: string
+}
 
-// Rotates through generic Socratic follow-ups when nothing in the student's
-// message keyword-matches something more specific below — the point is the
-// conversation always has somewhere to go, never that it runs out of things
-// to ask. Kept separate per model tab so the fallback question still matches
-// what that tab is meant to help students think about (structures/labels for
-// Descriptive, interactions/mechanism for Mechanistic — see section 7).
-const genericDescriptiveFollowUps = [
-  'Which structure in your model would that be part of — is it something you could add a label for?',
-  'Is that a structure you’ve already drawn, or a new part you’d want to add to your model?',
-  'Where is that positioned in your drawing, and is its relationship to the nearby structures easy to see?',
-  'How does that structure compare between the virus and the soap molecule in your model?',
-]
+// Picks the scenario's follow-up whose keywords appear first, else rotates
+// through its general questions so the conversation always has somewhere to go.
+function keywordReply(rules: [RegExp, string][], fallbacks: string[]) {
+  return (message: string, followUpCount: number) => {
+    const lower = message.toLowerCase()
+    return rules.find(([pattern]) => pattern.test(lower))?.[1] ?? fallbacks[followUpCount % fallbacks.length]
+  }
+}
 
-const genericMechanisticFollowUps = [
-  'Where in your model would that interaction show up — is it something you could add an arrow for?',
-  'How could you use arrows or labels to show that happening over time, rather than all at once?',
-  'Is that something your model already shows happening, or a new relationship you’d want to add?',
-  'Which structures are involved in that, and how would you position them relative to each other to show it?',
-]
+// COVID Virus (unchanged demo content). Descriptive stays on the structures
+// and labels in the drawing; Mechanistic pushes toward interactions and
+// change, and sends the student back to their Descriptive Model.
+const covidFeedbackScenario: StudentFeedbackScenario = {
+  id: 'covid-virus',
+  task: {
+    topic: 'COVID-19 & Handwashing: Structure and Function',
+    prompt:
+      'Develop and use models to think about the structures of the coronavirus and soap, then explain how the structure of soap helps it function when mixed with water.',
+  },
+  tabs: [
+    {
+      id: 'descriptive',
+      label: 'Descriptive Model',
+      kind: 'model',
+      promptLabel: 'Descriptive Model',
+      prompt: descriptiveModelPrompt,
+      starterImage: COVID_DESCRIPTIVE_MODEL_EXAMPLE_IMAGE,
+      starterAlt: 'Descriptive model of the coronavirus (protein, fatty envelope, genetic material) and a soap molecule (hydrophilic head, hydrophobic tail)',
+      tint: 'descriptive',
+      subtitle: 'Explore the structures and features shown in your model.',
+      initialFeedback: [
+        {
+          role: 'ai',
+          text: 'I see that you labeled the coronavirus’s fatty envelope and the two parts of the soap molecule. Where could you add water to your drawing so the relationship between the hydrophilic part and water is easier to see?',
+        },
+        { role: 'teacher', text: 'I could draw water molecules around the soap.' },
+        { role: 'ai', text: 'That could make the relationship clearer. Which part of the soap molecule should point toward the water in your drawing?' },
+      ],
+      reply: keywordReply(
+        [
+          [/protein|spike/, 'You mentioned the protein. Where did you draw it on the coronavirus, and how does its position compare to the fatty envelope in your model?'],
+          [/envelope|fatty/, 'You’re describing the fatty envelope. What part of the soap molecule do you think would interact with it — and did you label that part?'],
+          [/genetic|rna|dna/, 'You’re thinking about the genetic material. Where is it positioned in your model, and did you draw or label anything around it to show what protects it?'],
+          [/hydrophilic|water/, 'You’re describing the hydrophilic portion. Which end of the soap molecule is that, and how did you show it in your diagram?'],
+          [/hydrophobic|fat/, 'You’re describing the hydrophobic portion. Which direction does that part point in your drawing, and is that relationship labeled?'],
+        ],
+        [
+          'Which structure in your model would that be part of — is it something you could add a label for?',
+          'Is that a structure you’ve already drawn, or a new part you’d want to add to your model?',
+          'Where is that positioned in your drawing, and is its relationship to the nearby structures easy to see?',
+          'How does that structure compare between the virus and the soap molecule in your model?',
+        ],
+      ),
+    },
+    {
+      id: 'mechanistic',
+      label: 'Mechanistic Model',
+      kind: 'model',
+      promptLabel: 'Mechanistic Model',
+      prompt: mechanisticModelPrompt,
+      starterImage: COVID_MECHANISTIC_MODEL_EXAMPLE_IMAGE,
+      starterAlt: 'Mechanistic model of soap molecules trapping oil droplets in water',
+      tint: 'mechanistic',
+      subtitle: 'Use the structures you identified to explain how the interaction happens.',
+      progressionNote: 'Building on your Descriptive Model',
+      initialFeedback: [
+        {
+          role: 'ai',
+          text: 'I see that you drew the hydrophobic part of the soap next to the virus’s fatty envelope. What could you add to show what happens when many soap molecules interact with the envelope?',
+        },
+        { role: 'teacher', text: 'Maybe I could show the fatty layer starting to break apart?' },
+        {
+          role: 'ai',
+          text: 'Look back at your Descriptive Model: you showed that the hydrophobic part of soap interacts with fat while the hydrophilic part interacts with water. How could you use arrows, labels, or positioning in your Mechanistic Model to show how these interactions contribute to the change in the fatty envelope?',
+        },
+      ],
+      reply: keywordReply(
+        [
+          [/stick|attach|grab/, 'That connection could be useful to show in your model. What arrow or label could you add to represent what you think the soap is doing?'],
+          [/break|dissolve|disrupt|apart/, 'You’re describing something happening to the virus’s structure. What part of your model shows the fatty envelope actually being disrupted, and how would you show that change?'],
+          [/surround|cluster|group|ball/, 'That’s an interesting way to represent it. What’s on the outside of that cluster in your model, and what’s on the inside?'],
+          [/mix|combine|oil.*water|water.*oil/, 'You’re describing how oil and water interact with soap. Which part of the soap molecule is facing the oil, and which part is facing the water in your drawing?'],
+          [/rinse|wash|remove|away/, 'You’re describing the virus being carried away. What could you add — an arrow, or a change in the drawing — to show what happens right before that point?'],
+        ],
+        [
+          'Where in your model would that interaction show up — is it something you could add an arrow for?',
+          'How could you use arrows or labels to show that happening over time, rather than all at once?',
+          'Is that something your model already shows happening, or a new relationship you’d want to add?',
+          'Which structures are involved in that, and how would you position them relative to each other to show it?',
+        ],
+      ),
+    },
+  ],
+  initialExplanation: initialStudentExplanation,
+  explanationPlaceholder: "Explain how your model shows the structures of the coronavirus and soap, and how soap's structure helps it work with water...",
+  micExplanation: 'Also, I think the hydrophilic end is what lets the soap mix into the water in the first place.',
+  micReply: "I think the hydrophobic tail pulls toward the virus's fatty envelope, away from the water.",
+}
 
-// Stands in for a real AI call. Always responds with a scaffolding question
-// grounded in whatever the student just said, never the scientific answer
-// itself — matches the rest of this prototype's "mock reply" convention
-// (see mockDeeperAnalysisReply / mockRevisionFollowUpReply). Every reply
-// stays anchored to the DRAWING itself — labels, arrows, structures, and
-// the positioning/relationships between them, and what is or isn't yet
-// represented visually — rather than explaining the underlying science, so
-// this never reads as a general science tutor giving the answer away.
-// Sensitive to which model tab the student is currently on (see section 7
-// of the spec): Descriptive replies stay focused on identifying and
-// labeling structures/positioning, Mechanistic replies stay focused on
-// interactions, cause-and-effect, and change shown through arrows.
-function mockStudentFeedbackReply(message: string, followUpCount: number, modelTab: ModelTab): string {
-  const lower = message.toLowerCase()
+// Zombie Fires: the Model tab helps students represent components,
+// relationships, and processes; the Explanation tab helps them explain
+// causes and support their reasoning with evidence.
+const zombieFiresFeedbackScenario: StudentFeedbackScenario = {
+  id: 'zombie-fires',
+  task: {
+    topic: dashboardTask.topic,
+    prompt: 'Develop a model of how zombie fires keep burning through the winter, then use it to explain how matter and energy flow between the biosphere and atmosphere.',
+  },
+  tabs: [
+    {
+      id: 'model',
+      label: 'Model',
+      kind: 'model',
+      promptLabel: 'Model',
+      prompt: dashboardTask.question.replace(/^Prompt:\s*/, ''),
+      starterImage: ZOMBIE_FIRES_STUDENT_MODEL_IMAGE,
+      starterAlt: 'Model of a zombie fire showing peat, permafrost, fire, and the atmosphere',
+      tint: 'descriptive',
+      subtitle: 'Show the components, relationships, and processes in your model.',
+      initialFeedback: [
+        {
+          role: 'ai',
+          text: 'I see that your model shows fire burning above the ground. What could you add to show how the fire continues burning in peat beneath the snow during winter?',
+        },
+        { role: 'teacher', text: 'I could add a layer of peat under the snow and show the fire continuing underground.' },
+        {
+          role: 'ai',
+          text: 'That could help explain why zombie fires survive winter. How could you show the movement of matter and energy in your revised model?',
+        },
+      ],
+      reply: keywordReply(
+        [
+          [/peat/, 'You’re adding the peat layer. Where does it sit in your model compared with the snow and the permafrost, and is that labeled?'],
+          [/permafrost|thaw/, 'You mentioned permafrost. How could your model show what happens to the permafrost as the fire smolders above it?'],
+          [/snow|ice|winter|cold/, 'You’re thinking about the snow and ice. How could you show in your model what the fire under the snow is getting — and losing — during the winter?'],
+          [/carbon|co2|co₂|smoke|gas/, 'You’re describing carbon moving. Where could you add an arrow to show carbon leaving the peat, and where does it go?'],
+          [/energy|heat|warm|temperature/, 'You’re thinking about energy. How could you show the heat moving in your model — where it starts, and where it ends up?'],
+          [/spring|season|flare|reignit|come back/, 'You’re describing the fire returning in spring. How could your model show the change between winter and spring — maybe two panels, or arrows over time?'],
+          [/arrow/, 'Arrows can show processes. What does each arrow in your model stand for — matter, energy, or both — and how would someone reading it know?'],
+        ],
+        [
+          'Which part of your model would that be — is it a component, a relationship, or a process you could add an arrow for?',
+          'Is that something your model already shows, or a new part you’d want to add when you revise it?',
+          'How could you show that changing over time, rather than all at once?',
+          'What would someone looking at your model need to see to understand how matter and energy move in a zombie fire?',
+        ],
+      ),
+    },
+    {
+      id: 'explanation',
+      label: 'Explanation',
+      kind: 'explanation',
+      promptLabel: 'Explanation',
+      prompt:
+        'Explain how zombie fires keep burning under snow and ice through the winter, and why they release so much carbon. Use your model and evidence — such as temperature or CO₂ data — to support your reasoning.',
+      starterImage: null,
+      starterAlt: '',
+      tint: 'mechanistic',
+      subtitle: 'Explain the causes, and support your reasoning with evidence.',
+      progressionNote: 'Building on your Model',
+      initialFeedback: [
+        {
+          role: 'ai',
+          text: 'Your explanation says the fire keeps burning underground. What causes it to keep going through the winter, and what evidence supports that?',
+        },
+        { role: 'teacher', text: 'The peat has a lot of carbon and the snow keeps the heat in, so it doesn’t go out.' },
+        {
+          role: 'ai',
+          text: 'That’s a cause-and-effect idea you can build on. What evidence from your model or the data shows the snow keeping heat in the peat?',
+        },
+      ],
+      reply: keywordReply(
+        [
+          [/because|cause|so that|reason/, 'You’re giving a cause. What evidence — from your model or the data — would convince someone that this cause is right?'],
+          [/data|evidence|graph|measure/, 'Good — you’re bringing in evidence. How does that evidence connect back to your claim about why the fire keeps burning?'],
+          [/carbon|co2|co₂/, 'You’re explaining the carbon release. Where was that carbon stored before the fire, and how does your explanation show it moving into the atmosphere?'],
+          [/heat|energy|warm|temperature/, 'You’re explaining the energy part. What keeps supplying energy to the fire under the snow, and how do you know?'],
+          [/snow|ice|insulat|blanket/, 'You’re explaining the snow’s role. How does it affect the fire — and what observation or data supports that?'],
+        ],
+        [
+          'What causes that to happen — can you connect it to something in your model?',
+          'What evidence supports that part of your explanation?',
+          'How would you explain that to someone who thinks fires always go out in winter?',
+          'Which part of your explanation are you least sure about, and what evidence could help?',
+        ],
+      ),
+    },
+  ],
+  initialExplanation:
+    "Zombie fires keep burning because the fire moves down into the peat under the snow. The peat has a lot of carbon in it, so it keeps burning slowly all winter, and in spring it comes back up. I'm not sure yet how to show where the carbon goes.",
+  explanationPlaceholder: 'Explain how your model shows matter and energy moving in a zombie fire, and what evidence supports it...',
+  micExplanation: 'Also, I think the snow acts like a blanket that keeps the heat in the peat.',
+  micReply: 'I think the peat keeps burning because it has so much carbon stored in it.',
+}
 
-  if (modelTab === 'descriptive') {
-    if (lower.includes('protein') || lower.includes('spike')) {
-      return 'You mentioned the protein. Where did you draw it on the coronavirus, and how does its position compare to the fatty envelope in your model?'
-    }
-    if (lower.includes('envelope') || lower.includes('fatty')) {
-      return 'You’re describing the fatty envelope. What part of the soap molecule do you think would interact with it — and did you label that part?'
-    }
-    if (lower.includes('genetic') || lower.includes('rna') || lower.includes('dna')) {
-      return 'You’re thinking about the genetic material. Where is it positioned in your model, and did you draw or label anything around it to show what protects it?'
-    }
-    if (lower.includes('hydrophilic') || lower.includes('water')) {
-      return 'You’re describing the hydrophilic portion. Which end of the soap molecule is that, and how did you show it in your diagram?'
-    }
-    if (lower.includes('hydrophobic') || lower.includes('fat')) {
-      return 'You’re describing the hydrophobic portion. Which direction does that part point in your drawing, and is that relationship labeled?'
-    }
-    return genericDescriptiveFollowUps[followUpCount % genericDescriptiveFollowUps.length]
+// Any other lesson: general Model and Explanation prompts built from its
+// title — nothing claimed about the topic itself.
+function genericFeedbackScenario(lessonTitle: string | null): StudentFeedbackScenario {
+  const topic = lessonTitle ?? 'your assignment'
+  return {
+    id: 'generic',
+    task: { topic, prompt: 'Develop a model of the phenomenon, then explain it using your model and evidence.' },
+    tabs: [
+      {
+        id: 'model',
+        label: 'Model',
+        kind: 'model',
+        promptLabel: 'Model',
+        prompt: `Develop a model that shows what is happening in ${topic} and what causes it. Include the key parts, how they interact, and any changes over time.`,
+        starterImage: null,
+        starterAlt: '',
+        tint: 'descriptive',
+        subtitle: 'Show the components, relationships, and processes in your model.',
+        initialFeedback: [{ role: 'ai', text: 'Add your model when you’re ready. Which parts of the phenomenon does your model show so far, and how are they connected?' }],
+        reply: keywordReply(
+          [[/arrow/, 'What does each arrow in your model stand for, and how would someone reading it know?']],
+          [
+            'Which part of your model would that be — a component, a relationship, or a process?',
+            'Is that something your model already shows, or something you’d add when you revise it?',
+            'How could you show that changing over time?',
+          ],
+        ),
+      },
+      {
+        id: 'explanation',
+        label: 'Explanation',
+        kind: 'explanation',
+        promptLabel: 'Explanation',
+        prompt: `Explain the phenomenon in ${topic} using your model and evidence to support your reasoning.`,
+        starterImage: null,
+        starterAlt: '',
+        tint: 'mechanistic',
+        subtitle: 'Explain the causes, and support your reasoning with evidence.',
+        progressionNote: 'Building on your Model',
+        initialFeedback: [{ role: 'ai', text: 'Write your explanation when you’re ready. What do you think causes the phenomenon, and what evidence supports that?' }],
+        reply: keywordReply(
+          [[/because|cause/, 'You’re giving a cause. What evidence would convince someone that it’s right?']],
+          ['What evidence supports that part of your explanation?', 'How does your model help explain that?', 'Which part are you least sure about?'],
+        ),
+      },
+    ],
+    initialExplanation: '',
+    explanationPlaceholder: 'Explain the phenomenon using your model and evidence...',
+    micExplanation: 'I think the evidence shows a pattern that my model can explain.',
+    micReply: 'I think my model shows how the parts are connected.',
   }
+}
 
-  if (lower.includes('stick') || lower.includes('attach') || lower.includes('grab')) {
-    return 'That connection could be useful to show in your model. What arrow or label could you add to represent what you think the soap is doing?'
-  }
-  if (lower.includes('break') || lower.includes('dissolve') || lower.includes('disrupt') || lower.includes('apart')) {
-    return 'You’re describing something happening to the virus’s structure. What part of your model shows the fatty envelope actually being disrupted, and how would you show that change?'
-  }
-  if (lower.includes('surround') || lower.includes('cluster') || lower.includes('group') || lower.includes('ball')) {
-    return 'That’s an interesting way to represent it. What’s on the outside of that cluster in your model, and what’s on the inside?'
-  }
-  if (lower.includes('mix') || lower.includes('combine') || (lower.includes('oil') && lower.includes('water'))) {
-    return 'You’re describing how oil and water interact with soap. Which part of the soap molecule is facing the oil, and which part is facing the water in your drawing?'
-  }
-  if (lower.includes('rinse') || lower.includes('wash') || lower.includes('remove') || lower.includes('away')) {
-    return 'You’re describing the virus being carried away. What could you add — an arrow, or a change in the drawing — to show what happens right before that point?'
-  }
-  return genericMechanisticFollowUps[followUpCount % genericMechanisticFollowUps.length]
+// The scenario for a Student Feedback page: by the lesson (or, for an
+// activity's link, the activity's template), and by its student products.
+function studentFeedbackScenarioFor(
+  lessonId: string | null,
+  lessonTitle: string | null,
+  productNames: readonly string[] = [],
+): StudentFeedbackScenario {
+  if (lessonId === 'covid-virus' || productNames.includes('Descriptive')) return covidFeedbackScenario
+  if (lessonId === 'zombie-fires') return zombieFiresFeedbackScenario
+  const template = activityTemplateFor(lessonTitle)
+  if (template === 'covid-virus') return covidFeedbackScenario
+  if (template === 'zombie-fires') return zombieFiresFeedbackScenario
+  return genericFeedbackScenario(lessonTitle)
 }
 
 function MicButton({ isListening, onClick, label }: { isListening: boolean; onClick: () => void; label: string }) {
@@ -8680,86 +12028,249 @@ function MicButton({ isListening, onClick, label }: { isListening: boolean; onCl
   )
 }
 
-// The real hand-drawn example artifacts for each model tab — same
-// convention as ZOMBIE_FIRES_STUDENT_MODEL_IMAGE above: lives in /public so
-// a missing file degrades to a broken-image icon instead of failing the
-// build. handleArtifactUpload (in StudentFeedbackPage) swaps either one out
-// for the student's own uploaded photo.
-const COVID_DESCRIPTIVE_MODEL_EXAMPLE_IMAGE = '/covid-descriptive-model-example.png'
-const COVID_MECHANISTIC_MODEL_EXAMPLE_IMAGE = '/covid-mechanistic-model-example.png'
+
+// Student Login in front of a Student Feedback assignment (see "Student
+// login (prototype)"). The ID is checked against the assignment's class
+// roster only; there's no password and no real authentication.
+function StudentLoginGate({
+  classId,
+  lessonTitle,
+  classes,
+  signIns,
+  onSignIn,
+  onSignOut,
+  children,
+}: {
+  // null when the assignment isn't tied to a class (e.g. an unassigned lesson).
+  classId: string | null
+  // The lesson the URL opens, when known.
+  lessonTitle: string | null
+  classes: readonly LibraryClass[]
+  signIns: Record<string, string>
+  onSignIn: (classId: string, studentId: string) => void
+  onSignOut: (classId: string) => void
+  children: ReactNode
+}) {
+  const [draft, setDraft] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  // Teacher Preview (prototype demonstrations only): opens the assignment
+  // without a Student ID. It's local to this page — no session is stored,
+  // no student ID is used, and everything done in it is discarded on Exit
+  // Preview (the page's state unmounts). Nothing reaches Class Feedback.
+  // In production this must be limited to signed-in, authorized teachers.
+  const [isPreviewing, setIsPreviewing] = useState(false)
+  const signedInAs = classId ? signIns[classId] : undefined
+  // Read on each render rather than once, so a roster the teacher just saved
+  // in another tab is picked up.
+  const roster = classId ? findLoginRoster(classId, classes) : null
+
+  if (classId && isPreviewing && !signedInAs) {
+    return (
+      <>
+        <div className="student-session-bar teacher-preview-bar" role="status">
+          <span>
+            <strong>Teacher Preview</strong>
+            {roster && <> · {roster.label}</>} · Not signed in as a student — nothing here is saved or counted in Class Feedback.
+          </span>
+          <button type="button" className="secondary-button" onClick={() => setIsPreviewing(false)}>
+            Exit Preview
+          </button>
+        </div>
+        {children}
+      </>
+    )
+  }
+
+  if (classId && signedInAs) {
+    return (
+      <>
+        <div className="student-session-bar" role="status">
+          <span>
+            Signed in as <span className="roster-id">{signedInAs}</span>
+            {roster && <> · {roster.label}</>}
+          </span>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => {
+              setDraft('')
+              setError(null)
+              onSignOut(classId)
+            }}
+          >
+            Sign Out
+          </button>
+        </div>
+        {children}
+      </>
+    )
+  }
+
+  const submit = () => {
+    const studentId = normalizeClassStudentId(draft)
+    if (!classId || !studentId || !roster?.studentIds.includes(studentId)) {
+      setError('Student ID not found. Please check your ID or contact your teacher.')
+      return
+    }
+    setError(null)
+    onSignIn(classId, studentId)
+  }
+
+  return (
+    <div className="student-login">
+      <form
+        className="login-card student-login-card"
+        aria-labelledby="student-login-heading"
+        onSubmit={(event) => {
+          event.preventDefault()
+          submit()
+        }}
+      >
+        <div className="login-heading">
+          <h2 id="student-login-heading">Student Login</h2>
+          <p>Enter the Student ID provided by your teacher to access your assignment.</p>
+        </div>
+        {classId ? (
+          <>
+            {(roster || lessonTitle) && (
+              <p className="student-login-class">
+                {lessonTitle && <strong className="student-login-lesson">{lessonTitle}</strong>}
+                {roster?.label}
+              </p>
+            )}
+            <div className="field-grid">
+              <label>
+                <span>Student ID</span>
+                <input
+                  type="text"
+                  placeholder="SB-001"
+                  autoComplete="off"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  value={draft}
+                  aria-invalid={error ? true : undefined}
+                  onChange={(event) => {
+                    setDraft(event.target.value)
+                    setError(null)
+                  }}
+                />
+              </label>
+            </div>
+            {error && (
+              <p className="roster-error" role="alert">
+                {error}
+              </p>
+            )}
+            <button type="submit" className="primary-button login-submit" disabled={!draft.trim()}>
+              Continue
+            </button>
+            <div className="teacher-preview-entry">
+              <button
+                type="button"
+                className="secondary-button teacher-preview-button"
+                onClick={() => {
+                  setDraft('')
+                  setError(null)
+                  setIsPreviewing(true)
+                }}
+              >
+                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                Preview as Teacher
+              </button>
+              <small>For prototype demonstrations</small>
+            </div>
+          </>
+        ) : (
+          <p className="roster-warning" role="status">
+            This assignment isn’t linked to a class yet. Ask your teacher for your class’s Student Feedback link.
+          </p>
+        )}
+        <p className="login-note">Prototype only — no password or real authentication.</p>
+      </form>
+    </div>
+  )
+}
 
 function StudentFeedbackPage({
+  lessonId = null,
+  lessonTitle = null,
   initialModelTab = 'descriptive',
   assignment = null,
 }: {
+  // The lesson this page is for (from the link or demo task): it picks the
+  // mock content (see studentFeedbackScenarioFor).
+  lessonId?: string | null
+  lessonTitle?: string | null
   initialModelTab?: ModelTab
-  // A lesson's confirmed Student Feedback Activities, from its link.
+  // A lesson's confirmed student products, from its link.
   assignment?: StudentAssignmentLink | null
 }) {
-  const [modelTab, setModelTab] = useState<ModelTab>(initialModelTab)
-  const [activeActivity, setActiveActivity] = useState(0)
-  // The model name belongs to the current submission: this activity (when
-  // opened from a lesson link) and this model tab.
-  const submissionKey = `${assignment ? activeActivity : 'task'}:${modelTab}`
+  const [scenario] = useState(() =>
+    studentFeedbackScenarioFor(
+      assignment?.lessonId ?? lessonId,
+      assignment?.lessonTitle ?? lessonTitle,
+      assignment?.activities.map((activity) => activity.name),
+    ),
+  )
+  const { tabs } = scenario
+  const [tabId, setTabId] = useState(() => (tabs.some((tab) => tab.id === initialModelTab) ? initialModelTab : tabs[0].id))
+  const tab = tabs.find((item) => item.id === tabId) ?? tabs[0]
+  // The model name belongs to the current submission: this assignment (when
+  // opened from a link) and this product.
+  const submissionKey = `${assignment ? 'assignment' : 'task'}:${tab.id}`
   const [modelNames, setModelNames] = useState<Record<string, string>>({})
-  // Only activities that involve a model ask for a name; the prototype's
-  // own task is a modeling task.
-  const currentActivity = assignment?.activities[activeActivity]
-  const isModelSubmission = !currentActivity || /\bmodel/i.test(`${currentActivity.name} ${currentActivity.submission}`)
-  // Each AI message's optional rating, by tab and message position.
-  const [ratingsByTab, setRatingsByTab] = useState<Record<ModelTab, Record<number, FeedbackRating>>>({ descriptive: {}, mechanistic: {} })
+  // Each AI message's optional rating, by product and message position.
+  const [ratingsByTab, setRatingsByTab] = useState<Record<string, Record<number, FeedbackRating>>>({})
+  const tabRatings = ratingsByTab[tab.id] ?? {}
 
-  // Each tab's artifact is independent state — switching tabs must never
-  // lose either one (see the ModelTab comment above). null means "showing
-  // the starter reference diagram"; once the student uploads a photo of
-  // their own drawing, this holds an object URL for it instead.
-  const [descriptiveArtifactUrl, setDescriptiveArtifactUrl] = useState<string | null>(null)
-  const [mechanisticArtifactUrl, setMechanisticArtifactUrl] = useState<string | null>(null)
+  // Each product's model is independent state — switching tabs must never
+  // lose one. Absent means "showing the starter model"; once the student
+  // uploads a photo of their own drawing, it holds an object URL for it.
+  const [artifactUrls, setArtifactUrls] = useState<Record<string, string>>({})
   const artifactFileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleArtifactUpload = (tab: ModelTab, file: File | undefined) => {
+  const handleArtifactUpload = (id: string, file: File | undefined) => {
     if (!file) return
     const url = URL.createObjectURL(file)
-    const previousUrl = tab === 'descriptive' ? descriptiveArtifactUrl : mechanisticArtifactUrl
+    const previousUrl = artifactUrls[id]
     if (previousUrl) URL.revokeObjectURL(previousUrl)
-    if (tab === 'descriptive') setDescriptiveArtifactUrl(url)
-    else setMechanisticArtifactUrl(url)
+    setArtifactUrls((prev) => ({ ...prev, [id]: url }))
   }
 
-  const [explanation, setExplanation] = useState(initialStudentExplanation)
+  const [explanation, setExplanation] = useState(scenario.initialExplanation)
   const explanationRef = useRef<HTMLTextAreaElement>(null)
   const [isExplanationListening, setIsExplanationListening] = useState(false)
   const explanationListenTimeoutRef = useRef<number | null>(null)
 
-  // Descriptive and Mechanistic each keep their own conversation — switching
-  // tabs must never lose or mix either one (same rule as the artifact state
-  // above), so both live keyed by tab in one piece of state.
-  const [feedbackMessagesByTab, setFeedbackMessagesByTab] = useState<Record<ModelTab, ChatMessage[]>>(initialFeedbackByTab)
-  const feedbackMessages = feedbackMessagesByTab[modelTab]
+  // Each product keeps its own conversation — switching tabs must never lose
+  // or mix them, so they live keyed by product in one piece of state.
+  const [feedbackMessagesByTab, setFeedbackMessagesByTab] = useState<Record<string, ChatMessage[]>>(() =>
+    Object.fromEntries(tabs.map((item) => [item.id, item.initialFeedback])),
+  )
+  const feedbackMessages = feedbackMessagesByTab[tab.id] ?? []
   const [feedbackDraft, setFeedbackDraft] = useState('')
   const [isComposerListening, setIsComposerListening] = useState(false)
   const composerListenTimeoutRef = useRef<number | null>(null)
   const [isAiThinking, setIsAiThinking] = useState(false)
   const aiThinkingTimeoutRef = useRef<number | null>(null)
-  const followUpCountRef = useRef<Record<ModelTab, number>>({ descriptive: 0, mechanistic: 0 })
+  const followUpCountRef = useRef<Record<string, number>>({})
   const chatScrollRef = useRef<HTMLDivElement | null>(null)
 
   const [isRevisionFlash, setIsRevisionFlash] = useState(false)
   const revisionFlashTimeoutRef = useRef<number | null>(null)
-  // Tracks the two-button workflow (spec section 1): "Start Iterating" is
-  // repeatable and never changes this; "Submit Final Revision" is the one
-  // terminal action — once clicked, the button row is replaced with a
-  // plain confirmation note, same convention as RevisionChatPanel's
-  // "✓ Applied to Lesson" (see .inline-ai-applied-note).
+  // "Start Iterating" is repeatable and never changes this; "Submit Final
+  // Revision" is the one terminal action — once clicked, the button row is
+  // replaced with a plain confirmation note.
   const [isFinalSubmitted, setIsFinalSubmitted] = useState(false)
 
-  // The chat area is a fixed-height, internally scrolling pane (see
-  // .deeper-analysis-chat, reused here) — keep it pinned to the latest
-  // message as the conversation grows, same as Deeper AI Analysis.
+  // Keep the chat pinned to the latest message as the conversation grows.
   useEffect(() => {
     const container = chatScrollRef.current
     if (container) container.scrollTop = container.scrollHeight
-  }, [feedbackMessages, isAiThinking])
+  }, [feedbackMessagesByTab, tab.id, isAiThinking])
 
   useEffect(() => {
     return () => {
@@ -8770,10 +12281,9 @@ function StudentFeedbackPage({
     }
   }, [])
 
-  // Both mic controls are mocked the same way (no real speech-to-thing API):
-  // toggling "listening" on, then after a short pause, appending a canned
-  // transcript — enough to demonstrate "type or speak" without a flaky
-  // browser API dependency.
+  // Both mic controls are mocked the same way (no real speech API): toggling
+  // "listening" on, then after a short pause, appending the lesson's canned
+  // transcript.
   const toggleExplanationMic = () => {
     if (isExplanationListening) {
       if (explanationListenTimeoutRef.current !== null) window.clearTimeout(explanationListenTimeoutRef.current)
@@ -8782,9 +12292,7 @@ function StudentFeedbackPage({
     }
     setIsExplanationListening(true)
     explanationListenTimeoutRef.current = window.setTimeout(() => {
-      setExplanation((prev) =>
-        `${prev.trim() ? `${prev.trim()} ` : ''}Also, I think the hydrophilic end is what lets the soap mix into the water in the first place.`,
-      )
+      setExplanation((prev) => `${prev.trim() ? `${prev.trim()} ` : ''}${scenario.micExplanation}`)
       setIsExplanationListening(false)
     }, 1800)
   }
@@ -8797,9 +12305,7 @@ function StudentFeedbackPage({
     }
     setIsComposerListening(true)
     composerListenTimeoutRef.current = window.setTimeout(() => {
-      setFeedbackDraft((prev) =>
-        `${prev.trim() ? `${prev.trim()} ` : ''}I think the hydrophobic tail pulls toward the virus's fatty envelope, away from the water.`,
-      )
+      setFeedbackDraft((prev) => `${prev.trim() ? `${prev.trim()} ` : ''}${scenario.micReply}`)
       setIsComposerListening(false)
     }, 1800)
   }
@@ -8807,21 +12313,21 @@ function StudentFeedbackPage({
   const sendFeedbackMessage = () => {
     const text = feedbackDraft.trim()
     if (!text || isAiThinking) return
-    const tab = modelTab
-    setFeedbackMessagesByTab((prev) => ({ ...prev, [tab]: [...prev[tab], { role: 'teacher', text }] }))
+    const current = tab
+    setFeedbackMessagesByTab((prev) => ({ ...prev, [current.id]: [...(prev[current.id] ?? []), { role: 'teacher', text }] }))
     setFeedbackDraft('')
     setIsAiThinking(true)
-    const count = followUpCountRef.current[tab]
-    followUpCountRef.current = { ...followUpCountRef.current, [tab]: count + 1 }
+    const count = followUpCountRef.current[current.id] ?? 0
+    followUpCountRef.current = { ...followUpCountRef.current, [current.id]: count + 1 }
     aiThinkingTimeoutRef.current = window.setTimeout(() => {
       setFeedbackMessagesByTab((prev) => ({
         ...prev,
-        [tab]: [
-          ...prev[tab],
+        [current.id]: [
+          ...(prev[current.id] ?? []),
           {
             role: 'ai',
-            text: callAiModel('student-feedback', { message: text, followUpCount: count, modelTab: tab }, (request) =>
-              mockStudentFeedbackReply(request.message, request.followUpCount, request.modelTab),
+            text: callAiModel('student-feedback', { message: text, followUpCount: count, lesson: scenario.id, product: current.id }, (request) =>
+              current.reply(request.message, request.followUpCount),
             ),
           },
         ],
@@ -8830,11 +12336,9 @@ function StudentFeedbackPage({
     }, 700)
   }
 
-  // "Start Iterating" never touches the student's text itself — it just
-  // brings the editable explanation back into focus, so the student decides
-  // what (if anything) to revise based on the AI feedback they've read. It
-  // stays available and repeatable throughout the formative loop (create →
-  // Start Iterating → get feedback → revise → repeat).
+  // "Start Iterating" never touches the student's text itself — it brings
+  // the editable explanation back into focus, so the student decides what to
+  // revise based on the feedback. Repeatable throughout the formative loop.
   const handleStartIterating = () => {
     explanationRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     explanationRef.current?.focus()
@@ -8843,72 +12347,63 @@ function StudentFeedbackPage({
     revisionFlashTimeoutRef.current = window.setTimeout(() => setIsRevisionFlash(false), 1200)
   }
 
-  // "Submit Final Revision" is the one terminal action in this workflow —
-  // it marks the formative loop as done and swaps the button row for a
-  // plain confirmation note (see isFinalSubmitted above).
   const handleSubmitFinalRevision = () => {
     setIsFinalSubmitted(true)
   }
+
+  const modelImage = artifactUrls[tab.id] ?? tab.starterImage
 
   return (
     <div className="student-workspace-layout">
       <section className="student-model-panel">
         {assignment ? (
           <div className="student-task-card student-assignment-card">
-            <p className="card-label">Your Lesson</p>
+            <p className="card-label">Your Assignment</p>
             <h3>{assignment.lessonTitle}</h3>
             <p>
-              Complete these {pluralize(assignment.activities.length, 'activity', 'activities')} in order, and submit your work for
-              each one to get feedback.
+              Submit your {joinLabels(assignment.activities.map((activity) => activity.name))} below — both are part of this one assignment.
+              Each time you revise, your new work is saved as a new version.
             </p>
-            <ol className="student-assignment-list">
+            <ul className="student-assignment-list">
               {assignment.activities.map((activity, index) => (
-                <li key={`${index}-${activity.name}`}>
-                  <button
-                    type="button"
-                    className={`student-assignment-item${activeActivity === index ? ' active' : ''}`}
-                    aria-pressed={activeActivity === index}
-                    onClick={() => setActiveActivity(index)}
-                  >
-                    <span className="student-assignment-step">Activity {index + 1}</span>
-                    <strong>{activity.name}</strong>
-                    <span>{activity.submission}</span>
-                  </button>
+                <li key={`${index}-${activity.name}`} className="student-assignment-item">
+                  <strong>{activity.name}</strong>
+                  <span>{activity.submission}</span>
                 </li>
               ))}
-            </ol>
-            <p className="student-assignment-note">
-              The modeling workspace below is the prototype’s example activity; submissions aren’t saved yet.
-            </p>
+            </ul>
+            <p className="student-assignment-note">The workspace below is the prototype’s example task; submissions aren’t saved yet.</p>
           </div>
         ) : (
           <div className="student-task-card">
             <p className="card-label">Your Task</p>
-            <h3>{studentTask.topic}</h3>
-            <p>{studentTask.prompt}</p>
+            <h3>{scenario.task.topic}</h3>
+            <p>{scenario.task.prompt}</p>
           </div>
         )}
 
         <div className="planning-tabs" role="tablist" aria-label="Model representation">
-          {(Object.keys(modelTabLabels) as ModelTab[]).map((tab) => (
+          {tabs.map((item) => (
             <button
-              key={tab}
+              key={item.id}
               type="button"
               role="tab"
-              aria-selected={modelTab === tab}
-              className={`planning-tab ${modelTab === tab ? 'active' : ''}`}
-              onClick={() => setModelTab(tab)}
+              aria-selected={tab.id === item.id}
+              className={`planning-tab ${tab.id === item.id ? 'active' : ''}`}
+              onClick={() => setTabId(item.id)}
             >
-              {modelTabLabels[tab]}
+              {item.label}
             </button>
           ))}
         </div>
 
-        {modelTab === 'descriptive' ? (
-          <div className="model-representation-area">
-            <div className="model-task-prompt">
-              <p className="model-task-prompt-label">Descriptive Model</p>
-              {descriptiveModelPrompt.map((section) => (
+        <div className="model-representation-area">
+          <div className="model-task-prompt">
+            <p className="model-task-prompt-label">{tab.promptLabel}</p>
+            {typeof tab.prompt === 'string' ? (
+              <p>{tab.prompt}</p>
+            ) : (
+              tab.prompt.map((section) => (
                 <div key={section.heading} className="model-task-prompt-section">
                   <p className="model-task-prompt-heading">{section.heading}</p>
                   <p>{section.instruction}</p>
@@ -8918,57 +12413,34 @@ function StudentFeedbackPage({
                     ))}
                   </ul>
                 </div>
-              ))}
-            </div>
-
-            <img
-              src={descriptiveArtifactUrl ?? COVID_DESCRIPTIVE_MODEL_EXAMPLE_IMAGE}
-              alt="Descriptive model of the coronavirus (protein, fatty envelope, genetic material) and a soap molecule (hydrophilic head, hydrophobic tail)"
-              className="student-model-preview"
-            />
-
-            <div className="model-representation-actions">
-              <input
-                ref={artifactFileInputRef}
-                type="file"
-                accept="image/*"
-                style={{ display: 'none' }}
-                onChange={(event) => handleArtifactUpload('descriptive', event.target.files?.[0])}
-              />
-              <button type="button" className="secondary-button" onClick={() => artifactFileInputRef.current?.click()}>
-                Add Model
-              </button>
-            </div>
+              ))
+            )}
           </div>
-        ) : (
-          <div className="model-representation-area">
-            <div className="model-task-prompt">
-              <p className="model-task-prompt-label">Mechanistic Model</p>
-              <p>{mechanisticModelPrompt}</p>
-            </div>
 
-            <img
-              src={mechanisticArtifactUrl ?? COVID_MECHANISTIC_MODEL_EXAMPLE_IMAGE}
-              alt="Mechanistic model of soap molecules trapping oil droplets in water"
-              className="student-model-preview"
-            />
+          {tab.kind === 'model' && (
+            <>
+              {modelImage ? (
+                <img src={modelImage} alt={artifactUrls[tab.id] ? `Your ${tab.label}` : tab.starterAlt} className="student-model-preview" />
+              ) : (
+                <p className="empty-state-support student-model-empty">No model added yet — use Add Model to upload a photo of your drawing.</p>
+              )}
+              <div className="model-representation-actions">
+                <input
+                  ref={artifactFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={(event) => handleArtifactUpload(tab.id, event.target.files?.[0])}
+                />
+                <button type="button" className="secondary-button" onClick={() => artifactFileInputRef.current?.click()}>
+                  Add Model
+                </button>
+              </div>
+            </>
+          )}
+        </div>
 
-            <div className="model-representation-actions">
-              <input
-                ref={artifactFileInputRef}
-                type="file"
-                accept="image/*"
-                style={{ display: 'none' }}
-                onChange={(event) => handleArtifactUpload('mechanistic', event.target.files?.[0])}
-              />
-              <button type="button" className="secondary-button" onClick={() => artifactFileInputRef.current?.click()}>
-                Add Model
-              </button>
-            </div>
-          </div>
-        )}
-
-        {isModelSubmission && (
+        {tab.kind === 'model' && (
           <label className="model-name-field">
             <span>Name Your Model</span>
             <input
@@ -8982,7 +12454,7 @@ function StudentFeedbackPage({
 
         <div className={`student-explanation-field${isRevisionFlash ? ' revision-flash' : ''}`}>
           <div className="student-explanation-header">
-            <span>Explain your thinking</span>
+            <span>{tab.kind === 'explanation' ? 'Your explanation' : 'Explain your thinking'}</span>
             <span className="empty-state-support">Type your explanation, or use the microphone to speak it.</span>
           </div>
           <div className="student-explanation-input-row">
@@ -8991,7 +12463,7 @@ function StudentFeedbackPage({
               rows={6}
               value={explanation}
               onChange={(event) => setExplanation(event.target.value)}
-              placeholder="Explain how your model shows the structures of the coronavirus and soap, and how soap's structure helps it work with water..."
+              placeholder={scenario.explanationPlaceholder}
             />
             <MicButton isListening={isExplanationListening} onClick={toggleExplanationMic} label="your explanation" />
           </div>
@@ -9012,44 +12484,32 @@ function StudentFeedbackPage({
         )}
       </section>
 
-      {/* `ai-panel-${modelTab}` carries the subtle per-state tint (see
-          .ai-panel-descriptive / .ai-panel-mechanistic in App.css) — the
-          badge, progression note, and contextual text below all key off the
-          same `modelTab` so the whole header changes together with the
-          conversation and the model/work on the left. */}
-      <section className={`student-ai-panel ai-panel-${modelTab}`}>
+      {/* `ai-panel-${tab.tint}` carries the subtle per-product tint (see
+          .ai-panel-descriptive / .ai-panel-mechanistic in App.css). */}
+      <section className={`student-ai-panel ai-panel-${tab.tint}`}>
         <div className="panel-header compact ai-panel-header">
           <h3>AI Feedback</h3>
-          <span className="badge ai-panel-badge">{modelTab === 'descriptive' ? 'Descriptive Model' : 'Mechanistic Model'}</span>
+          <span className="badge ai-panel-badge">{tab.label}</span>
         </div>
-        {modelTab === 'mechanistic' && (
-          <p className="ai-panel-progression-note">🔗 {mechanisticProgressionNote}</p>
-        )}
-        <p className="empty-state-support deeper-analysis-subtitle">
-          {modelTab === 'mechanistic'
-            ? 'Use the structures you identified to explain how the interaction happens.'
-            : 'Explore the structures and features shown in your model.'}
-        </p>
+        {tab.progressionNote && <p className="ai-panel-progression-note">🔗 {tab.progressionNote}</p>}
+        <p className="empty-state-support deeper-analysis-subtitle">{tab.subtitle}</p>
 
         <div className="deeper-analysis-body">
           <div className="deeper-analysis-chat" ref={chatScrollRef}>
-            {/* `ai-panel-chat-${modelTab}` recolors only the AI bubbles (see
-                .ai-panel-chat-descriptive/.ai-panel-chat-mechanistic in
-                App.css) — student bubbles stay the shared neutral gray from
-                .teacher-message everywhere, unaffected by model tab. */}
+            {/* `ai-panel-chat-${tab.tint}` recolors only the AI bubbles. */}
             <ChatThread
               messages={feedbackMessages}
-              className={`ai-panel-chat-${modelTab}`}
+              className={`ai-panel-chat-${tab.tint}`}
               renderAfterMessage={(message, index) =>
                 message.role === 'ai' && (
                   <FeedbackRatingButtons
-                    rating={ratingsByTab[modelTab][index]}
+                    rating={tabRatings[index]}
                     onChange={(next) =>
                       setRatingsByTab((prev) => {
-                        const tabRatings = { ...prev[modelTab] }
-                        if (next) tabRatings[index] = next
-                        else delete tabRatings[index]
-                        return { ...prev, [modelTab]: tabRatings }
+                        const ratings = { ...(prev[tab.id] ?? {}) }
+                        if (next) ratings[index] = next
+                        else delete ratings[index]
+                        return { ...prev, [tab.id]: ratings }
                       })
                     }
                   />
@@ -9114,22 +12574,38 @@ type ArtifactVersion = {
   // Plain-language description of the drawing. Shown in place of the image
   // when there's no scan yet, and used as the image's alt text when there is.
   modelDescription: string
-  explanation: string
+  // Absent when the model was submitted without a written explanation.
+  explanation?: string
 }
 
-// `uncertain` marks ideas the work only hints at — "do not present uncertain
-// inferences as established misconceptions" — so they're shown as worth
-// checking with the student rather than as findings.
-type PotentialMisconception = {
-  idea: string
-  evidence: string
-  uncertain?: boolean
+// The AI Summary of a model's most recent submission, read against the
+// lesson's practice-oriented learning objectives the way Class Feedback
+// reads the class: one concise summary per objective (by its 0-based index
+// in the lesson plan) of what the work demonstrates, and of what remains
+// incomplete or unclear. An objective missing from a section means the
+// submission doesn't show enough to say — never that the student
+// misunderstands it.
+type LatestSubmissionSummary = {
+  overlap: Partial<Record<number, string>>
+  areasForImprovement: Partial<Record<number, string>>
 }
+
+// Suggested Next Steps for one student's most recent submission: one
+// instructional move per learning need, tied to an objective (0-based index)
+// and to the student work it targets — the Model or the Explanation (the
+// report shows those matching the selected work; COVID's products show all).
+type StudentNextStep = { objectiveIndex: number; focus: WorkType; title: string; action: string }
 
 type StudentModelWork = {
+  // Mock data, written from the latest version and the revision history.
+  nextSteps: StudentNextStep[]
   versions: ArtifactVersion[]
-  changesInUnderstanding: string[]
-  potentialMisconceptions: PotentialMisconception[]
+  // Changes between Revisions: what changed from the initial submission to
+  // each revision, by the revision's versionNumber. Mock data, written from
+  // the versions above.
+  revisionChanges: Record<number, string[]>
+  // Mock data, written from the most recent version above, never beyond it.
+  latestSummary: LatestSubmissionSummary
 }
 
 type IndividualStudentReport = {
@@ -9160,15 +12636,36 @@ const individualStudentReports: IndividualStudentReport[] = [
               'I split my model into seasons. Under the ground there is peat and permafrost. In winter there is snow on top. In spring there is a burn scar where last year’s fire was, and smoke and CO₂ go up into the atmosphere.',
           },
         ],
-        changesInUnderstanding: [
-          'Now includes what’s below the surface — peat and permafrost are drawn and labeled (Version 2).',
-          'Seasonal panels and the Spring burn scar let the model show the fire returning to the same place.',
-        ],
-        potentialMisconceptions: [
+        revisionChanges: {
+          2: [
+            'Now includes what’s below the surface — peat and permafrost are drawn and labeled.',
+            'Seasonal panels and the Spring burn scar let the model show the fire returning to the same place.',
+          ],
+        },
+        latestSummary: {
+          overlap: {
+            0: 'Draws on the seasonal pattern of zombie fires, marking a burn scar where last year’s fire was to show the fire returning to the same place.',
+            1: 'Models the system above and below ground — peat, permafrost, snow, and smoke/CO₂ are drawn and labeled across seasonal panels.',
+          },
+          areasForImprovement: {
+            0: 'Shows that the fire comes back but not why; naming what causes it to return would complete the cause-and-effect relationship.',
+            1: 'Ice, soil, and peat share one underground band, so it isn’t clear whether they’re separate parts — worth asking. Labeling which parts are matter and which are energy would connect the model to the objective.',
+          },
+        },
+        nextSteps: [
           {
-            idea: 'Ice, soil, and peat may not be distinguished from one another',
-            evidence: 'All three are drawn as one brown underground band in Version 2.',
-            uncertain: true,
+            objectiveIndex: 1,
+            focus: 'model',
+            title: 'Separate matter from energy',
+            action:
+              'Ask Jordan to give ice, soil, and peat their own labeled layers, then mark each part as matter or energy and use a different arrow style for each.',
+          },
+          {
+            objectiveIndex: 0,
+            focus: 'explanation',
+            title: 'Explain why the fire returns',
+            action:
+              'Have Jordan add a sentence naming what keeps the fire alive between seasons, using the Spring burn scar as evidence.',
           },
         ],
       },
@@ -9200,24 +12697,43 @@ const individualStudentReports: IndividualStudentReport[] = [
               'My model shows the fire moving underground into the peat as the permafrost thaws. During winter, I think the fire keeps burning in the peat underneath the snow and ice, and then it can come back to the surface in spring. I labeled the peat and permafrost as matter and the fire as energy, and drew arrows from both of them up into the smoke and CO₂ leaving through the atmosphere.',
           },
         ],
-        changesInUnderstanding: [
-          'Shifted from “the fire goes out in winter” (Version 1) to “it keeps burning underground in the peat” — the core zombie-fire mechanism.',
-          'Links thawing permafrost to the fire moving underground, a new cause-and-effect relationship (Version 3).',
-          'Shows matter (peat → smoke/CO₂) entering the atmosphere in every season, not only when flames are visible.',
-        ],
-        potentialMisconceptions: [
+        revisionChanges: {
+          2: [
+            'Shifted from “the fire goes out in winter” (Version 1) to “it keeps burning underground in the peat” — the core zombie-fire mechanism.',
+            'Smoke/CO₂ now rises from the Winter panel too, so carbon release no longer stops when flames aren’t visible.',
+          ],
+          3: [
+            'Shifted from “the fire goes out in winter” (Version 1) to “it keeps burning underground in the peat” — the core zombie-fire mechanism.',
+            'Links thawing permafrost to the fire moving underground, a new cause-and-effect relationship (Version 3).',
+            'Shows matter (peat → smoke/CO₂) entering the atmosphere in every season, not only when flames are visible.',
+          ],
+        },
+        latestSummary: {
+          overlap: {
+            0: 'Links thawing permafrost to the fire moving underground — a clear cause-and-effect relationship.',
+            1: 'Models the fire burning in the peat beneath the snow all winter and shows matter (peat → smoke/CO₂) entering the atmosphere in every season.',
+            2: 'Raises an open question about which parts of the system count as matter (“Ice? Soil? Peat?”).',
+          },
+          areasForImprovement: {
+            0: 'Doesn’t yet account for what supplies oxygen to the underground fire — it may simply not have been considered yet.',
+            1: 'Labels the fire itself as energy; showing fire as the process that releases energy from the peat would sharpen the matter–energy distinction.',
+            2: 'The question about ice, soil, and peat is left unanswered; connecting it to how much carbon is released or the role of humans would extend it.',
+          },
+        },
+        nextSteps: [
           {
-            idea: 'Treats fire as “energy” rather than a process that releases energy from peat',
-            evidence: 'Version 3 labels “Fire (energy)”; the explanation says “the fire as energy.”',
+            objectiveIndex: 1,
+            focus: 'model',
+            title: 'Show fire as a process',
+            action:
+              'Ask Jordan to relabel the fire as the process releasing energy from the peat, with separate arrows for energy (heat) and matter (peat → CO₂).',
           },
           {
-            idea: 'Unsure whether ice and soil count as matter',
-            evidence: 'Version 3 asks “Ice? Soil? Peat? (matter?)” without answering it.',
-          },
-          {
-            idea: 'No account of what supplies oxygen to the underground fire',
-            evidence: 'Not addressed in the model or explanation — may simply not have been considered yet.',
-            uncertain: true,
+            objectiveIndex: 0,
+            focus: 'explanation',
+            title: 'Account for oxygen underground',
+            action:
+              'Ask Jordan how the underground fire gets the oxygen it needs, and have them add that cause to the explanation.',
           },
         ],
       },
@@ -9241,15 +12757,35 @@ const individualStudentReports: IndividualStudentReport[] = [
             explanation: 'I added the peat and the frozen ground under the fire. The smoke has CO₂ in it that goes into the air.',
           },
         ],
-        changesInUnderstanding: [
-          'Adds peat and frozen ground (permafrost) below the surface, making the underground system visible.',
-          'Labels smoke as containing CO₂ — a first sign of noticing what matter leaves the system.',
-        ],
-        potentialMisconceptions: [
+        revisionChanges: {
+          2: [
+            'Adds peat and frozen ground (permafrost) below the surface, making the underground system visible.',
+            'Labels smoke as containing CO₂ — a first sign of noticing what matter leaves the system.',
+          ],
+        },
+        latestSummary: {
+          overlap: {
+            1: 'Adds peat and frozen ground beneath the fire and labels the smoke as containing CO₂, showing some matter leaving the system.',
+          },
+          areasForImprovement: {
+            0: 'Doesn’t yet say what causes the fire or why it keeps burning.',
+            1: 'The snow is still drawn off to the side rather than on top of the peat, so how snow, peat, and fire relate isn’t shown yet.',
+          },
+        },
+        nextSteps: [
           {
-            idea: 'Relationship between snow, peat, and fire isn’t shown',
-            evidence: 'In Version 2 the snow is still drawn off to the side rather than on top of the peat layer.',
-            uncertain: true,
+            objectiveIndex: 1,
+            focus: 'model',
+            title: 'Place the snow on the peat',
+            action:
+              'Ask Carlos to move the snow layer on top of the peat and add arrows showing how the fire, peat, and snow connect in winter.',
+          },
+          {
+            objectiveIndex: 0,
+            focus: 'explanation',
+            title: 'Name the cause',
+            action:
+              'Have Carlos finish the sentence “The fire keeps burning because…” using a part of his model as evidence.',
           },
         ],
       },
@@ -9268,23 +12804,35 @@ const individualStudentReports: IndividualStudentReport[] = [
             explanation: 'I drew a line under the snow because there is still heat underground. The fire goes out in winter but the leftover heat makes it start again in the spring in the same spot.',
           },
         ],
-        changesInUnderstanding: [
-          'The drawing now connects the two fires underground — something persists between seasons.',
-          'The explanation hasn’t changed in the same way: the fire still “goes out” and restarts, so the drawing may overstate the change in reasoning.',
-        ],
-        potentialMisconceptions: [
+        revisionChanges: {
+          2: [
+            'The drawing now connects the two fires underground — something persists between seasons.',
+            'The explanation hasn’t changed in the same way: the fire still “goes out” and restarts, so the drawing may overstate the change in reasoning.',
+          ],
+        },
+        latestSummary: {
+          overlap: {
+            1: 'Connects the summer and spring fires with a line underground, showing that something persists between seasons.',
+          },
+          areasForImprovement: {
+            0: 'Explains the spring fire as restarting from leftover heat after the fire goes out, rather than the same fire continuing underground.',
+            1: 'The CO₂ in the smoke isn’t traced back to the peat being burned, and the “heat underground” label could use clarifying — it may be shorthand.',
+          },
+        },
+        nextSteps: [
           {
-            idea: 'Fire goes out in winter and a new fire starts in spring',
-            evidence: 'Version 2: “The fire goes out in winter but the leftover heat makes it start again.”',
+            objectiveIndex: 0,
+            focus: 'explanation',
+            title: 'Reconcile drawing and explanation',
+            action:
+              'His Version 2 drawing connects the fires but the explanation says the fire goes out — ask Carlos which he now thinks is right, and why.',
           },
           {
-            idea: 'Carbon released isn’t traced back to the peat',
-            evidence: 'Smoke/CO₂ appears above the fires, but neither version connects it to the peat being burned.',
-          },
-          {
-            idea: 'May think of “heat” as a substance stored in the ground',
-            evidence: 'The dashed line is labeled “heat underground” — possibly shorthand; worth asking.',
-            uncertain: true,
+            objectiveIndex: 1,
+            focus: 'model',
+            title: 'Trace CO₂ to the peat',
+            action:
+              'Ask Carlos to draw an arrow from the peat to the CO₂ in the smoke and replace “heat underground” with what is actually burning.',
           },
         ],
       },
@@ -9308,11 +12856,34 @@ const individualStudentReports: IndividualStudentReport[] = [
             explanation: 'Now the peat is its own layer and the fire is inside the peat, smoldering. The snow is on top the whole winter.',
           },
         ],
-        changesInUnderstanding: [
-          'Draws peat and fire as separate components, with the fire located inside the peat.',
-          'Introduces “smoldering” to distinguish the underground fire from flames above ground.',
+        revisionChanges: {
+          2: [
+            'Draws peat and fire as separate components, with the fire located inside the peat.',
+            'Introduces “smoldering” to distinguish the underground fire from flames above ground.',
+          ],
+        },
+        latestSummary: {
+          overlap: {
+            1: 'Draws peat as its own layer with the smoldering fire inside it, distinguishing the underground fire from flames above ground.',
+          },
+          areasForImprovement: {},
+        },
+        nextSteps: [
+          {
+            objectiveIndex: 1,
+            focus: 'model',
+            title: 'Add matter and energy arrows',
+            action:
+              'Priya’s layers are clear; ask her to add arrows showing where matter (carbon) and energy (heat) move from the smoldering peat.',
+          },
+          {
+            objectiveIndex: 0,
+            focus: 'explanation',
+            title: 'Connect smoldering to winter',
+            action:
+              'Ask Priya to explain why smoldering, rather than open flames, lets the fire survive under the snow, citing her model.',
+          },
         ],
-        potentialMisconceptions: [],
       },
       mechanistic: {
         versions: [
@@ -9335,15 +12906,39 @@ const individualStudentReports: IndividualStudentReport[] = [
             explanation: 'The peat is the fuel for the fire, so the fire uses up the peat as it burns all winter. That’s why there is less peat in the spring. The fire makes smoke and CO₂ that go up into the atmosphere.',
           },
         ],
-        changesInUnderstanding: [
-          'Now describes peat as fuel that is used up as it burns, rather than treating peat and fire as one thing.',
-          'The “less peat” label in Spring suggests she’s beginning to track matter leaving the biosphere over time.',
-        ],
-        potentialMisconceptions: [
+        revisionChanges: {
+          2: [
+            'Draws peat as its own layer with the smoldering fire inside it, instead of a single “fire part.”',
+            'Adds CO₂ to the smoke rising through the snow.',
+          ],
+          3: [
+            'Now describes peat as fuel that is used up as it burns, rather than treating peat and fire as one thing.',
+            'The “less peat” label in Spring suggests the student is beginning to track matter leaving the biosphere over time.',
+          ],
+        },
+        latestSummary: {
+          overlap: {
+            0: 'Identifies a cause-and-effect change in the biosphere: burning all winter leaves less peat by spring.',
+            1: 'Models peat as the fire’s fuel, used up as it burns, with smoke and CO₂ rising into the atmosphere.',
+          },
+          areasForImprovement: {
+            1: 'Describes CO₂ as coming “from the fire” rather than from the peat — possibly shorthand, since the peat is already described as used up; worth checking.',
+          },
+        },
+        nextSteps: [
           {
-            idea: 'CO₂ is described as coming “from the fire” rather than from the peat',
-            evidence: 'Version 3: “The fire makes smoke and CO₂.” May be shorthand, since she already says the peat is used up.',
-            uncertain: true,
+            objectiveIndex: 1,
+            focus: 'model',
+            title: 'Start the CO₂ arrow at the peat',
+            action:
+              'Her “less peat” label already shows peat being used up — ask Priya to redraw the CO₂ arrow so it starts at the peat, not the fire.',
+          },
+          {
+            objectiveIndex: 2,
+            focus: 'explanation',
+            title: 'Pose a follow-up question',
+            action:
+              'Invite Priya to write one question about where the lost peat’s carbon ends up, and how she could find out.',
           },
         ],
       },
@@ -9361,11 +12956,29 @@ const individualStudentReports: IndividualStudentReport[] = [
             explanation: 'Zombie fires burn underground in the winter and start again in spring. They make smoke.',
           },
         ],
-        changesInUnderstanding: [],
-        potentialMisconceptions: [
+        revisionChanges: {},
+        latestSummary: {
+          overlap: {
+            0: 'States the key fact about zombie fires: they burn underground through winter and return in spring.',
+          },
+          areasForImprovement: {
+            1: 'The model shows only snow, fire, and smoke, with the fire above ground — adding peat and permafrost and placing the fire underground would match the explanation.',
+          },
+        },
+        nextSteps: [
           {
-            idea: 'Underground components (peat, permafrost) are not represented',
-            evidence: 'Only snow, fire, and smoke are labeled; the fire is drawn above ground though the explanation says it burns underground.',
+            objectiveIndex: 1,
+            focus: 'model',
+            title: 'Move the fire underground',
+            action:
+              'Ask Emma to add peat and permafrost layers and redraw the fire inside the peat, so the model matches her written explanation.',
+          },
+          {
+            objectiveIndex: 0,
+            focus: 'explanation',
+            title: 'Explain using the model',
+            action:
+              'Have Emma point to each part of her revised model while explaining how the fire survives the winter.',
           },
         ],
       },
@@ -9384,18 +12997,35 @@ const individualStudentReports: IndividualStudentReport[] = [
             explanation: 'The fire keeps burning underground in the winter and then comes back in spring when things dry out.',
           },
         ],
-        changesInUnderstanding: [
-          'Now states the fire continues underground in winter, which Version 1 didn’t.',
-          'The drawing changed only slightly and the “dries out” cause remains — the new sentence may be adopted wording rather than changed reasoning. Worth asking her to explain it in her own words.',
-        ],
-        potentialMisconceptions: [
+        revisionChanges: {
+          2: [
+            'Now states the fire continues underground in winter, which Version 1 didn’t.',
+            'The drawing changed only slightly and the “dries out” cause remains — the new sentence may be adopted wording rather than changed reasoning. Worth asking for an explanation in the student’s own words.',
+          ],
+        },
+        latestSummary: {
+          overlap: {
+            1: 'States that the fire keeps burning underground through winter, with a fire icon added under the snow.',
+          },
+          areasForImprovement: {
+            0: 'Still attributes the spring fire to things drying out rather than to the fire that persisted underground.',
+            1: 'Doesn’t yet show what burns or where the smoke’s matter comes from. The drawing changed only slightly, so it’s worth asking for the explanation in the student’s own words.',
+          },
+        },
+        nextSteps: [
           {
-            idea: 'Spring fire is attributed to drying out, not to the fire that persisted underground',
-            evidence: 'The “dries out” arrow is still the only causal link in Version 2.',
+            objectiveIndex: 0,
+            focus: 'explanation',
+            title: 'Explain in her own words',
+            action:
+              'The drawing barely changed between versions — ask Emma to explain aloud how the winter fire leads to the spring fire without using “dries out.”',
           },
           {
-            idea: 'Matter and energy flow are not yet represented',
-            evidence: 'Neither version identifies what burns or where the smoke’s matter comes from.',
+            objectiveIndex: 1,
+            focus: 'model',
+            title: 'Show what burns',
+            action:
+              'Ask Emma to label the peat as fuel and add an arrow from it to the smoke, showing where the smoke’s matter comes from.',
           },
         ],
       },
@@ -9403,16 +13033,101 @@ const individualStudentReports: IndividualStudentReport[] = [
   },
 ]
 
-const individualStudentReportsByName: Record<string, IndividualStudentReport> = Object.fromEntries(
-  individualStudentReports.map((report) => [report.studentName, report]),
-)
+// COVID Virus: one detailed report, built from the existing COVID example
+// artifacts — the Descriptive and Mechanistic models Student Feedback
+// starts from, and the explanation written with the Mechanistic one. Each
+// model has only that one version; no revisions are invented.
+const covidStudentReports: IndividualStudentReport[] = [
+  {
+    studentName: 'Bianca S.',
+    models: {
+      descriptive: {
+        versions: [
+          {
+            versionNumber: 1,
+            submittedAt: 'Nov 4, 9:40 AM',
+            modelImage: COVID_DESCRIPTIVE_MODEL_EXAMPLE_IMAGE,
+            modelDescription:
+              'Labeled diagrams: (a) the coronavirus with protein spikes, a fatty envelope, and genetic material inside; (b) two soap molecules, each with a hydrophilic head (“likes water”) and a hydrophobic tail (“likes fat/oil”).',
+          },
+        ],
+        revisionChanges: {},
+        latestSummary: {
+          overlap: {
+            0: 'Labels all three virus structures and both parts of the soap molecule, noting what each end of the soap is attracted to.',
+          },
+          areasForImprovement: {
+            1: 'The virus and soap are drawn separately, so the model doesn’t yet show how their structures relate.',
+          },
+        },
+        nextSteps: [
+          {
+            objectiveIndex: 1,
+            focus: 'model',
+            title: 'Relate the two structures',
+            action:
+              'Ask Bianca to redraw a soap molecule beside the virus, showing which part of the soap meets the fatty envelope.',
+          },
+        ],
+      },
+      mechanistic: {
+        versions: [
+          {
+            versionNumber: 1,
+            submittedAt: 'Nov 6, 10:05 AM',
+            modelImage: COVID_MECHANISTIC_MODEL_EXAMPLE_IMAGE,
+            modelDescription:
+              'A beaker of water with soap molecules clustered around three oil droplets, heads facing the water, labeled “Soap traps the oil.”',
+            explanation: initialStudentExplanation,
+          },
+        ],
+        revisionChanges: {},
+        latestSummary: {
+          overlap: {
+            0: 'Shows many soap molecules around each oil droplet, with their hydrophilic heads facing the water.',
+            1: 'Explains that the soap’s hydrophobic tail pushes into the virus’s fatty envelope, which may help break it apart.',
+          },
+          areasForImprovement: {
+            1: 'Doesn’t yet show how water and the hydrophilic heads carry the trapped oil or virus away — the explanation names this as the next thing to add. The drawing shows oil while the explanation describes the virus, so connecting the two would help.',
+          },
+        },
+        nextSteps: [
+          {
+            objectiveIndex: 1,
+            focus: 'model',
+            title: 'Show the rinse step',
+            action:
+              'Have Bianca add water moving past a soap cluster, with an arrow showing the trapped virus being carried away.',
+          },
+          {
+            objectiveIndex: 1,
+            focus: 'explanation',
+            title: 'Match the drawing to the explanation',
+            action:
+              'Ask Bianca to replace one oil droplet with the virus so her drawing shows what her explanation describes.',
+          },
+        ],
+      },
+    },
+  },
+]
 
-// Everyone who appears anywhere in Class Summary evidence for this
-// assignment — the prototype's stand-in for the class roster. A real
+// Each analyzed lesson's detailed reports.
+const individualStudentReportsByLesson: Record<string, IndividualStudentReport[]> = {
+  'zombie-fires': individualStudentReports,
+  'covid-virus': covidStudentReports,
+}
+
+function individualStudentReportsFor(lessonId: string): Record<string, IndividualStudentReport> {
+  return Object.fromEntries((individualStudentReportsByLesson[lessonId] ?? []).map((report) => [report.studentName, report]))
+}
+
+// Everyone who appears anywhere in the Zombie Fires Class Summary evidence
+// — the prototype's stand-in for the demo class roster (Period 4). A real
 // backend would scope this to the signed-in teacher's class via
 // students.feedback_page_id.
 const assignmentStudentRoster: string[] = Array.from(
-  new Set(Object.values(allPatternRows).flatMap((row) => row.students.map((student) => student.name))),
+  new Set(zombieFiresPatternIds.flatMap((id) => allPatternRows[id].students.map((student) => student.name))),
 ).sort((a, b) => a.localeCompare(b))
 
 // A searchable dropdown (ARIA combobox) over the assignment roster. Typing
@@ -9421,10 +13136,16 @@ function StudentSearchSelect({
   students,
   selectedStudent,
   onSelect,
+  reports,
+  modelTabs,
 }: {
   students: readonly string[]
   selectedStudent: string | null
   onSelect: (name: string) => void
+  // The lesson's detailed reports by student name, and the model types the
+  // assignment covers (for the revision counts in the list).
+  reports: Record<string, IndividualStudentReport>
+  modelTabs: readonly ModelTab[]
 }) {
   const [query, setQuery] = useState(selectedStudent ?? '')
   const [isOpen, setIsOpen] = useState(false)
@@ -9496,10 +13217,8 @@ function StudentSearchSelect({
             <p className="standards-empty">No students match “{query.trim()}”.</p>
           ) : (
             filteredStudents.map((name, index) => {
-              const report = individualStudentReportsByName[name]
-              const revisionCount = report
-                ? Object.values(report.models).reduce((total, model) => total + model.versions.length - 1, 0)
-                : 0
+              const report = reports[name]
+              const revisionCount = report ? modelTabs.reduce((total, tab) => total + report.models[tab].versions.length - 1, 0) : 0
               return (
                 <button
                   key={name}
@@ -9520,7 +13239,7 @@ function StudentSearchSelect({
                   <span className="standard-suggestion-code">{name}</span>
                   <span className="standard-suggestion-description">
                     {report
-                      ? `${revisionCount} ${revisionCount === 1 ? 'revision' : 'revisions'} across both models`
+                      ? `${revisionCount} ${revisionCount === 1 ? 'revision' : 'revisions'}${modelTabs.length > 1 ? ' across both models' : ''}`
                       : 'No individual report yet'}
                   </span>
                 </button>
@@ -9554,23 +13273,34 @@ function ArtifactImageLightbox({ src, alt, onClose }: { src: string; alt: string
   )
 }
 
+// How a revision is named in the comparison: the most recent one says so.
+function revisionLabel(version: ArtifactVersion, latest: ArtifactVersion): string {
+  return version.versionNumber === latest.versionNumber ? `Most Recent Revision (Version ${version.versionNumber})` : `Revision ${version.versionNumber}`
+}
+
 // One submitted version: the model drawing, the explanation it was
-// submitted with, and when/after what. `versionOptions` adds a version
-// picker to the header when there are more versions to choose between.
+// submitted with, and when. `versionOptions` adds a revision picker to the
+// header when there's more than one revision to choose between.
 function ArtifactVersionCard({
   studentName,
   modelTab,
+  workType,
   heading,
+  versionLabel,
   version,
   versionOptions,
+  optionLabel,
   onVersionChange,
   onExpandImage,
 }: {
   studentName: string
   modelTab: ModelTab
+  workType: WorkView
   heading: string
+  versionLabel: string
   version: ArtifactVersion
   versionOptions?: readonly ArtifactVersion[]
+  optionLabel?: (version: ArtifactVersion) => string
   onVersionChange?: (versionNumber: number) => void
   onExpandImage: (src: string, alt: string) => void
 }) {
@@ -9589,18 +13319,18 @@ function ArtifactVersionCard({
             >
               {versionOptions.map((option) => (
                 <option key={option.versionNumber} value={option.versionNumber}>
-                  Version {option.versionNumber}
+                  {optionLabel ? optionLabel(option) : `Version ${option.versionNumber}`}
                 </option>
               ))}
             </select>
           ) : (
-            <h4>Version {version.versionNumber}</h4>
+            <h4>{versionLabel}</h4>
           )}
         </div>
         <p className="artifact-version-meta">{version.submittedAt}</p>
       </header>
 
-      {version.modelImage ? (
+      {workType === 'explanation' ? null : version.modelImage ? (
         <button
           type="button"
           className="artifact-image-button"
@@ -9617,96 +13347,206 @@ function ArtifactVersionCard({
         </div>
       )}
 
-      <div className="artifact-explanation">
-        <p className="card-label">Written explanation</p>
-        <p className="student-quote">&ldquo;{version.explanation}&rdquo;</p>
-      </div>
+      {workType !== 'model' && (
+        <div className="artifact-explanation">
+          <p className="card-label">Written explanation</p>
+          {version.explanation ? (
+            <p className="student-quote">&ldquo;{version.explanation}&rdquo;</p>
+          ) : (
+            <p className="empty-state-support">No written explanation was submitted in this version.</p>
+          )}
+        </div>
+      )}
     </article>
   )
 }
 
-// Everything under one model-type tab: initial and revised work side by side
-// (the main focus), then a short AI analysis (secondary). Keyed by student +
-// tab by its parent, so switching either resets to the latest revision.
+// A lesson learning objective as the AI Summary shows it: "Objective 1.A",
+// the practices it asks for, and its full text (a tooltip only).
+type ReportObjective = { label: string; practices: string[]; title: string }
+
+// The lesson's own objectives and practices, in lesson order.
+function reportObjectivesFor(lesson: LibraryLesson): ReportObjective[] {
+  const context = lessonContextFor(lesson)
+  return context.objectives.map((objective, index) => ({
+    label: objectiveLabelFor(context.objectives, index),
+    practices: practicesForObjective(objective, context.practices),
+    title: objective,
+  }))
+}
+
+// Everything under one model-type tab: the initial submission (fixed, left)
+// beside one revision (right — the most recent by default, or any earlier
+// revision from the picker), then the AI Summary of the most recent
+// submission.
+// Keyed by student + tab by its parent, so switching either resets to the
+// most recent revision.
 function StudentModelWorkView({
   studentName,
   modelTab,
+  workType,
   work,
+  objectives,
 }: {
   studentName: string
   modelTab: ModelTab
+  // Which product of each version the cards show: the model, the
+  // explanation, or (a product with its own data) the whole submission.
+  workType: WorkView
   work: StudentModelWork
+  // The lesson's learning objectives, in order.
+  objectives: readonly ReportObjective[]
 }) {
   const { versions } = work
   const initialVersion = versions[0]
   const latestVersion = versions[versions.length - 1]
   const revisions = versions.slice(1)
 
-  const [revisedVersion, setRevisedVersion] = useState(latestVersion.versionNumber)
+  const [revisedVersionNumber, setRevisedVersionNumber] = useState(latestVersion.versionNumber)
   const [expandedImage, setExpandedImage] = useState<{ src: string; alt: string } | null>(null)
+  const revisedVersion = revisions.find((version) => version.versionNumber === revisedVersionNumber) ?? latestVersion
+
+  // The AI Summary is always about the most recent submission — picking an
+  // earlier revision changes the artifacts above, not the summary.
+  const isLatest = revisedVersion.versionNumber === latestVersion.versionNumber
+  const summary = work.latestSummary
+  // What changed up to the selected revision — follows the dropdown.
+  const revisionChanges = work.revisionChanges[revisedVersion.versionNumber] ?? []
+  // Next steps for the selected work (all of them for a product with its
+  // own data), at most two.
+  const nextSteps = work.nextSteps.filter((step) => workType === 'both' || step.focus === workType).slice(0, 2)
 
   const cardProps = {
     studentName,
     modelTab,
+    workType,
     onExpandImage: (src: string, alt: string) => setExpandedImage({ src, alt }),
   }
 
   return (
     <div className="student-model-work">
       <div className="artifact-compare-grid" aria-label="Student artifacts">
-        <ArtifactVersionCard {...cardProps} heading="Initial" version={initialVersion} />
+        <ArtifactVersionCard {...cardProps} heading="Initial Submission" versionLabel={`Version ${initialVersion.versionNumber}`} version={initialVersion} />
         {revisions.length > 0 ? (
           <ArtifactVersionCard
             {...cardProps}
-            heading="Revised"
-            version={revisions.find((version) => version.versionNumber === revisedVersion) ?? latestVersion}
+            heading={isLatest ? 'Most Recent Revised Submission' : 'Revised Submission'}
+            versionLabel={revisionLabel(revisedVersion, latestVersion)}
+            version={revisedVersion}
             versionOptions={revisions}
-            onVersionChange={setRevisedVersion}
+            optionLabel={(version) => revisionLabel(version, latestVersion)}
+            onVersionChange={setRevisedVersionNumber}
           />
         ) : (
           <div className="artifact-version-card artifact-version-empty">
-            <p className="card-label">Revised</p>
-            <p className="empty-state-support">{studentName} hasn’t submitted a revision of this model yet.</p>
+            <p className="card-label">Revised Submission</p>
+            <p className="empty-state-support">
+              Only one version has been submitted — {studentName} hasn’t revised this model yet, so there’s nothing to compare.
+            </p>
           </div>
         )}
       </div>
 
-      <section className="student-ai-analysis" aria-label="AI Analysis">
+      {/* Changes between Revisions: full width under both artifact cards,
+          for whichever revision is selected on the right. */}
+      <section className="revision-changes" aria-label="Changes between Revisions">
         <div className="student-report-subheader">
-          <h4>AI Analysis</h4>
-          <span className="badge">AI-generated</span>
+          <h4>Changes between Revisions</h4>
+          <span className="badge">Mock AI analysis</span>
         </div>
-        <div className="analysis-columns">
-          <div className="analysis-block">
-            <p className="analysis-block-title">Changes in Understanding</p>
-            {work.changesInUnderstanding.length === 0 ? (
-              <p className="empty-state-support">No revision yet, so there’s nothing to compare.</p>
-            ) : (
-              <ul className="analysis-list">
-                {work.changesInUnderstanding.map((change) => (
+        {revisions.length === 0 ? (
+          <p className="empty-state-support">Only one version has been submitted, so there are no changes to compare yet.</p>
+        ) : (
+          <>
+            <p className="student-analysis-comparison">
+              Initial Submission (Version {initialVersion.versionNumber}) → {revisionLabel(revisedVersion, latestVersion)}
+            </p>
+            {revisionChanges.length > 0 ? (
+              <ul className="revision-change-list">
+                {revisionChanges.map((change) => (
                   <li key={change}>{change}</li>
                 ))}
               </ul>
-            )}
-          </div>
-
-          <div className="analysis-block">
-            <p className="analysis-block-title">Potential Misconceptions</p>
-            {work.potentialMisconceptions.length === 0 ? (
-              <p className="empty-state-support">None identified in the latest submission.</p>
             ) : (
-              <ul className="analysis-list misconception-list">
-                {work.potentialMisconceptions.map((item) => (
-                  <li key={item.idea}>
-                    <span className="misconception-idea">{item.idea}</span>
-                    {item.uncertain && <span className="tag misconception-uncertain-tag">Uncertain — check with student</span>}
-                    <span className="misconception-evidence">{item.evidence}</span>
-                  </li>
-                ))}
-              </ul>
+              <p className="empty-state-support">No analysis of changes is available for this revision yet.</p>
             )}
-          </div>
+          </>
+        )}
+      </section>
+
+      {/* The AI Summary of the most recent submission, in Class Feedback's
+          structure (blue Overlap, yellow Areas for Improvement), with one
+          concise summary per learning objective of the lesson, in order. */}
+      <section className="student-ai-analysis" aria-label="AI Summary">
+        <div className="student-report-subheader">
+          <h4>AI Summary</h4>
+          <span className="badge">Mock AI analysis</span>
         </div>
+        <p className="student-analysis-comparison">Analysis of Most Recent Submission (Version {latestVersion.versionNumber})</p>
+        {objectives.length === 0 ? (
+          <p className="empty-state-support">This lesson has no learning objectives to analyze the submission against.</p>
+        ) : (
+          <div className="student-summary-sections">
+            {(
+              [
+                { key: 'overlap', title: 'Overlap with Practice-Oriented Learning Objectives', className: 'summary-section-objective', texts: summary.overlap },
+                { key: 'improvement', title: 'Areas for Improvement', className: 'summary-section-misconception', texts: summary.areasForImprovement },
+              ] as const
+            ).map((section) => (
+              <div key={section.key} className={`summary-section ${section.className}`}>
+                <p className="summary-section-title">{section.title}</p>
+                {objectives.map((objective, index) => {
+                  const text = section.texts[index]
+                  // Nothing to say: either the work shows no gap, or it
+                  // doesn't show enough to assess the objective at all.
+                  const fallback =
+                    section.key === 'improvement' && summary.overlap[index]
+                      ? 'No remaining gaps identified for this objective in this submission.'
+                      : 'This submission doesn’t show enough evidence to assess this objective yet.'
+                  return (
+                    <div key={index} className="pattern-group student-objective-summary">
+                      <p className="pattern-group-title" title={objective.title}>
+                        {objective.label}
+                        {objective.practices.length > 0 && <span className="student-objective-practices"> — {objective.practices.join(' · ')}</span>}
+                      </p>
+                      <p className={`finding-summary${text ? '' : ' student-objective-empty'}`}>{text ?? fallback}</p>
+                    </div>
+                  )
+                })}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Suggested Next Steps for this student, in Class Feedback's style:
+          at most two, for the selected work (Model or Explanation). */}
+      <section className="next-steps-panel student-next-steps" aria-labelledby="student-next-steps-heading">
+        <div className="student-report-subheader">
+          <h4 id="student-next-steps-heading">Suggested Next Steps</h4>
+          <span className="badge">Mock AI analysis</span>
+        </div>
+        {nextSteps.length === 0 ? (
+          <p className="empty-state-support">No next steps for this submission yet.</p>
+        ) : (
+          <ol className="next-step-list">
+            {nextSteps.map((step) => {
+              const objective = objectives[step.objectiveIndex]
+              return (
+                <li key={step.title} className="next-step-item">
+                  <p className="next-step-objective" title={objective?.title}>
+                    {objective?.label ?? `Objective ${step.objectiveIndex + 1}`}
+                    {objective && objective.practices.length > 0 && (
+                      <span className="next-step-practices"> · {objective.practices.join(' · ')}</span>
+                    )}
+                  </p>
+                  <p className="next-step-title">{step.title}</p>
+                  <p className="next-step-action">{step.action}</p>
+                </li>
+              )
+            })}
+          </ol>
+        )}
       </section>
 
       {expandedImage && (
@@ -9716,47 +13556,265 @@ function StudentModelWorkView({
   )
 }
 
-function IndividualStudentReportView({ report }: { report: IndividualStudentReport }) {
-  const [modelTab, setModelTab] = useState<ModelTab>('descriptive')
-
+function IndividualStudentReportView({
+  report,
+  studentId,
+  modelTab,
+  onModelTabChange,
+  workType,
+  objectives,
+  modelTabs,
+}: {
+  report: IndividualStudentReport
+  // The student's class Student ID.
+  studentId: string
+  modelTab: ModelTab
+  onModelTabChange: (tab: ModelTab) => void
+  workType: WorkView
+  objectives: readonly ReportObjective[]
+  // The model types the assignment covers: tabs only when there are two.
+  modelTabs: readonly ModelTab[]
+}) {
   return (
     <div className="student-report">
       <div className="student-report-heading">
         <h4>{report.studentName}</h4>
+        <span className="roster-id">{studentId}</span>
         <span className="tag mock-data-tag">Prototype mock data</span>
       </div>
 
+      {modelTabs.length > 1 && (
       <div className="planning-tabs" role="tablist" aria-label="Model type">
-        {(Object.keys(modelTabLabels) as ModelTab[]).map((tab) => (
+        {modelTabs.map((tab) => (
           <button
             key={tab}
             type="button"
             role="tab"
             aria-selected={modelTab === tab}
             className={`planning-tab ${modelTab === tab ? 'active' : ''}`}
-            onClick={() => setModelTab(tab)}
+            onClick={() => onModelTabChange(tab)}
           >
             {modelTabLabels[tab]}
           </button>
         ))}
       </div>
+      )}
 
       <StudentModelWorkView
         key={`${report.studentName}-${modelTab}`}
         studentName={report.studentName}
         modelTab={modelTab}
+        workType={workType}
         work={report.models[modelTab]}
+        objectives={objectives}
       />
     </div>
   )
 }
 
-// Collapsed by default so it doesn't lengthen the page for teachers who
-// only want the class-level view.
-function StudentReportsSection() {
-  const [isExpanded, setIsExpanded] = useState(false)
-  const [selectedStudent, setSelectedStudent] = useState<string | null>(null)
-  const selectedReport = selectedStudent ? individualStudentReportsByName[selectedStudent] : undefined
+// Individual Student Reports, its own view: one lesson's submissions in one
+// class (from the route). Opened from a Library lesson card it starts at the
+// student selector; from Student Evidence the student is already selected.
+// Only the class whose submissions were analyzed has reports — any other
+// lesson or class gets an empty state, never someone else's data.
+function StudentReportsPage({
+  route,
+  lesson,
+  classroom,
+  students,
+  classes,
+  lessons,
+  onRouteChange,
+  backLabel,
+  onBack,
+}: {
+  route: StudentReportsRoute | null
+  lesson: LibraryLesson | null
+  classroom: LibraryClass | null
+  students: readonly Student[]
+  // The teacher's classes and lessons, for choosing the class and lesson.
+  classes: readonly LibraryClass[]
+  lessons: readonly LibraryLesson[]
+  // null clears the selection (another class was chosen).
+  onRouteChange: (route: StudentReportsRoute | null) => void
+  backLabel: string
+  // null when opened from the navigation drawer: there's no page to go back to.
+  onBack: (() => void) | null
+}) {
+  // The class and lesson: from the route (opened from the Library or Class
+  // Feedback), or chosen here (opened from the navigation drawer). A class
+  // can be chosen before its lesson.
+  const [pickedClassId, setPickedClassId] = useState<string | null>(null)
+  const classId = route?.classId ?? pickedClassId
+  const pickedClass = classes.find((item) => item.id === classId) ?? null
+  const classLessons = pickedClass
+    ? lessons.filter((item) => pickedClass.lessonIds.includes(item.id) && !item.demoUnavailable)
+    : []
+  const chooseClass = (id: string) => {
+    setPickedClassId(id || null)
+    onRouteChange(null)
+  }
+  const chooseLesson = (id: string) => {
+    if (!pickedClass || !id) return
+    const first = classFeedbackAssignmentsFor(id)[0]
+    onRouteChange({
+      lessonId: id,
+      classId: pickedClass.id,
+      assignmentId: first?.id ?? null,
+      studentId: null,
+      modelTab: first?.modelTabs[0] ?? 'descriptive',
+      work: 'model',
+    })
+  }
+  const contextPicker = (
+    <div className="student-reports-controls student-reports-context">
+      <label className="work-view-select">
+        <span>Class</span>
+        <select value={classId ?? ''} onChange={(event) => chooseClass(event.target.value)}>
+          <option value="">Select a class</option>
+          {classes.map((item) => (
+            <option key={item.id} value={item.id}>
+              {classDisplayName(item)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="work-view-select">
+        <span>Lesson</span>
+        <select value={route?.lessonId ?? ''} disabled={!pickedClass} onChange={(event) => chooseLesson(event.target.value)}>
+          <option value="">{pickedClass ? 'Select a lesson' : 'Select a class first'}</option>
+          {classLessons.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.title}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  )
+
+  // The class roster with each student's class Student ID.
+  const roster = classroom
+    ? classroom.studentIds.flatMap((key) => {
+        const name = students.find((student) => student.id === key)?.name
+        const studentId = classroom.studentCodes[key]
+        return name && studentId ? [{ name, studentId }] : []
+      })
+    : []
+  // The lesson's assignments (the route's, else its first) and the model
+  // types the assignment covers — a single-model assignment always shows
+  // that model.
+  const assignments = lesson ? classFeedbackAssignmentsFor(lesson.id) : []
+  const assignment = assignments.find((item) => item.id === route?.assignmentId) ?? assignments[0] ?? null
+  const modelTabs: ModelTab[] = assignment?.modelTabs ?? ['descriptive', 'mechanistic']
+  const modelTab = route && modelTabs.includes(route.modelTab) ? route.modelTab : modelTabs[0]
+  // The assignment as the teacher chooses it, and its student-product switch.
+  const choices = assignmentChoices(assignments)
+  const choice = assignment ? choices.find((item) => assignmentLabel(item) === assignmentLabel(assignment)) : undefined
+  const productSwitch = assignment ? productSwitchFor(assignment, route?.work ?? 'model') : null
+  // A product with its own data shows its whole submission; otherwise the
+  // selected Model or Explanation.
+  const workView: WorkView = assignment?.productId ? 'both' : (route?.work ?? 'model')
+  const hasSubmissions = Boolean(lesson && classroom && assignment && analyzedSubmissionClassIds[lesson.id] === classroom.id)
+  const reports = lesson ? individualStudentReportsFor(lesson.id) : {}
+  const selected = route?.studentId ? roster.find((student) => student.studentId === route.studentId) : undefined
+  const report = selected ? reports[selected.name] : undefined
+
+  let body: ReactNode
+  if (!route || !lesson) {
+    body = (
+      <p className="empty-state-support">
+        {pickedClass ? 'Select a lesson to see its student reports.' : 'Select a class and lesson to see Individual Student Reports.'}
+      </p>
+    )
+  } else if (!classroom) {
+    body = (
+      <p className="empty-state-support">
+        This lesson isn’t associated with a class, so there are no student submissions to report on. Open the reports from the lesson under its class in
+        the Library.
+      </p>
+    )
+  } else if (!hasSubmissions) {
+    body = (
+      <p className="empty-state-support student-reports-empty">
+        No student submissions have been analyzed for this lesson in {classDisplayName(classroom)} yet. Individual reports appear once students in this
+        class submit their work.
+      </p>
+    )
+  } else {
+    body = (
+      <>
+        <div className="student-reports-controls">
+          <StudentSearchSelect
+            key={`search-${selected?.studentId ?? 'none'}`}
+            students={roster.map((student) => student.name)}
+            selectedStudent={selected?.name ?? null}
+            onSelect={(name) => {
+              const student = roster.find((item) => item.name === name)
+              if (student) onRouteChange({ ...route, studentId: student.studentId })
+            }}
+            reports={reports}
+            modelTabs={modelTabs}
+          />
+          {/* The lesson's assignments, as on Class Feedback (opened from
+              there, it arrives already set). */}
+          {assignment && choice && (
+            <label className="work-view-select">
+              <span>Assignment</span>
+              <select
+                value={choice.id}
+                disabled={choices.length < 2}
+                title={choices.length < 2 ? 'This lesson has one assignment.' : undefined}
+                onChange={(event) => {
+                  const next = choices.find((item) => item.id === event.target.value)
+                  if (next) onRouteChange({ ...route, assignmentId: next.id, modelTab: next.modelTabs[0] })
+                }}
+              >
+                {choices.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {assignmentLabel(option)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {assignment && productSwitch && (
+            <WorkTypeSwitch
+              options={productSwitch.options}
+              value={productSwitch.value}
+              onChange={(productId) => {
+                const next = chooseProduct(assignment, productId)
+                onRouteChange({
+                  ...route,
+                  assignmentId: next.assignment.id,
+                  modelTab: next.assignment.id === assignment.id ? modelTab : next.assignment.modelTabs[0],
+                  work: next.workType ?? route.work,
+                })
+              }}
+            />
+          )}
+        </div>
+        {!selected && <p className="empty-state-support">Select a student to see their report.</p>}
+        {selected && !report && (
+          <p className="empty-state-support student-report-unavailable">
+            {selected.name} ({selected.studentId}) is in this class, but their work hasn’t been analyzed individually in this prototype’s mock data yet.
+          </p>
+        )}
+        {selected && report && (
+          <IndividualStudentReportView
+            key={`report-${selected.studentId}`}
+            report={report}
+            studentId={selected.studentId}
+            modelTab={modelTab}
+            onModelTabChange={(tab) => onRouteChange({ ...route, modelTab: tab })}
+            workType={workView}
+            objectives={reportObjectivesFor(lesson)}
+            modelTabs={modelTabs}
+          />
+        )}
+      </>
+    )
+  }
 
   return (
     <section className="report-panel student-reports-panel" aria-labelledby="student-reports-title">
@@ -9764,40 +13822,20 @@ function StudentReportsSection() {
         <div>
           <h3 id="student-reports-title">Individual Student Reports</h3>
           <p className="empty-state-support student-reports-subtitle">
-            Explore individual students’ artifacts, learning development, and misconceptions.
+            {lesson ? lesson.title : 'No lesson selected'}
+            {classroom && ` · ${classDisplayName(classroom)}`}
           </p>
         </div>
-        <button
-          type="button"
-          className={isExpanded ? 'secondary-button' : 'primary-button'}
-          aria-expanded={isExpanded}
-          aria-controls="student-reports-body"
-          onClick={() => setIsExpanded((expanded) => !expanded)}
-        >
-          {isExpanded ? 'Hide Student Reports' : 'View Student Reports'}
-        </button>
+        {onBack && (
+          <button type="button" className="secondary-button" onClick={onBack}>
+            ← Back to {backLabel}
+          </button>
+        )}
       </div>
-
-      {isExpanded && (
-        <div className="student-reports-body" id="student-reports-body">
-          <StudentSearchSelect
-            students={assignmentStudentRoster}
-            selectedStudent={selectedStudent}
-            onSelect={setSelectedStudent}
-          />
-
-          {!selectedStudent && (
-            <p className="empty-state-support">Select a student to see their report.</p>
-          )}
-          {selectedStudent && !selectedReport && (
-            <p className="empty-state-support student-report-unavailable">
-              No individual report is available for {selectedStudent} in this prototype’s mock data yet. Their
-              class-level evidence still appears in Class Summary below.
-            </p>
-          )}
-          {selectedReport && <IndividualStudentReportView key={selectedReport.studentName} report={selectedReport} />}
-        </div>
-      )}
+      <div className="student-reports-body">
+        {contextPicker}
+        {body}
+      </div>
     </section>
   )
 }
@@ -9842,9 +13880,115 @@ function lessonContextFor(lesson: LibraryLesson): ClassFeedbackLessonContext {
   }
 }
 
-// Lessons whose student submissions have been analyzed (the prototype's
-// demo class data belongs to its demo lesson).
-const analyzedClassFeedbackLessonIds = ['climate-carbon-cycle']
+// "Objective 1.A" — an objective's prefix from the lesson plan, or its
+// position when it has none. Used by Class Feedback and Individual Student
+// Reports, so both name objectives the same way.
+function objectiveLabelFor(objectives: readonly string[], index: number): string {
+  const prefix = objectives[index]?.split(' ')[0] ?? ''
+  return `Objective ${/^\d+(\.[A-Za-z0-9]+)?:?$/.test(prefix) ? prefix.replace(/:$/, '') : index + 1}`
+}
+
+// The class whose submissions each analyzed lesson's data came from: Class
+// Summary evidence and Individual Student Reports are that class's work, so
+// another class with the same lesson has no reports yet.
+const analyzedSubmissionClassIds: Record<string, string> = {
+  'zombie-fires': demoStudentFeedbackClassId,
+  'covid-virus': 'period-1-life-science',
+}
+
+// Submitted work Class Feedback analyzes, with its own prompt, statistics,
+// and analyzed patterns. `modelTabs` are the model types its Individual
+// Student Reports show. Usually one entry is one assignment (Zombie Fires,
+// whose Model and Explanation are views of the same work); when a lesson's
+// mock data is split by student product, each entry is one product
+// (`productId`, see studentProductsFor) of the same assignment
+// (`assignmentTitle`) — COVID Virus's Descriptive and Mechanistic.
+type ClassFeedbackAssignment = {
+  id: string
+  lessonId: string
+  title: string
+  task: { topic: string; question: string }
+  metrics: { label: string; value: string; trend: string }[]
+  patternIds: string[]
+  modelTabs: ModelTab[]
+  productId?: string
+  assignmentTitle?: string
+}
+
+// Prototype mock data for the lessons with analyzed submissions.
+const classFeedbackAssignments: ClassFeedbackAssignment[] = [
+  {
+    id: 'zombie-fires',
+    lessonId: 'zombie-fires',
+    title: 'Zombie Fires: Matter and Energy Flow',
+    task: dashboardTask,
+    metrics: metricCards,
+    patternIds: zombieFiresPatternIds,
+    modelTabs: ['descriptive', 'mechanistic'],
+  },
+  {
+    id: 'covid-descriptive',
+    lessonId: 'covid-virus',
+    title: 'Descriptive Model',
+    productId: 'descriptive',
+    assignmentTitle: 'COVID Virus: Structure and Function of Soap',
+    task: {
+      topic: 'COVID Virus: Descriptive Model',
+      question: `Prompt: ${descriptiveModelPrompt.map((part) => `${part.heading} — ${part.instruction} ${part.labels.join(', ')}.`).join(' ')}`,
+    },
+    metrics: [
+      { label: 'Submissions', value: '24', trend: '+3' },
+      { label: 'Average Time on Task', value: '16 min', trend: '+2 min' },
+      { label: 'Resubmissions', value: '6', trend: '+1' },
+      { label: 'AI Feedback Requests', value: '15', trend: '+4' },
+    ],
+    patternIds: covidDescriptivePatterns.map((row) => row.id),
+    modelTabs: ['descriptive'],
+  },
+  {
+    id: 'covid-mechanistic',
+    lessonId: 'covid-virus',
+    title: 'Mechanistic Model',
+    productId: 'mechanistic',
+    assignmentTitle: 'COVID Virus: Structure and Function of Soap',
+    task: { topic: 'COVID Virus: Mechanistic Model', question: `Prompt: ${mechanisticModelPrompt}` },
+    metrics: [
+      { label: 'Submissions', value: '22', trend: '+2' },
+      { label: 'Average Time on Task', value: '23 min', trend: '+4 min' },
+      { label: 'Resubmissions', value: '9', trend: '+3' },
+      { label: 'AI Feedback Requests', value: '19', trend: '+6' },
+    ],
+    patternIds: covidMechanisticPatterns.map((row) => row.id),
+    modelTabs: ['mechanistic'],
+  },
+]
+
+function classFeedbackAssignmentsFor(lessonId: string): ClassFeedbackAssignment[] {
+  return classFeedbackAssignments.filter((assignment) => assignment.lessonId === lessonId)
+}
+
+// The assignment an entry belongs to, as the teacher sees it.
+const assignmentLabel = (assignment: ClassFeedbackAssignment) => assignment.assignmentTitle ?? assignment.title
+
+// The assignments to choose between: entries that are products of the same
+// assignment count once.
+function assignmentChoices(assignments: readonly ClassFeedbackAssignment[]): ClassFeedbackAssignment[] {
+  return assignments.filter((assignment, index) => assignments.findIndex((other) => assignmentLabel(other) === assignmentLabel(assignment)) === index)
+}
+
+// The student-work switch for an entry: its lesson's products. Selecting a
+// product either picks that product's entry (data split by product) or, for
+// one entry covering both, changes only which work is shown (`workType`).
+type ProductSwitch = { options: { id: string; label: string }[]; value: string; byEntry: boolean }
+
+function productSwitchFor(assignment: ClassFeedbackAssignment, workType: WorkType): ProductSwitch {
+  const products = studentProductsFor(assignment.lessonId)
+  return {
+    options: products.map((product) => ({ id: product.id, label: product.name })),
+    value: assignment.productId ?? workType,
+    byEntry: Boolean(assignment.productId),
+  }
+}
 
 type ClassSummaryFinding = {
   objectiveIndex: number
@@ -9857,11 +14001,11 @@ type ClassSummaryFinding = {
 type ClassSummaryOutput = { overlap: ClassSummaryFinding[]; areasForImprovement: ClassSummaryFinding[] }
 
 const classSummaryInstructions = [
-  'You analyze one class’s submitted science work (models and written explanations) for the lesson in "lesson".',
+  'You analyze one class’s submitted science work (models and written explanations) for the assignment in "assignment", part of the lesson in "lesson".',
   'A practice-oriented learning objective is one of lesson.learningObjectives read together with the science practices it asks students to use (from lesson.sciencePractices). Judge the work by what students do with those practices — modeling, explaining, questioning, reasoning from evidence — not only by the content they mention.',
   'Use only the class-level patterns in "patterns"; never invent student work. Refer to students by count, never by name.',
   'overlap: for each objective, the patterns showing students demonstrating its targeted practices, strongest first, and a one-sentence summary of what that work shows students doing.',
-  'areasForImprovement: for each objective, the patterns showing gaps — missing or incomplete practice moves, difficulties, or misconceptions — a one-sentence summary of the gap, and nextStep: one concrete instructional move.',
+  'areasForImprovement: for each objective, the patterns showing gaps — missing or incomplete practice moves, difficulties, or misconceptions — a one-sentence summary of the gap, and nextStep: one concrete instructional move the teacher can make. nextStep is shown apart from the summary under Suggested Next Steps, so it must make sense on its own and must not restate the summary.',
   'Group findings by objective in lesson order (objectiveIndex is 0-based), list the practices each finding concerns, and leave an objective out of a section when no pattern supports it.',
 ].join('\n')
 
@@ -9893,53 +14037,98 @@ const classSummarySchema = {
 
 type ClassSummaryPatternInput = { id: string; label: string; studentCount: number; source: string }
 
-// Every analyzed pattern, without student evidence.
-const classSummaryPatterns: ClassSummaryPatternInput[] = [
-  ...learningObjectiveOverlap.flatMap((group) =>
-    group.ideas.map((row) => ({ id: row.id, label: row.label, studentCount: row.count, source: `Responses to objective ${group.objective.split(' ')[0]}` })),
-  ),
-  ...scienceInPracticePatterns.flatMap((group) =>
-    group.patterns.map((row) => ({ id: row.id, label: row.label, studentCount: row.count, source: `Practice: ${group.practice}` })),
-  ),
-  ...misconceptionPatterns.map((row) => ({ id: row.id, label: row.label, studentCount: row.count, source: 'Misconceptions across responses and models' })),
-]
-
-// Stands in for the analysis model: its reading of each demo pattern —
-// which objective it speaks to and whether it shows the targeted practice
-// or a gap — plus the summaries it would write.
-const mockClassSummaryJudgments: Record<string, { objective: number; finding: 'overlap' | 'improvement' }> = {
-  'lo1a-permafrost-thawing': { objective: 0, finding: 'overlap' },
-  'lo1a-earlier-spring-fires': { objective: 0, finding: 'overlap' },
-  'lo1a-no-mechanism': { objective: 0, finding: 'improvement' },
-  'misconception-common-everywhere': { objective: 0, finding: 'improvement' },
-  'practice-models-system-components': { objective: 1, finding: 'overlap' },
-  'lo1b-underground-persists': { objective: 1, finding: 'overlap' },
-  'practice-models-matter-energy-flows': { objective: 1, finding: 'overlap' },
-  'lo1b-matter-energy-labeled': { objective: 1, finding: 'overlap' },
-  'practice-models-seasonal-change': { objective: 1, finding: 'overlap' },
-  'lo1b-above-ground-only': { objective: 1, finding: 'improvement' },
-  'misconception-no-matter-energy-distinction': { objective: 1, finding: 'improvement' },
-  'misconception-new-fire-each-spring': { objective: 1, finding: 'improvement' },
-  'lo1c-human-role': { objective: 2, finding: 'overlap' },
-  'lo1c-carbon-amount': { objective: 2, finding: 'overlap' },
-  'lo1c-restated-fact': { objective: 2, finding: 'improvement' },
+// An assignment's analyzed patterns, without student evidence.
+function classSummaryPatternsFor(assignment: ClassFeedbackAssignment): ClassSummaryPatternInput[] {
+  return assignment.patternIds.map((id) => ({
+    id,
+    label: allPatternRows[id].label,
+    studentCount: allPatternRows[id].count,
+    source: `Submissions for “${assignment.title}”`,
+  }))
 }
 
-const mockClassSummaryText: Record<number, { overlap: string; improvement: string; nextStep: string }> = {
-  0: {
-    overlap: 'Students obtained information from the images and readings and used it to reason about cause and effect, linking warming and thawing permafrost to fires that keep burning.',
-    improvement: 'Some students noticed that zombie fires are unusual without using the evidence to name a cause, or generalized them to every wildfire.',
-    nextStep: 'Have these students pick one piece of evidence and complete “This happens because…” before revising their models.',
+// Stands in for the analysis model: its reading of each demo pattern in
+// each assignment — which objective it speaks to and whether it shows the
+// targeted practice or a gap — plus the summaries it would write.
+type MockSummaryJudgment = { objective: number; finding: 'overlap' | 'improvement' }
+
+const mockClassSummaryJudgments: Record<string, Record<string, MockSummaryJudgment>> = {
+  'zombie-fires': {
+    'lo1a-permafrost-thawing': { objective: 0, finding: 'overlap' },
+    'lo1a-earlier-spring-fires': { objective: 0, finding: 'overlap' },
+    'lo1a-no-mechanism': { objective: 0, finding: 'improvement' },
+    'misconception-common-everywhere': { objective: 0, finding: 'improvement' },
+    'practice-models-system-components': { objective: 1, finding: 'overlap' },
+    'lo1b-underground-persists': { objective: 1, finding: 'overlap' },
+    'practice-models-matter-energy-flows': { objective: 1, finding: 'overlap' },
+    'lo1b-matter-energy-labeled': { objective: 1, finding: 'overlap' },
+    'practice-models-seasonal-change': { objective: 1, finding: 'overlap' },
+    'lo1b-above-ground-only': { objective: 1, finding: 'improvement' },
+    'misconception-no-matter-energy-distinction': { objective: 1, finding: 'improvement' },
+    'misconception-new-fire-each-spring': { objective: 1, finding: 'improvement' },
+    'lo1c-human-role': { objective: 2, finding: 'overlap' },
+    'lo1c-carbon-amount': { objective: 2, finding: 'overlap' },
+    'lo1c-restated-fact': { objective: 2, finding: 'improvement' },
   },
-  1: {
-    overlap: 'Most models include the key parts of the system and use arrows to show matter and energy moving to the atmosphere, often across seasons.',
-    improvement: 'Some models show the fire only above ground or don’t separate matter (peat) from energy (fire), so the model can’t yet explain how the fire persists.',
-    nextStep: 'Ask students to label each part of their model as matter or energy and add what happens underground in winter.',
+  'covid-descriptive': {
+    'covid-d-virus-structures-labeled': { objective: 0, finding: 'overlap' },
+    'covid-d-soap-two-ends': { objective: 0, finding: 'overlap' },
+    'covid-d-envelope-unlabeled': { objective: 0, finding: 'improvement' },
+    'covid-d-ends-swapped': { objective: 0, finding: 'improvement' },
+    'covid-d-fat-attraction': { objective: 1, finding: 'overlap' },
+    'covid-d-no-relationship': { objective: 1, finding: 'improvement' },
   },
-  2: {
-    overlap: 'Many students asked testable questions about human influence and how much carbon the fires release.',
-    improvement: 'A few students restated facts instead of asking a question that would move the investigation forward.',
-    nextStep: 'Model turning one known fact into a “What would happen if…?” question for the Driving Question Board.',
+  'covid-mechanistic': {
+    'covid-m-parts-labeled': { objective: 0, finding: 'overlap' },
+    'covid-m-single-molecule': { objective: 0, finding: 'improvement' },
+    'covid-m-soap-surrounds-oil': { objective: 1, finding: 'overlap' },
+    'covid-m-tail-into-envelope': { objective: 1, finding: 'overlap' },
+    'covid-m-no-water-role': { objective: 1, finding: 'improvement' },
+    'covid-m-soap-kills': { objective: 1, finding: 'improvement' },
+  },
+}
+
+const mockClassSummaryText: Record<string, Record<number, { overlap: string; improvement: string; nextStep: string }>> = {
+  'zombie-fires': {
+    0: {
+      overlap: 'Students obtained information from the images and readings and used it to reason about cause and effect, linking warming and thawing permafrost to fires that keep burning.',
+      improvement: 'Some students noticed that zombie fires are unusual without using the evidence to name a cause, or generalized them to every wildfire.',
+      nextStep: 'Have students who haven’t named a cause pick one piece of evidence and complete “This happens because…” before revising their models.',
+    },
+    1: {
+      overlap: 'Most models include the key parts of the system and use arrows to show matter and energy moving to the atmosphere, often across seasons.',
+      improvement: 'Some models show the fire only above ground or don’t separate matter (peat) from energy (fire), so the model can’t yet explain how the fire persists.',
+      nextStep: 'Ask students to label each part of their model as matter or energy and add what happens underground in winter.',
+    },
+    2: {
+      overlap: 'Many students asked testable questions about human influence and how much carbon the fires release.',
+      improvement: 'A few students restated facts instead of asking a question that would move the investigation forward.',
+      nextStep: 'Model turning one known fact into a “What would happen if…?” question for the Driving Question Board.',
+    },
+  },
+  'covid-descriptive': {
+    0: {
+      overlap: 'Most models label the coronavirus’s structures and draw the soap molecule with a hydrophilic head and a hydrophobic tail.',
+      improvement: 'Some models leave the fatty envelope unlabeled, and a few swap which end of the soap molecule is hydrophilic.',
+      nextStep: 'Have students check each label against the two-part prompt and correct any swapped soap ends before they start the mechanistic model.',
+    },
+    1: {
+      overlap: 'A few students already connect the soap’s hydrophobic tail to the virus’s fatty envelope.',
+      improvement: 'Many models show the virus and the soap side by side without showing how their structures relate.',
+      nextStep: 'Ask students to draw one arrow from a soap structure to a virus structure and label why the two might interact.',
+    },
+  },
+  'covid-mechanistic': {
+    0: {
+      overlap: 'Many models label which end of each soap molecule faces the oil and which faces the water.',
+      improvement: 'Some models show a single soap molecule, so the combined action of many molecules isn’t shown.',
+      nextStep: 'Have students redraw the interaction with several soap molecules and label which end faces the oil or the envelope.',
+    },
+    1: {
+      overlap: 'Students show soap molecules surrounding oil and the hydrophobic tail pushing into the virus’s fatty envelope.',
+      improvement: 'Many models stop before showing how water carries the trapped oil or virus away, and some describe soap as “killing” the virus.',
+      nextStep: 'Ask students to add an arrow showing what water does to the soap-wrapped oil, and to replace “kills” with what happens to the envelope’s structure.',
+    },
   },
 }
 
@@ -9956,15 +14145,20 @@ function practicesForObjective(objective: string, practices: readonly string[]):
   )
 }
 
-function mockClassSummaryReply(request: { lesson: ClassFeedbackLessonContext; patterns: ClassSummaryPatternInput[] }): string {
-  const { lesson, patterns } = request
+function mockClassSummaryReply(request: {
+  lesson: ClassFeedbackLessonContext
+  patterns: ClassSummaryPatternInput[]
+  assignment: { id: string; title: string; prompt: string }
+}): string {
+  const { lesson, patterns, assignment } = request
+  const judgments = mockClassSummaryJudgments[assignment.id] ?? {}
   const findings = (finding: 'overlap' | 'improvement'): ClassSummaryFinding[] =>
     lesson.objectives.flatMap((objective, objectiveIndex) => {
       const patternIds = patterns
-        .filter((pattern) => mockClassSummaryJudgments[pattern.id]?.objective === objectiveIndex && mockClassSummaryJudgments[pattern.id].finding === finding)
+        .filter((pattern) => judgments[pattern.id]?.objective === objectiveIndex && judgments[pattern.id].finding === finding)
         .sort((a, b) => b.studentCount - a.studentCount)
         .map((pattern) => pattern.id)
-      const text = mockClassSummaryText[objectiveIndex]
+      const text = mockClassSummaryText[assignment.id]?.[objectiveIndex]
       if (patternIds.length === 0 || !text) return []
       return [
         {
@@ -10002,31 +14196,77 @@ function readClassSummaryOutput(raw: string): ClassSummaryOutput {
   return { overlap: list(data.overlap), areasForImprovement: list(data.areasForImprovement) }
 }
 
-function analyzeClassSummary(lesson: ClassFeedbackLessonContext): ClassSummaryOutput {
+function analyzeClassSummary(lesson: ClassFeedbackLessonContext, assignment: ClassFeedbackAssignment): ClassSummaryOutput {
   const raw = callAiModel(
     'class-feedback-summary',
-    { instructions: classSummaryInstructions, responseSchema: classSummarySchema, lesson, patterns: classSummaryPatterns },
+    {
+      instructions: classSummaryInstructions,
+      responseSchema: classSummarySchema,
+      lesson,
+      assignment: { id: assignment.id, title: assignment.title, prompt: assignment.task.question },
+      patterns: classSummaryPatternsFor(assignment),
+    },
     (request) => mockClassSummaryReply(request),
   )
   return readClassSummaryOutput(raw)
 }
 
-function FeedbackDashboardPage({ lesson }: { lesson: LibraryLesson }) {
-  // The lesson this page is about, and the class summary of its submitted
-  // work (only lessons whose submissions have been analyzed have one).
+function FeedbackDashboardPage({
+  lesson,
+  assignmentId,
+  onAssignmentChange,
+  workType,
+  onWorkTypeChange,
+  selectedPatternId,
+  onSelectPattern: setSelectedPatternId,
+  onOpenStudentReport,
+}: {
+  lesson: LibraryLesson
+  // The lesson's assignment being analyzed (null: its first), kept by App
+  // so Back from a student's report returns to it.
+  assignmentId: string | null
+  onAssignmentChange: (assignmentId: string) => void
+  // The student work reviewed within the assignment: Model or Explanation.
+  workType: WorkType
+  onWorkTypeChange: (next: WorkType) => void
+  // The Class Summary finding whose students Student Evidence shows (kept
+  // by App so Back from a student's report returns to it).
+  selectedPatternId: string | null
+  onSelectPattern: (id: string) => void
+  // Opens one student's Individual Student Report for this assignment.
+  onOpenStudentReport: (studentName: string, assignmentId: string) => void
+}) {
+  // The lesson this page is about, its assignments, and the class summary
+  // of each assignment's submitted work (only lessons whose submissions
+  // have been analyzed have assignments here).
   const [lessonContext] = useState(() => lessonContextFor(lesson))
-  const [classSummary] = useState(() =>
-    analyzedClassFeedbackLessonIds.includes(lesson.id) ? analyzeClassSummary(lessonContext) : null,
+  const assignments = classFeedbackAssignmentsFor(lesson.id)
+  const assignment = assignments.find((item) => item.id === assignmentId) ?? assignments[0] ?? null
+  // The assignment as the teacher chooses it, and its student-product switch.
+  const choices = assignmentChoices(assignments)
+  const choice = assignment ? choices.find((item) => assignmentLabel(item) === assignmentLabel(assignment)) : undefined
+  const productSwitch = assignment ? productSwitchFor(assignment, workType) : null
+  const productLabel = productSwitch?.options.find((option) => option.id === productSwitch.value)?.label ?? ''
+  // A product with its own data shows its whole submission; otherwise the
+  // selected Model or Explanation.
+  const workView: WorkView = assignment?.productId ? 'both' : workType
+  const [classSummaries] = useState<Record<string, ClassSummaryOutput>>(() =>
+    Object.fromEntries(classFeedbackAssignmentsFor(lesson.id).map((item) => [item.id, analyzeClassSummary(lessonContext, item)])),
   )
-  const [selectedPatternId, setSelectedPatternId] = useState<string | null>(defaultPatternId)
-  const [facilitationQuestions, setFacilitationQuestions] = useState<FacilitationQuestion[]>(() =>
-    classSummary ? generateFacilitationQuestions(lessonContext, classSummary, []) : [],
+  const classSummary = assignment ? (classSummaries[assignment.id] ?? null) : null
+  const [questionsByAssignment, setQuestionsByAssignment] = useState<Record<string, FacilitationQuestion[]>>(() =>
+    Object.fromEntries(
+      classFeedbackAssignmentsFor(lesson.id).map((item) => [item.id, generateFacilitationQuestions(lessonContext, classSummaries[item.id], [], item)]),
+    ),
   )
+  const facilitationQuestions = assignment ? (questionsByAssignment[assignment.id] ?? []) : []
   const [isRegeneratingQuestions, setIsRegeneratingQuestions] = useState(false)
 
-  // The last two sets shown, so a regenerated set is new; older ones can
-  // come back once the ideas run out.
-  const recentQuestionsRef = useRef<string[]>(facilitationQuestions.map((question) => question.text))
+  // The last sets shown for each assignment, so a regenerated set is new;
+  // older ones can come back once the ideas run out.
+  const recentQuestionsRef = useRef<Record<string, string[]>>(
+    Object.fromEntries(Object.entries(questionsByAssignment).map(([id, questions]) => [id, questions.map((question) => question.text)])),
+  )
   const regenerationTimeoutRef = useRef<number | null>(null)
 
   useEffect(() => {
@@ -10035,15 +14275,44 @@ function FeedbackDashboardPage({ lesson }: { lesson: LibraryLesson }) {
     }
   }, [])
 
-  const selectedPattern = selectedPatternId ? allPatternRows[selectedPatternId] : undefined
+  // The selected finding within this assignment — the first strength when
+  // the teacher hasn't picked one here yet (or picked one in another).
+  const assignmentPatternIds = assignment?.patternIds ?? []
+  const activePatternId =
+    selectedPatternId && assignmentPatternIds.includes(selectedPatternId)
+      ? selectedPatternId
+      : (classSummary?.overlap[0]?.patternIds[0] ?? assignmentPatternIds[0] ?? null)
+  const selectedPattern = activePatternId ? allPatternRows[activePatternId] : undefined
+
+  const objectiveLabel = (index: number) => objectiveLabelFor(lessonContext.objectives, index)
+
+  // Suggested Next Steps: the analysis's instructional move for each
+  // objective with gaps, and which student ideas it addresses.
+  const nextSteps = (classSummary?.areasForImprovement ?? []).flatMap((finding) =>
+    finding.nextStep
+      ? [
+          {
+            objectiveIndex: finding.objectiveIndex,
+            practices: finding.practices,
+            action: finding.nextStep,
+            ideas: finding.patternIds.length,
+            students: finding.patternIds.reduce((total, id) => total + allPatternRows[id].count, 0),
+          },
+        ]
+      : [],
+  )
 
   const regenerateFacilitationQuestions = () => {
+    if (!assignment) return
     setIsRegeneratingQuestions(true)
+    const regenerating = assignment
     regenerationTimeoutRef.current = window.setTimeout(() => {
-      if (classSummary) {
-        const next = generateFacilitationQuestions(lessonContext, classSummary, recentQuestionsRef.current)
-        recentQuestionsRef.current = [...recentQuestionsRef.current, ...next.map((question) => question.text)].slice(-12)
-        setFacilitationQuestions(next)
+      const summary = classSummaries[regenerating.id]
+      if (summary) {
+        const recent = recentQuestionsRef.current[regenerating.id] ?? []
+        const next = generateFacilitationQuestions(lessonContext, summary, recent, regenerating)
+        recentQuestionsRef.current[regenerating.id] = [...recent, ...next.map((question) => question.text)].slice(-12)
+        setQuestionsByAssignment((prev) => ({ ...prev, [regenerating.id]: next }))
       }
       setIsRegeneratingQuestions(false)
     }, 900)
@@ -10069,7 +14338,6 @@ function FeedbackDashboardPage({ lesson }: { lesson: LibraryLesson }) {
       patterns: finding.patternIds.map((id) => classAnalysisPattern(allPatternRows[id])),
     })),
   }
-  const [focusedStudent, setFocusedStudent] = useState<StudentEvidence | null>(null)
   const deeperAiTimeoutRef = useRef<number | null>(null)
   // Student Evidence and Deeper AI Analysis are one unified, single-scroll
   // workspace (see .evidence-workspace-scroll) rather than two independently
@@ -10101,13 +14369,12 @@ function FeedbackDashboardPage({ lesson }: { lesson: LibraryLesson }) {
     setDeeperChatMessages([])
     setDeeperChatDraft('')
     setIsDeeperAiThinking(false)
-    setFocusedStudent(null)
     if (deeperAiTimeoutRef.current !== null) {
       window.clearTimeout(deeperAiTimeoutRef.current)
       deeperAiTimeoutRef.current = null
     }
     if (evidenceWorkspaceScrollRef.current) evidenceWorkspaceScrollRef.current.scrollTop = 0
-  }, [selectedPatternId])
+  }, [activePatternId, assignment?.id])
 
   useEffect(() => {
     return () => {
@@ -10122,11 +14389,12 @@ function FeedbackDashboardPage({ lesson }: { lesson: LibraryLesson }) {
     setDeeperChatDraft('')
     setIsDeeperAiThinking(true)
     const pattern = selectedPattern
-    const student = focusedStudent
+    // Deeper AI Analysis is class-level: individual students are reviewed in
+    // their Individual Student Report instead.
     deeperAiTimeoutRef.current = window.setTimeout(() => {
       const reply = callAiModel(
         'class-feedback-analysis',
-        { pattern, question: text, focusedStudent: student, classAnalysis: classAnalysisForAi },
+        { pattern, question: text, focusedStudent: null, classAnalysis: classAnalysisForAi, assignment: assignment?.title },
         (request) => mockDeeperAnalysisReply(request.pattern, request.question, request.focusedStudent, request.classAnalysis),
       )
       setDeeperChatMessages((prev) => [...prev, { role: 'ai', text: reply }])
@@ -10134,21 +14402,49 @@ function FeedbackDashboardPage({ lesson }: { lesson: LibraryLesson }) {
     }, 700)
   }
 
-  // Clicking the comment/"Ask AI" action on one student's evidence card
-  // narrows Deeper AI Analysis to that student — every subsequent reply is
-  // framed around their specific response/artifact until the teacher
-  // focuses someone else or picks a different Class Summary pattern.
-  const focusStudentInDeeperAnalysis = (student: StudentEvidence) => {
-    setFocusedStudent(student)
-    setDeeperChatMessages((prev) => [...prev, { role: 'ai', text: buildStudentFocusNote(student) }])
-  }
-
   return (
     <div className="dashboard-page">
       <section className="dashboard-task-card">
-        <p className="card-label">Assignment</p>
-        <h3>{dashboardTask.topic}</h3>
-        <p className="dashboard-task-question">{dashboardTask.question}</p>
+        <div className="dashboard-task-header">
+          <div>
+            <p className="card-label">Assignment</p>
+            <h3>{assignment?.task.topic ?? lesson.title}</h3>
+          </div>
+          {/* The lesson's assignments; with only one there's nothing to
+              switch to, so the dropdown is shown but disabled. */}
+          {assignment && choice && (
+            <label className="work-view-select">
+              <span>Assignment</span>
+              <select
+                value={choice.id}
+                disabled={choices.length < 2}
+                title={choices.length < 2 ? 'This lesson has one assignment.' : undefined}
+                onChange={(event) => onAssignmentChange(event.target.value)}
+              >
+                {choices.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {assignmentLabel(option)}
+                  </option>
+                ))}
+              </select>
+              {choices.length < 2 && <small className="work-view-note">Only assignment in this lesson</small>}
+            </label>
+          )}
+          {assignment && productSwitch && (
+            <WorkTypeSwitch
+              options={productSwitch.options}
+              value={productSwitch.value}
+              onChange={(productId) => {
+                const next = chooseProduct(assignment, productId)
+                if (next.assignment.id !== assignment.id) onAssignmentChange(next.assignment.id)
+                if (next.workType) onWorkTypeChange(next.workType)
+              }}
+            />
+          )}
+        </div>
+        <p className="dashboard-task-question">
+          {assignment?.task.question ?? 'No student submissions have been analyzed for this lesson yet.'}
+        </p>
       </section>
 
       <section className="dashboard-task-card lesson-context-card" aria-labelledby="lesson-context-heading">
@@ -10196,7 +14492,7 @@ function FeedbackDashboardPage({ lesson }: { lesson: LibraryLesson }) {
       </section>
 
       <div className="metrics-row">
-        {metricCards.map((metric) => (
+        {(assignment?.metrics ?? []).map((metric) => (
           <div key={metric.label} className="metric-card">
             <p>{metric.label}</p>
             <strong>{metric.value}</strong>
@@ -10205,12 +14501,11 @@ function FeedbackDashboardPage({ lesson }: { lesson: LibraryLesson }) {
         ))}
       </div>
 
-      <StudentReportsSection />
-
       <div className="report-grid">
         <section className="report-panel class-summary-panel">
           <div className="panel-header compact">
             <h3>Class Summary</h3>
+            {assignment && <span className="badge">{productLabel}</span>}
           </div>
 
           <h4 className="practice-objectives-heading">Practice-Oriented Learning Objectives</h4>
@@ -10226,24 +14521,24 @@ function FeedbackDashboardPage({ lesson }: { lesson: LibraryLesson }) {
                 ) : (
                   section.findings.map((finding) => (
                     <div key={finding.objectiveIndex} className="pattern-group">
-                      <p className="pattern-group-title">
-                        Learning Objective: {lessonContext.objectives[finding.objectiveIndex] ?? `Objective ${finding.objectiveIndex + 1}`}
+                      {/* The objective by its label only; the full text is
+                          in the lesson plan (and the tooltip). */}
+                      <p className="pattern-group-title" title={lessonContext.objectives[finding.objectiveIndex]}>
+                        {objectiveLabel(finding.objectiveIndex)}
                       </p>
                       {finding.practices.length > 0 && (
                         <p className="finding-practices">Practices: {finding.practices.join(' · ')}</p>
                       )}
-                      <p className="finding-summary">{finding.summary}</p>
-                      {finding.nextStep && (
-                        <p className="finding-next-step">
-                          <strong>Next step:</strong> {finding.nextStep}
-                        </p>
-                      )}
+                      <p className="finding-summary">
+                        <span className="finding-field-label">Summary:</span> {finding.summary}
+                      </p>
+                      {/* Student ideas and counts for this summary. */}
                       <div className="pattern-row-list">
                         {finding.patternIds.map((id) => (
                           <PatternRowButton
                             key={id}
                             row={allPatternRows[id]}
-                            isActive={selectedPatternId === id}
+                            isActive={activePatternId === id}
                             onSelect={setSelectedPatternId}
                           />
                         ))}
@@ -10271,7 +14566,7 @@ function FeedbackDashboardPage({ lesson }: { lesson: LibraryLesson }) {
               </div>
               {selectedPattern && (
                 <p className={`evidence-context-row tag evidence-tag-${selectedPattern.kind}`}>
-                  {selectedPattern.label} · {selectedPattern.count} students
+                  {selectedPattern.label} · {selectedPattern.count} students · {productLabel}
                 </p>
               )}
 
@@ -10289,7 +14584,7 @@ function FeedbackDashboardPage({ lesson }: { lesson: LibraryLesson }) {
                     const imageBlock = student.artifactImage && (
                       <img
                         src={student.artifactImage}
-                        alt={`${student.name}'s zombie fire model`}
+                        alt={`${student.name}'s model`}
                         className="student-artifact-image"
                       />
                     )
@@ -10297,29 +14592,42 @@ function FeedbackDashboardPage({ lesson }: { lesson: LibraryLesson }) {
                       <p className="student-artifact">{student.artifact}</p>
                     )
                     return (
-                      <div
-                        key={student.name}
-                        className={`evidence-card${focusedStudent?.name === student.name ? ' student-focused' : ''}`}
-                      >
+                      <div key={student.name} className="evidence-card">
                         <div className="student-header">
-                          <h4>{student.name}</h4>
+                          {/* The name and the button both open this
+                              student's own report — not Deeper AI Analysis. */}
+                          <h4>
+                            <button
+                              type="button"
+                              className="student-name-link"
+                              title={`Open ${student.name}'s Individual Student Report`}
+                              onClick={() => assignment && onOpenStudentReport(student.name, assignment.id)}
+                            >
+                              {student.name}
+                            </button>
+                          </h4>
                         </div>
-                        {responseBlock}
-                        {imageBlock}
-                        {artifactBlock}
+                        {/* Only the selected student work: the model, or
+                            the student's written explanation. */}
+                        {workView === 'both' ? (
+                          <>
+                            {responseBlock}
+                            {imageBlock}
+                            {artifactBlock}
+                          </>
+                        ) : workView === 'explanation' ? (
+                          responseBlock || <p className="empty-state-support">No written explanation in this mock data.</p>
+                        ) : (
+                          imageBlock || artifactBlock || <p className="empty-state-support">No model in this mock data.</p>
+                        )}
                         <div className="student-footer">
                           <button
                             type="button"
-                            className="student-ask-ai-button"
-                            aria-label={`Ask AI about ${student.name}'s response`}
-                            onClick={() => focusStudentInDeeperAnalysis(student)}
+                            className="secondary-button student-report-link"
+                            aria-label={`Access Individual Student Report for ${student.name}`}
+                            onClick={() => assignment && onOpenStudentReport(student.name, assignment.id)}
                           >
-                            <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true" focusable="false">
-                              <path
-                                fill="currentColor"
-                                d="M4 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h1v2.5a.5.5 0 0 0 .8.4L9.33 14H16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H4Z"
-                              />
-                            </svg>
+                            Access Individual Student Report
                           </button>
                         </div>
                       </div>
@@ -10335,20 +14643,16 @@ function FeedbackDashboardPage({ lesson }: { lesson: LibraryLesson }) {
                   <h3>Deeper AI Analysis</h3>
                 </div>
 
-                <p className="empty-state-support deeper-analysis-subtitle">
-                  Ask follow-up questions about the selected student responses and artifacts.
-                </p>
-
                 {selectedPattern ? (
                   <div className="deeper-analysis-body">
-                    <div className="deeper-analysis-chat">
-                      {deeperChatMessages.length === 0 && !isDeeperAiThinking ? (
-                        <p className="deeper-analysis-chat-empty">Ask a question below to start the conversation.</p>
-                      ) : (
+                    {/* The conversation appears once the teacher asks
+                        something; until then there's only the input. */}
+                    {(deeperChatMessages.length > 0 || isDeeperAiThinking) && (
+                      <div className="deeper-analysis-chat">
                         <ChatThread messages={deeperChatMessages} />
-                      )}
-                      {isDeeperAiThinking && <p className="empty-state-support">AI is analyzing these responses…</p>}
-                    </div>
+                        {isDeeperAiThinking && <p className="empty-state-support">AI is analyzing these responses…</p>}
+                      </div>
+                    )}
 
                     {/* Example questions: clicking one only fills the input,
                         so the teacher can edit it before sending. */}
@@ -10405,6 +14709,36 @@ function FeedbackDashboardPage({ lesson }: { lesson: LibraryLesson }) {
           </section>
         </div>
       </div>
+
+      {/* Instructional actions for the gaps in Areas for Improvement — kept
+          apart from the questions to ask students below. */}
+      <section className="questions-panel next-steps-panel" aria-labelledby="next-steps-heading">
+        <div className="panel-header compact">
+          <h3 id="next-steps-heading">Suggested Next Steps</h3>
+        </div>
+        {nextSteps.length === 0 ? (
+          <p className="empty-state-support">
+            {classSummary
+              ? 'No next steps — the analysis didn’t find gaps to address.'
+              : 'Next steps will appear once this lesson’s student submissions are analyzed.'}
+          </p>
+        ) : (
+          <ol className="next-step-list">
+            {nextSteps.map((step) => (
+              <li key={step.objectiveIndex} className="next-step-item">
+                <p className="next-step-objective" title={lessonContext.objectives[step.objectiveIndex]}>
+                  {objectiveLabel(step.objectiveIndex)}
+                  {step.practices.length > 0 && <span className="next-step-practices"> · {step.practices.join(' · ')}</span>}
+                </p>
+                <p className="next-step-action">{step.action}</p>
+                <p className="next-step-addresses">
+                  Addresses {pluralize(step.ideas, 'student idea')} ({pluralize(step.students, 'response')}) in Areas for Improvement
+                </p>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
 
       <section className="questions-panel">
         <div className="panel-header compact">

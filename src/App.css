@@ -20,7 +20,7 @@
   font-size: 0.82rem;
   font-weight: 500;
   line-height: 1.4;
-  color: #5a7385;
+  color: var(--text-secondary);
   max-width: 560px;
 }
 
@@ -39,7 +39,7 @@
    Mechanistic Model badge); purple and orange are new but pitched at the
    same moderate saturation and contrast level as those two. */
 .brand-color-blue {
-  color: #2f6fed;
+  color: #1d4ed8;
 }
 
 .brand-color-green {
@@ -51,7 +51,7 @@
 }
 
 .brand-color-orange {
-  color: #97701e;
+  color: #7a5412;
 }
 
 .eyebrow {
@@ -59,7 +59,7 @@
   letter-spacing: 0.12em;
   font-size: 0.72rem;
   font-weight: 700;
-  color: #5a7385;
+  color: var(--text-secondary);
   margin: 0 0 6px;
 }
 
@@ -81,7 +81,7 @@
   border-radius: 10px;
   border: 1px solid #c9dbec;
   background: #fff;
-  color: #1f2d3d;
+  color: var(--text-primary);
   font-size: 1.1rem;
   display: grid;
   place-items: center;
@@ -142,13 +142,13 @@
 .nav-drawer-subtitle {
   margin: 0;
   font-size: 0.85rem;
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
 .drawer-close {
   border: none;
   background: transparent;
-  color: #5a7385;
+  color: var(--text-secondary);
   font-size: 1.4rem;
   line-height: 1;
   cursor: pointer;
@@ -156,7 +156,7 @@
 }
 
 .drawer-close:hover {
-  color: #1f2d3d;
+  color: var(--text-primary);
 }
 
 .page-nav {
@@ -168,7 +168,7 @@
 .nav-button {
   border: 1px solid transparent;
   background: transparent;
-  color: #1f2d3d;
+  color: var(--text-primary);
   text-align: left;
   display: flex;
   align-items: center;
@@ -250,7 +250,7 @@
 .secondary-button,
 .ghost-button {
   background: white;
-  color: #1f2d3d;
+  color: var(--text-primary);
   border: 1px solid #d8e1ea;
   padding: 10px 16px;
 }
@@ -385,11 +385,13 @@ input,
 select,
 textarea {
   font: inherit;
-  border: 1px solid #dfe7ee;
+  /* ≥ 3:1 against white and the light card backgrounds, so each field's
+     outline is visible (WCAG 1.4.11 non-text contrast). */
+  border: 1px solid #7b8ea3;
   border-radius: 10px;
   background: #fff;
   padding: 10px 12px;
-  color: #1f2d3d;
+  color: var(--text-primary);
   width: 100%;
   box-sizing: border-box;
 }
@@ -413,7 +415,7 @@ textarea {
 .upload-card h4,
 .card-label {
   margin: 0;
-  color: #5a7385;
+  color: var(--text-secondary);
   font-size: 0.76rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -422,7 +424,7 @@ textarea {
 .upload-card h4 {
   letter-spacing: 0;
   text-transform: none;
-  color: #1f2d3d;
+  color: var(--text-primary);
   margin-top: 8px;
   font-size: 1rem;
 }
@@ -431,7 +433,7 @@ textarea {
   display: flex;
   align-items: center;
   gap: 12px;
-  color: #8fa3b3;
+  color: var(--text-placeholder);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -493,7 +495,7 @@ textarea {
   border: 1px solid #dbe8f5;
   border-radius: 12px;
   background: #f5f9fd;
-  color: #1f2d3d;
+  color: var(--text-primary);
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -514,6 +516,52 @@ textarea {
 .planning-method:focus-visible {
   outline: 2px solid #2f80ed;
   outline-offset: 2px;
+}
+
+/* Options not used for the generated lesson or activity. */
+.planning-method:disabled,
+.planning-method:disabled:hover {
+  background: #f1f3f5;
+  border-color: #e1e5ea;
+  color: #8a96a3;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.planning-method:disabled .planning-method-icon {
+  background: #e4e8ec;
+  color: #8a96a3;
+}
+
+.planning-start-new {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.planning-start-new p {
+  margin: 0;
+}
+
+.planning-start-new-button {
+  padding: 6px 12px;
+  font-size: 0.82rem;
+}
+
+.planning-start-new-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.planning-start-new-actions .primary-button,
+.planning-start-new-actions .secondary-button {
+  padding: 6px 12px;
+  font-size: 0.82rem;
 }
 
 .planning-method-icon {
@@ -550,7 +598,7 @@ textarea {
 .planning-method-text small {
   font-size: 0.74rem;
   line-height: 1.3;
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
 /* Nothing chosen yet: only the three buttons show. */
@@ -559,7 +607,7 @@ textarea {
 }
 
 /* Brainstorm with AI: intro, then a chat thread that scrolls on its own,
-   then the Form Completion Summary, then the message input. */
+   then the Lesson Planning Notes summary, then the message input. */
 .brainstorm-chat {
   gap: 12px;
 }
@@ -573,7 +621,7 @@ textarea {
   margin: 0;
   font-size: 0.88rem;
   line-height: 1.45;
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
 .brainstorm-thread {
@@ -585,7 +633,78 @@ textarea {
   margin-bottom: 10px;
 }
 
-/* Suggested answers sit under the assistant's latest question. */
+/* Planning focus: chosen before the conversation starts, then shown above it
+   with Change Focus. The option cards reuse the planning-method card look. */
+.brainstorm-focus-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.brainstorm-focus-picker h4 {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--text-primary);
+}
+
+/* Two compact cards of equal height. */
+.brainstorm-focus-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 8px;
+}
+
+.brainstorm-focus-option {
+  align-items: center;
+  padding: 8px 10px;
+}
+
+.brainstorm-focus-cancel {
+  align-self: flex-start;
+}
+
+.brainstorm-focus-cancel,
+.brainstorm-focus-change {
+  padding: 2px 4px;
+  border: none;
+  background: transparent;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #1a4f8d;
+}
+
+.brainstorm-focus-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid #dbe8f5;
+  border-radius: 10px;
+  background: #f5f9fd;
+}
+
+.brainstorm-focus-current {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.84rem;
+  color: #1a4f8d;
+}
+
+.brainstorm-focus-current .card-label {
+  margin: 0;
+}
+
+@media (max-width: 520px) {
+  .brainstorm-focus-options {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Conversation starters, and the chips of a standards or practices suggestion. */
 .brainstorm-quick-replies {
   display: flex;
   flex-wrap: wrap;
@@ -593,55 +712,25 @@ textarea {
   margin-bottom: 8px;
 }
 
-/* Edit on the teacher's latest accepted answer for each field. */
-.brainstorm-edit-answer {
-  display: block;
-  margin: 4px 0 0 auto;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: #1a4f8d;
-  font: inherit;
-  font-size: 0.76rem;
-  font-weight: 700;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-.brainstorm-edit-answer:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.brainstorm-editing-note {
-  margin: 0 0 8px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: #fff6e5;
-  color: #7a5412;
-  font-size: 0.8rem;
-}
-
-.brainstorm-editing-note .ghost-button {
-  padding: 0 4px;
-  border: none;
-  background: transparent;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: #1a4f8d;
-  text-decoration: underline;
-}
-
-/* Brainstorm standards: pick several suggestions, then confirm. */
-.brainstorm-standards-picker {
+/* Science practice bubbles under the Science Practice Activity welcome. */
+.brainstorm-practice-picker {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 4px;
   margin-bottom: 8px;
 }
 
-.brainstorm-standards-picker .brainstorm-quick-replies {
-  margin-bottom: 0;
+.brainstorm-practice-continue {
+  padding: 8px 16px;
+  font-size: 0.85rem;
+}
+
+.brainstorm-practice-continue:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .chip-check {
@@ -649,23 +738,184 @@ textarea {
   font-weight: 700;
 }
 
-.brainstorm-standards-confirm {
+/* A practice the assistant suggested for the topic — marked, not selected. */
+.chip-suggested-tag {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #075985;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+/* The chosen practices, with a way to change them, during brainstorming. */
+.brainstorm-practice-current {
   display: flex;
-  align-items: center;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.practice-change-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #1d4ed8;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Suggestions picked up from the conversation, waiting for review. */
+.brainstorm-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #f0d9a8;
+  border-radius: 10px;
+  background: #fffaf0;
+}
+
+.brainstorm-suggestions-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 10px;
 }
 
-.brainstorm-standards-confirm .primary-button {
-  padding: 7px 14px;
+.brainstorm-suggestions-header h4 {
+  margin: 0;
   font-size: 0.86rem;
+  color: var(--text-primary);
 }
 
-.brainstorm-standards-confirm .primary-button:disabled {
+.brainstorm-suggestions-count {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.brainstorm-suggestions-header p {
+  margin: 2px 0 0;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.brainstorm-suggestions-header .secondary-button {
+  flex: none;
+  padding: 5px 10px;
+  font-size: 0.78rem;
+}
+
+.brainstorm-suggestion-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.brainstorm-suggestion {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid #f0d9a8;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.brainstorm-suggestion:focus {
+  outline: 2px solid #2f80ed;
+  outline-offset: 1px;
+}
+
+.brainstorm-suggestion-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.brainstorm-suggestion-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.brainstorm-suggestion-badge {
+  flex: none;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #7a5412;
+}
+
+.brainstorm-suggestion-value,
+.brainstorm-suggestion-current {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: #355063;
+}
+
+.brainstorm-suggestion-current {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+}
+
+.brainstorm-suggestion .brainstorm-quick-replies {
+  margin-bottom: 0;
+}
+
+.brainstorm-suggestion textarea {
+  font-size: 0.82rem;
+}
+
+.brainstorm-suggestion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.brainstorm-suggestion-actions .primary-button,
+.brainstorm-suggestion-actions .secondary-button {
+  padding: 4px 10px;
+  font-size: 0.78rem;
+}
+
+.brainstorm-suggestion-actions .primary-button:disabled,
+.brainstorm-suggestion-actions .secondary-button:disabled {
   opacity: 0.5;
   cursor: default;
   transform: none;
   box-shadow: none;
+}
+
+.brainstorm-suggestion-dismiss {
+  padding: 4px 6px;
+  border: none;
+  background: transparent;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.brainstorm-suggestion-status {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #eef8f4;
+  color: #1f5c4a;
+  font-size: 0.8rem;
 }
 
 .form-summary {
@@ -678,8 +928,8 @@ textarea {
   margin: 0;
 }
 
-/* Collapsed, the summary is just this one line: title, count, a thin
-   progress bar, and the arrow. */
+/* Collapsed, the summary is just this one line: title, how many fields
+   have been added, any suggestions waiting, and the arrow. */
 .form-summary-toggle {
   width: 100%;
   display: flex;
@@ -708,66 +958,42 @@ textarea {
   flex: none;
   font-size: 0.82rem;
   font-weight: 700;
-  color: #1f2d3d;
+  color: var(--text-primary);
 }
 
 .form-summary-count {
   flex: none;
   font-size: 0.78rem;
   font-weight: 600;
-  color: #5a7385;
+  color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
 
-.form-summary-progress {
+/* Pushes the suggested count and arrow to the right of the header. */
+.form-summary-spacer {
   flex: 1;
-  min-width: 40px;
-  height: 4px;
-  border-radius: 999px;
-  background: #e3eaf1;
-  overflow: hidden;
-}
-
-.form-summary-progress span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: #1f7a68;
-  transition: width 0.25s ease;
 }
 
 .form-summary-chevron {
   flex: none;
   font-size: 0.8rem;
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
-.form-summary-optional {
+.form-summary-suggested {
   flex: none;
   font-size: 0.74rem;
   font-weight: 600;
-  color: #1f7a68;
+  color: #7a5412;
 }
 
-.form-summary-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 100%;
-}
-
-.form-summary-group + .form-summary-group {
-  padding-top: 6px;
-  border-top: 1px dashed #dfe7ee;
-}
-
-.form-summary-group-label {
+.form-summary-legend {
   margin: 0;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #5a7385;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
 }
 
 .form-summary-content {
@@ -805,7 +1031,7 @@ textarea {
   border: 1px solid #dfe7ee;
   border-radius: 999px;
   background: #ffffff;
-  color: #5a7385;
+  color: var(--text-secondary);
   font-size: 0.76rem;
   white-space: nowrap;
   overflow: hidden;
@@ -837,8 +1063,29 @@ textarea {
   color: #ffffff;
 }
 
-/* Template / Rubric bubbles are buttons that open their upload; they keep
-   the bubble look, with a hover/focus cue. */
+/* Suggested by AI, not yet applied: dashed, in the suggestion amber. */
+.form-summary-bubble.suggested {
+  border-style: dashed;
+  border-color: #e3b35a;
+  background: #fffaf0;
+  color: #7a5412;
+}
+
+.form-summary-bubble.suggested .form-summary-icon {
+  border-color: #e3b35a;
+  color: #7a5412;
+}
+
+/* A field already in the form that has a newer suggestion to review. */
+.form-summary-new {
+  flex: none;
+  font-size: 0.7rem;
+  color: #b27a16;
+}
+
+/* Template / Rubric bubbles (and suggested fields) are buttons that open
+   their upload or review; they keep the bubble look, with a hover/focus
+   cue. */
 .form-summary-bubble-button {
   font: inherit;
   font-size: 0.76rem;
@@ -991,7 +1238,7 @@ textarea {
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
 .standards-dropdown .standards-suggestions {
@@ -1029,7 +1276,7 @@ textarea {
   padding: 6px 4px;
   font-size: 0.78rem;
   font-weight: 500;
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
 .selected-standards-row {
@@ -1087,7 +1334,7 @@ textarea {
   margin: 0;
   font-size: 0.76rem;
   font-weight: 600;
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
 .standards-suggested-row {
@@ -1171,18 +1418,18 @@ textarea {
   flex: 1;
   font-size: 0.95rem;
   font-weight: 700;
-  color: #1f2d3d;
+  color: var(--text-primary);
 }
 
 .customization-chevron {
-  color: #5a7385;
+  color: var(--text-secondary);
   font-size: 0.85rem;
 }
 
 .customization-description {
   margin: 0;
   font-size: 0.82rem;
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
 .customization-fields {
@@ -1193,7 +1440,7 @@ textarea {
   margin-top: -4px;
   font-size: 0.78rem;
   font-weight: 500;
-  color: #5a7385;
+  color: var(--text-secondary);
   line-height: 1.4;
 }
 
@@ -1250,7 +1497,7 @@ textarea {
 .customization-note {
   margin: 0;
   font-size: 0.78rem;
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
 /* Required fields */
@@ -1262,7 +1509,7 @@ textarea {
 .required-legend {
   margin: -8px 0 0;
   font-size: 0.78rem;
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
 .field-invalid input,
@@ -1403,7 +1650,7 @@ textarea {
 .empty-state-support {
   margin: 10px 0 0;
   max-width: 420px;
-  color: #5a7385;
+  color: var(--text-secondary);
   font-size: 0.92rem;
   line-height: 1.6;
 }
@@ -1419,7 +1666,7 @@ textarea {
 .lesson-plan-content {
   padding: 24px 22px;
   line-height: 1.7;
-  color: #1f2d3d;
+  color: var(--text-primary);
 }
 
 .lesson-plan-content p {
@@ -1444,7 +1691,7 @@ textarea {
   padding: 1px 6px;
   border-radius: 999px;
   background: rgba(243, 183, 58, 0.18);
-  color: #9a6a00;
+  color: #7a5600;
   font-size: 0.64rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -1455,7 +1702,7 @@ textarea {
 
 .lesson-source {
   margin: 0;
-  color: #5a7385;
+  color: var(--text-secondary);
   font-size: 0.78rem;
   font-weight: 600;
 }
@@ -1465,12 +1712,12 @@ textarea {
   align-items: center;
   gap: 8px;
   margin: 0;
-  color: #5a7385;
+  color: var(--text-secondary);
   font-size: 0.78rem;
 }
 
 .legend-divider {
-  color: #c3d0db;
+  color: var(--text-placeholder);
 }
 
 .lesson-highlight-trigger {
@@ -1526,7 +1773,7 @@ textarea {
 
 .lesson-hint {
   margin: 0;
-  color: #5a7385;
+  color: var(--text-secondary);
   font-size: 0.78rem;
 }
 
@@ -1541,7 +1788,7 @@ textarea {
 .lesson-lead-in {
   margin: 0 0 6px;
   padding: 2px 6px;
-  color: #1f2d3d;
+  color: var(--text-primary);
 }
 
 .lesson-bullet-list {
@@ -1612,7 +1859,7 @@ textarea {
 }
 
 .lesson-suggestion-sparkle {
-  color: #d99a1c;
+  color: #b27a16;
   font-size: 0.95rem;
   line-height: 1;
 }
@@ -1668,7 +1915,7 @@ textarea {
 }
 
 .suggestion-popover .card-label {
-  color: #9a6a00;
+  color: #7a5600;
 }
 
 .selection-ask-popup {
@@ -1797,7 +2044,7 @@ textarea {
 }
 
 .inline-ai-preview .card-label {
-  color: #9a6a00;
+  color: #7a5600;
 }
 
 .inline-ai-preview textarea {
@@ -1816,7 +2063,7 @@ textarea {
   padding: 5px 12px;
   cursor: pointer;
   background: #fff;
-  color: #1f2d3d;
+  color: var(--text-primary);
 }
 
 .proposal-edit-button:disabled {
@@ -1866,7 +2113,7 @@ textarea {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  opacity: 0.7;
+  color: var(--text-secondary);
 }
 
 .composer-box {
@@ -1899,6 +2146,90 @@ textarea {
   line-height: 1.6;
 }
 
+.dashboard-task-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 20px;
+}
+
+/* Assignment choice on Class Feedback and Individual Student Reports. */
+.work-view-select {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #355063;
+}
+
+.work-view-select select {
+  min-width: 200px;
+}
+
+/* Model / Explanation: which student work in the assignment is reviewed. */
+.work-type-switch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #355063;
+}
+
+.work-type-options {
+  display: inline-flex;
+  border: 1px solid #7b8ea3;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.work-type-option {
+  padding: 7px 16px;
+  border: 0;
+  background: #fff;
+  color: #1e293b;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.work-type-option + .work-type-option {
+  border-left: 1px solid #7b8ea3;
+}
+
+.work-type-option.active {
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.work-type-option:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: -3px;
+}
+
+.work-view-select select:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+.work-view-note {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.student-reports-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 20px;
+}
+
+.student-reports-controls .student-search {
+  flex: 1 1 280px;
+}
+
 .metrics-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -1915,14 +2246,14 @@ textarea {
 .metric-card p,
 .metric-card span {
   margin: 0;
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
 .metric-card strong {
   display: block;
   margin: 8px 0;
   font-size: 2rem;
-  color: #1f2d3d;
+  color: var(--text-primary);
 }
 
 .report-grid {
@@ -2064,15 +2395,15 @@ textarea {
 }
 
 .summary-section-objective .summary-section-title {
-  color: #2f6fed;
+  color: #1d4ed8;
 }
 
 .summary-section-practice .summary-section-title {
-  color: #29867b;
+  color: #1f6f66;
 }
 
 .summary-section-misconception .summary-section-title {
-  color: #97701e;
+  color: #7a5412;
 }
 
 .pattern-group + .pattern-group {
@@ -2099,7 +2430,7 @@ textarea {
   padding: 9px 14px;
   text-align: left;
   cursor: pointer;
-  color: #1f2d3d;
+  color: var(--text-primary);
   font: inherit;
   font-size: 0.86rem;
   line-height: 1.4;
@@ -2123,7 +2454,7 @@ textarea {
 .pattern-row-count {
   flex: none;
   font-weight: 700;
-  color: #1f2d3d;
+  color: var(--text-primary);
 }
 
 .evidence-card {
@@ -2133,35 +2464,6 @@ textarea {
   border-radius: 12px;
   padding: 16px 18px;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-/* Marks whichever card the teacher last sent to Deeper AI Analysis via the
-   comment action, so it's obvious which student the conversation below is
-   currently centered on. */
-.evidence-card.student-focused {
-  border-color: #2f6fed;
-  box-shadow: 0 0 0 1px #2f6fed inset;
-}
-
-.student-ask-ai-button {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: none;
-  border-radius: 999px;
-  background: transparent;
-  color: #7089a0;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.student-ask-ai-button:hover {
-  background: rgba(47, 111, 237, 0.12);
-  color: #2f6fed;
 }
 
 /* The student list flows naturally inside the unified workspace's single
@@ -2196,17 +2498,17 @@ textarea {
 
 .evidence-tag-objective {
   background: #eef4ff;
-  color: #2f6fed;
+  color: #1d4ed8;
 }
 
 .evidence-tag-practice {
   background: #eafaf7;
-  color: #29867b;
+  color: #1f6f66;
 }
 
 .evidence-tag-misconception {
   background: #fbf1de;
-  color: #97701e;
+  color: #7a5412;
 }
 
 .evidence-objective .evidence-card {
@@ -2226,7 +2528,7 @@ textarea {
 
 .student-quote {
   margin: 0 0 6px;
-  color: #1f2d3d;
+  color: var(--text-primary);
   font-style: italic;
   line-height: 1.6;
 }
@@ -2275,6 +2577,40 @@ textarea {
 .evidence-card h4 {
   margin: 0;
   font-size: 1rem;
+}
+
+/* A student's name opens their Individual Student Report. */
+.student-name-link {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: #1a4f8d;
+  cursor: pointer;
+  text-align: left;
+}
+
+.student-name-link:hover {
+  text-decoration: underline;
+}
+
+.student-name-link:focus-visible {
+  outline: 2px solid #2f80ed;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.student-report-link {
+  padding: 5px 12px;
+  font-size: 0.8rem;
+}
+
+/* Which two versions the AI analysis compares. */
+.student-analysis-comparison {
+  margin: -4px 0 10px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
 }
 
 .regenerate-button {
@@ -2373,13 +2709,6 @@ textarea {
   max-width: 92%;
 }
 
-.deeper-analysis-chat-empty {
-  margin: 0;
-  color: #8a9bab;
-  font-size: 0.86rem;
-  font-style: italic;
-}
-
 .send-button {
   flex: none;
   display: inline-flex;
@@ -2407,7 +2736,7 @@ textarea {
 .question-list {
   margin: 0;
   padding-left: 18px;
-  color: #1f2d3d;
+  color: var(--text-primary);
 }
 
 .question-list li {
@@ -2612,7 +2941,7 @@ textarea {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #2f6fed;
+  color: #1d4ed8;
 }
 
 .model-task-prompt-section + .model-task-prompt-section {
@@ -2622,7 +2951,7 @@ textarea {
 .model-task-prompt-heading {
   margin: 0 0 2px;
   font-weight: 700;
-  color: #1f2d3d;
+  color: var(--text-primary);
 }
 
 .model-task-prompt p {
@@ -2634,7 +2963,7 @@ textarea {
 .model-task-prompt ul {
   margin: 0;
   padding-left: 18px;
-  color: #1f2d3d;
+  color: var(--text-primary);
 }
 
 .model-task-prompt li {
@@ -2675,7 +3004,7 @@ textarea {
   gap: 2px;
   font-weight: 600;
   font-size: 0.85rem;
-  color: #1f2d3d;
+  color: var(--text-primary);
 }
 
 .student-explanation-input-row {
@@ -2699,14 +3028,14 @@ textarea {
   border-radius: 999px;
   border: 1px solid #d8e1ea;
   background: #fff;
-  color: #5a7385;
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .mic-button:hover {
   border-color: #bdd7ff;
-  color: #2f6fed;
+  color: #1d4ed8;
 }
 
 .mic-button.listening {
@@ -2847,7 +3176,7 @@ textarea {
 
 .mock-data-tag {
   background: #f2f5f8;
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
 .student-model-work {
@@ -2918,7 +3247,7 @@ textarea {
 
 .artifact-version-meta {
   margin: 0;
-  color: #5a7385;
+  color: var(--text-secondary);
   font-size: 0.78rem;
 }
 
@@ -2971,7 +3300,7 @@ textarea {
   align-self: flex-start;
   background: #fff;
   border: 1px solid #dbe8f5;
-  color: #5a7385;
+  color: var(--text-secondary);
   border-radius: 999px;
   padding: 3px 9px;
   font-size: 0.7rem;
@@ -3012,13 +3341,15 @@ textarea {
   border: none;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.92);
-  color: #1f2d3d;
+  color: var(--text-primary);
   font-size: 1.5rem;
   line-height: 1;
   cursor: pointer;
 }
 
-.student-ai-analysis {
+.student-ai-analysis,
+.student-next-steps,
+.revision-changes {
   background: #f9fbfd;
   border: 1px solid #e8eef4;
   border-radius: 14px;
@@ -3026,58 +3357,56 @@ textarea {
   font-size: 0.92rem;
 }
 
-.analysis-columns {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
-}
-
-.analysis-block-title {
-  margin: 0 0 6px;
-  font-weight: 700;
-  color: #1f2d3d;
-}
-
-.analysis-block .empty-state-support {
+/* Changes between Revisions (full width, above the AI Summary). */
+.revision-changes .empty-state-support {
   margin: 0;
 }
 
-.analysis-list {
+.revision-change-list {
   margin: 0;
   padding-left: 18px;
-  color: #1f2d3d;
+  color: var(--text-primary);
 }
 
-.analysis-list li {
+.revision-change-list li {
   line-height: 1.55;
 }
 
-.analysis-list li + li {
+.revision-change-list li + li {
   margin-top: 6px;
 }
 
-.misconception-idea {
+/* The student's AI Summary: Class Feedback's blue Overlap and yellow Areas
+   for Improvement sections, side by side. */
+.student-summary-sections {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.student-summary-sections .summary-section + .summary-section {
+  margin-top: 0;
+}
+
+.student-summary-sections .empty-state-support {
+  margin: 0;
+}
+
+.student-objective-practices {
   font-weight: 600;
+  color: var(--text-secondary);
 }
 
-.misconception-uncertain-tag {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 2px 8px;
-  background: #f2f5f8;
-  color: #5a7385;
-  vertical-align: 1px;
-}
-
-.misconception-evidence {
-  display: block;
-  color: #5a7385;
-  font-size: 0.85rem;
+/* An objective the submission doesn't speak to, or has no gap for. */
+.student-objective-empty {
+  font-style: italic;
+  color: var(--text-secondary);
 }
 
 @media (max-width: 760px) {
   .artifact-compare-grid,
-  .analysis-columns {
+  .student-summary-sections {
     grid-template-columns: 1fr;
   }
 
@@ -3090,7 +3419,8 @@ textarea {
     width: 100%;
   }
 
-  .student-ai-analysis {
+  .student-ai-analysis,
+  .student-next-steps {
     padding: 14px;
   }
 }
@@ -3156,8 +3486,36 @@ textarea {
   border-radius: 12px;
   font: inherit;
   text-align: left;
-  color: #1f2d3d;
+  color: var(--text-primary);
   cursor: pointer;
+}
+
+/* A lesson whose mock content isn't ready: visible, grayed, not openable. */
+.library-class-lesson.unavailable,
+.library-card.unavailable {
+  background: #f1f5f9;
+  opacity: 0.7;
+}
+
+.library-class-lesson.unavailable .library-class-lesson-toggle {
+  cursor: not-allowed;
+}
+
+.library-class-lesson.unavailable .library-context-swatch,
+.library-card.unavailable .library-card-banner {
+  filter: grayscale(1);
+}
+
+.library-demo-unavailable {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border: 1px solid #94a3b8;
+  border-radius: 999px;
+  background: #fff;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .library-class-lesson-toggle .library-context-swatch {
@@ -3179,13 +3537,13 @@ textarea {
 
 .library-class-lesson-text small {
   font-size: 0.78rem;
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
 .library-class-note {
   margin: 0;
   font-size: 0.8rem;
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
 .library-dialog-actions button:disabled {
@@ -3205,7 +3563,7 @@ textarea {
 
 .library-unassigned > p {
   margin-bottom: 14px;
-  color: #5a7385;
+  color: var(--text-secondary);
   font-size: 0.88rem;
 }
 
@@ -3215,7 +3573,7 @@ textarea {
   flex: none;
   display: inline-flex;
   font-size: 0.9rem;
-  color: #1f2d3d;
+  color: var(--text-primary);
   font-weight: 400;
   cursor: pointer;
 }
@@ -3238,7 +3596,7 @@ textarea {
   align-items: center;
   gap: 8px;
   font-weight: 500;
-  color: #1f2d3d;
+  color: var(--text-primary);
 }
 
 .library-checkbox input {
@@ -3298,7 +3656,7 @@ textarea {
 .setup-section-title {
   margin: 0;
   font-size: 1.08rem;
-  color: #1f2d3d;
+  color: var(--text-primary);
 }
 
 /* One function inside a card (Add Class, Edit Existing Class, Check &
@@ -3308,6 +3666,37 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* Class Management: Add Class / Edit Existing Class, one form at a time. */
+.class-mode-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 260px));
+  gap: 10px;
+}
+
+#class-mode-content:not(:empty) {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e8eef4;
+}
+
+.class-mode-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.class-mode-close {
+  padding: 4px 12px;
+  font-size: 0.84rem;
+}
+
+@media (max-width: 600px) {
+  .class-mode-options {
+    grid-template-columns: 1fr;
+  }
 }
 
 .setup-subsection-title {
@@ -3361,12 +3750,12 @@ textarea {
   white-space: nowrap;
   font-size: 0.8rem;
   font-weight: 500;
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
 .setup-toggle-chevron {
   flex: none;
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
 .setup-subsection-body {
@@ -3412,7 +3801,7 @@ textarea {
 
 .setup-class-fields {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr) auto;
   align-items: end;
   gap: 10px;
 }
@@ -3452,9 +3841,31 @@ textarea {
 }
 
 .class-mgmt-notice .secondary-button,
-.roster-current-header .secondary-button {
-  padding: 6px 12px;
-  font-size: 0.84rem;
+/* Download Roster with Student IDs, with its privacy reminder beneath. */
+.roster-download {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.roster-download-note {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+/* At the bottom of Check & Edit Student Roster, set off from Add Student. */
+.roster-download-footer {
+  align-items: flex-start;
+  margin-top: 6px;
+  padding-top: 14px;
+  border-top: 1px solid #e8eef4;
+}
+
+.roster-download-footer .primary-button {
+  padding: 8px 16px;
+  font-size: 0.88rem;
 }
 
 /* ---- Continue to Lesson Planning (bottom of the page) ---- */
@@ -3530,7 +3941,7 @@ textarea {
   border: 1px solid #dfe7ee;
   border-radius: 999px;
   background: #fff;
-  color: #5a7385;
+  color: var(--text-secondary);
   font-size: 0.86rem;
   font-weight: 600;
 }
@@ -3616,7 +4027,7 @@ textarea {
 .roster-upload-hint {
   margin: 2px 0 0;
   font-size: 0.84rem;
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
 .roster-upload-actions {
@@ -3666,6 +4077,31 @@ textarea {
   margin-top: 10px;
 }
 
+.roster-result {
+  padding: 12px 14px;
+  border: 1px solid #bfe3d3;
+  background: #f4fbf8;
+  border-radius: 12px;
+}
+
+.roster-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.roster-result-header .roster-section-header {
+  margin-bottom: 0;
+}
+
+.roster-result .class-mgmt-table-wrap {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
 .roster-section-header {
   display: flex;
   flex-direction: column;
@@ -3680,7 +4116,7 @@ textarea {
 
 .roster-section-header p {
   margin: 0;
-  color: #5a7385;
+  color: var(--text-secondary);
   font-size: 0.82rem;
 }
 
@@ -3690,7 +4126,7 @@ textarea {
 }
 
 .roster-status.muted {
-  color: #8a9aa8;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
@@ -3710,12 +4146,6 @@ textarea {
   color: #a63d32;
   font-size: 0.82rem;
   font-weight: 600;
-}
-
-.roster-inline-fix {
-  padding: 2px 8px;
-  margin-left: 4px;
-  font-size: 0.78rem;
 }
 
 .roster-link-select {
@@ -3757,7 +4187,7 @@ textarea {
 
 .class-mgmt-table thead th {
   background: #f5f8fb;
-  color: #5a7385;
+  color: var(--text-secondary);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -3772,7 +4202,7 @@ textarea {
 
 .class-mgmt-table tbody th {
   font-weight: 600;
-  color: #1f2d3d;
+  color: var(--text-primary);
 }
 
 .class-mgmt-table tbody tr.blocked {
@@ -3814,7 +4244,7 @@ textarea {
   display: block;
   font-weight: 500;
   font-size: 0.76rem;
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
 .roster-icon-button {
@@ -3913,7 +4343,7 @@ textarea {
 .login-heading p,
 .login-note {
   margin: 0;
-  color: #5a7385;
+  color: var(--text-secondary);
   font-size: 0.9rem;
 }
 
@@ -3925,6 +4355,82 @@ textarea {
 .login-submit {
   width: 100%;
   font-weight: 600;
+}
+
+/* Teacher Preview: an outline button under Continue, for demonstrations. */
+.teacher-preview-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.teacher-preview-button {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.teacher-preview-entry small {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.student-session-bar.teacher-preview-bar {
+  border-color: #d97706;
+  background: #fffbeb;
+  color: #78350f;
+}
+
+/* ---------- Student Login (Student Feedback) ---------- */
+
+.student-login {
+  display: flex;
+  justify-content: center;
+  padding: 24px 0;
+}
+
+.student-login-class {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #f5f8ff;
+  color: #355063;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.student-login-lesson {
+  display: block;
+  color: #1b2834;
+}
+
+.student-login-card .login-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.student-session-bar {
+  margin-top: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid #dfe7ee;
+  border-radius: 10px;
+  background: #fff;
+  color: #355063;
+  font-size: 0.86rem;
+}
+
+.student-session-bar .secondary-button {
+  padding: 4px 12px;
+  font-size: 0.82rem;
 }
 
 /* ---------- My Lesson Library ---------- */
@@ -3947,7 +4453,7 @@ textarea {
 }
 
 .library-context-banner p span {
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
 .library-context-swatch {
@@ -3995,7 +4501,7 @@ textarea {
 
 .library-count {
   margin: 14px 0;
-  color: #5a7385;
+  color: var(--text-secondary);
   font-size: 0.85rem;
   font-weight: 600;
 }
@@ -4073,7 +4579,7 @@ textarea {
 }
 
 .library-card-meta dt {
-  color: #5a7385;
+  color: var(--text-secondary);
   font-weight: 600;
 }
 
@@ -4118,7 +4624,7 @@ textarea {
 }
 
 .library-action:disabled {
-  color: #8a9aa8;
+  color: var(--text-placeholder);
   background: #f4f6f8;
   border-style: dashed;
   cursor: not-allowed;
@@ -4158,7 +4664,7 @@ textarea {
   border-radius: 8px;
   font: inherit;
   font-size: 0.86rem;
-  color: #1f2d3d;
+  color: var(--text-primary);
   cursor: pointer;
 }
 
@@ -4180,7 +4686,7 @@ textarea {
 }
 
 .library-empty p {
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
 @media (max-width: 600px) {
@@ -4194,6 +4700,106 @@ textarea {
     max-width: none;
   }
 }
+
+/* ---- Science Practice Activity workspace (reuses the lesson workspace) ---- */
+
+.generate-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.activity-status {
+  flex: none;
+  background: #fff6e0;
+  color: #7a5412;
+}
+
+.activity-status.confirmed {
+  background: #eef6f1;
+  color: #2c6b4f;
+}
+
+.activity-draft {
+  min-height: 0;
+}
+
+.activity-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.activity-sequence,
+.activity-collection-preview,
+.activity-incorporated {
+  margin: 0 0 10px;
+  padding-left: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lesson-plan-content .activity-topic-note {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.activity-incorporated {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+/* Asks before Regenerate replaces confirmed or edited work. */
+.activity-regenerate-warning {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 10px 0;
+  padding: 12px 14px;
+  border: 1px solid #d97706;
+  border-radius: 10px;
+  background: #fffbeb;
+  color: #78350f;
+}
+
+.activity-regenerate-warning p {
+  margin: 0;
+  font-weight: 600;
+}
+
+.activity-review-actions {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.activity-review-actions .primary-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.activity-confirmed-note {
+  margin: 0;
+  flex: 1;
+  min-width: 200px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #2c6b4f;
+}
+
+.activity-collection-confirm {
+  align-self: flex-start;
+}
+
+.activity-collection-confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 
 /* ---- Student Feedback Activities (bottom of the lesson) ---- */
 
@@ -4234,7 +4840,7 @@ textarea {
 .feedback-link-note {
   margin: 0;
   font-size: 0.84rem;
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
 .feedback-activity-list {
@@ -4278,18 +4884,23 @@ textarea {
 
 .feedback-activity-name {
   font-weight: 700;
-  color: #1f2d3d;
+  color: var(--text-primary);
+}
+
+.collection-field-label {
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
 .feedback-activity-number {
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
 .feedback-activity-status {
   margin-left: 8px;
   font-size: 0.76rem;
   font-weight: 600;
-  color: #9a6a00;
+  color: #7a5600;
 }
 
 .feedback-activity-status.confirmed {
@@ -4341,6 +4952,19 @@ textarea {
 
 .feedback-link .card-label {
   margin: 0;
+}
+
+.feedback-link-class {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.feedback-link-class-name {
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #355063;
 }
 
 .feedback-link-row {
@@ -4399,7 +5023,7 @@ textarea {
   border-radius: 10px;
   background: #fff;
   text-align: left;
-  cursor: pointer;
+  cursor: default;
 }
 
 .student-assignment-item.active {
@@ -4423,7 +5047,7 @@ textarea {
 .student-assignment-note {
   margin-top: 10px !important;
   font-size: 0.8rem;
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
 /* ---- Student Feedback: model name + AI feedback ratings ---- */
@@ -4437,7 +5061,7 @@ textarea {
 .model-name-field span {
   font-weight: 600;
   font-size: 0.85rem;
-  color: #1f2d3d;
+  color: var(--text-primary);
 }
 
 /* Sits right under its AI bubble — the thread gap is pulled in so the
@@ -4460,7 +5084,7 @@ textarea {
   border: 1px solid transparent;
   border-radius: 999px;
   background: transparent;
-  color: #8a9aaa;
+  color: var(--text-placeholder);
   cursor: pointer;
 }
 
@@ -4505,12 +5129,12 @@ textarea {
   margin: 0 0 4px;
   font-size: 0.76rem;
   font-weight: 700;
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
 .lesson-context-grid dd {
   margin: 0;
-  color: #1f2d3d;
+  color: var(--text-primary);
   line-height: 1.5;
 }
 
@@ -4529,22 +5153,85 @@ textarea {
 
 .practice-objectives-heading {
   margin: 0 0 10px;
-  color: #1f2d3d;
+  color: var(--text-primary);
 }
 
 .finding-practices {
   margin: 0 0 4px;
   font-size: 0.76rem;
   font-weight: 600;
-  color: #5a7385;
+  color: var(--text-secondary);
 }
 
-.finding-summary,
-.finding-next-step {
+.finding-summary {
   margin: 0 0 8px;
   font-size: 0.84rem;
   line-height: 1.5;
   color: #355063;
+}
+
+.finding-field-label {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* ---- Class Feedback: Suggested Next Steps ---- */
+
+.next-step-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.next-step-item {
+  padding: 12px 14px;
+  border: 1px solid #f1dfb0;
+  border-left: 4px solid #f3b73a;
+  border-radius: 12px;
+  background: #fffaf0;
+}
+
+.next-step-item p {
+  margin: 0;
+}
+
+.next-step-objective {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.next-step-practices {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* A student next step's short title (Individual Student Reports). */
+.next-step-title {
+  margin-top: 6px !important;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.next-step-title + .next-step-action {
+  margin-top: 2px !important;
+}
+
+.next-step-action {
+  margin-top: 6px !important;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.next-step-addresses {
+  margin-top: 6px !important;
+  font-size: 0.76rem;
+  color: var(--text-secondary);
 }
 
 /* ---- Class Feedback: example questions + facilitation question labels ---- */
@@ -4563,7 +5250,7 @@ textarea {
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #6f8597;
+  color: var(--text-secondary);
   line-height: 1.4;
 }
 
@@ -4580,15 +5267,15 @@ textarea {
 
 /* Each category heading takes the matching Class Summary accent color. */
 .facilitation-whole-class-prompts .question-category {
-  color: #2f6fed;
+  color: #1d4ed8;
 }
 
 .facilitation-peer-to-peer-discussion .question-category {
-  color: #29867b;
+  color: #1f6f66;
 }
 
 .facilitation-debrief .question-category {
-  color: #97701e;
+  color: #7a5412;
 }
 
 /* ---- Suggested standards: (i) button + verified description ---- */
@@ -4649,11 +5336,11 @@ textarea {
 
 .standard-info-header p {
   margin: 0;
-  color: #1f2d3d;
+  color: var(--text-primary);
 }
 
 .standard-info-header span {
-  color: #5a7385;
+  color: var(--text-secondary);
   font-size: 0.76rem;
 }
 

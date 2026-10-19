@@ -1,53 +1,48 @@
-// End-to-end regression test for the AI lesson-revision workflow on the
-// Lesson Workspace page. This is a plain Node script (not a test-framework
-// file) so it can run with zero configuration: `npm run test:e2e`.
+// End-to-end regression test for the AI lesson-revision workflow in the
+// Lesson Workspace on Lesson Planning. This is a plain Node script (not a
+// test-framework file) so it can run with zero configuration:
+// `npm run test:e2e`.
 //
 // It spins up the Vite dev server itself, drives a real Chromium instance
-// through the exact flow a teacher would use, and asserts on the rendered
-// DOM — not on internal state — so it catches the class of bug where the UI
-// *looks* like it applied a change (highlight + badge) without the actual
-// lesson text being replaced.
+// through the exact flow a teacher would use — starting at the mock Teacher
+// Login, then opening the demo lesson from the Library — and asserts on the
+// rendered DOM, not on internal state, so it catches the class of bug where
+// the UI *looks* like it applied a change (highlight + badge) without the
+// actual lesson text being replaced.
 //
-// Flow under test — two tabs, one track:
-//   There is a single WORKING lesson (Generated + AI Suggestions), driven
-//   entirely by editor.revisedLesson — it only ever changes in response to
-//   the teacher explicitly clicking Apply Change in the conversational
-//   left-side chat, or an Edit Lesson manual edit (which always wins,
-//   regardless of any AI track). A section is highlighted only once the
-//   teacher has actually accepted a change for it.
+// Flow under test — one working lesson:
+//   The lesson is driven entirely by editor.revisedLesson — it only ever
+//   changes in response to the teacher explicitly clicking Apply to Lesson
+//   in the conversational left-side chat, or an Edit Lesson manual edit
+//   (which always wins, regardless of any AI track). A section is marked
+//   "AI revised" only once the teacher has actually accepted a change.
 //
-//   0. Generated | AI Suggestions. Generated is the default tab and shows
-//      no highlighting until something has actually been applied.
-//      Suggestions is the same working lesson, PLUS pending AI suggestions
-//      are flagged as clickable highlights. A section with no AI suggestion
-//      (Materials) is never flagged anywhere — "don't introduce unrelated
-//      changes."
-//   1. On AI Suggestions, a flagged AI suggestion shows a popover with
-//      "See AI Suggestions"; clicking it opens that section's conversation
-//      in the LEFT workspace (switching to the AI Chat tab), not inline in
-//      the lesson text — the right side stays the lesson plan.
+//   0. A single view (no Generated / AI Suggestions tab strip): pending AI
+//      suggestions are flagged as clickable highlights and summarized; a
+//      section with no AI suggestion (Materials) is never flagged —
+//      "don't introduce unrelated changes."
+//   1. Clicking a flagged phrase opens that section's conversation in the
+//      LEFT workspace, not inline in the lesson text — the right side stays
+//      the lesson plan.
 //   2. There is no separate "Preview Change" step. As soon as the AI has a
 //      concrete proposal, the full proposed content is shown immediately in
-//      a "PROPOSED CHANGE — NOT YET APPLIED" card in the left chat, with a
-//      single Apply Change action.
-//   3. A follow-up typed into the left chat replaces the proposed-change
-//      card's content with a new concrete proposal (a statement, not
-//      another clarifying question) whenever the teacher's intent is clear
-//      enough to act on. AI only asks a clarifying question back when the
-//      follow-up is genuinely too vague to turn into a revision.
+//      a "Suggested revision — not yet applied" card in the left chat, with
+//      Apply to Lesson as its action.
+//   3. A follow-up typed into the left chat (behind "Ask AI about this")
+//      replaces the card's content with a new concrete proposal (a
+//      statement, not another clarifying question) whenever the teacher's
+//      intent is clear enough to act on. AI only asks a clarifying question
+//      back when the follow-up is genuinely too vague to turn into a
+//      revision.
 //   4. Every section with a flagged suggestion (not just one) supports the
-//      See AI Suggestions -> Apply flow on AI Suggestions. A bullet-list
-//      section (Equipment & Technology) keeps its item structure once
-//      applied, with only the added item highlighted, rather than
-//      flattening to one paragraph. A freeform text selection (e.g. on
+//      same open -> Apply to Lesson flow. A freeform text selection (e.g. on
 //      Standards, which has no pre-flagged suggestion) can still start a
-//      conversation on the left, just with no proposed-change card until
+//      conversation on the left, just with no suggested-revision card until
 //      the AI actually has something concrete to propose.
-//   5. Manual "Edit Lesson" still works independently, per section (and is
-//      unavailable on Generated), and its edits always win over any AI
-//      suggestion or applied change.
-//   6. Clicking a flagged suggestion's popover, then clicking Edit Lesson,
-//      must NOT hide that popover — it stays visible right next to the
+//   5. Manual "Edit Lesson" still works independently, per section, and its
+//      edits always win over any AI suggestion or applied change.
+//   6. Opening a section's AI Suggestion card, then clicking Edit Lesson,
+//      must NOT hide that suggestion — it stays visible right next to the
 //      section's now-editable textarea, so the teacher can compare the
 //      suggestion against what they're typing without switching views.
 
@@ -59,6 +54,7 @@ const projectRoot = fileURLToPath(new URL('..', import.meta.url))
 
 const PORT = 4319
 const BASE_URL = `http://localhost:${PORT}/`
+const DEMO_TEACHER_EMAIL = 'demo@partners.edu'
 
 // Every section that carries a pre-flagged AI suggestion (see
 // lessonSuggestions / lessonRevisionSegments in src/App.tsx).
@@ -112,26 +108,42 @@ function assert(condition, message) {
   log(`PASS: ${message}`)
 }
 
-// Landing on Lesson Workspace shows a blank lesson until Generate Lesson is
-// actually clicked — every flow below that needs the canvas visible must
-// trigger generation itself first, same as a real teacher would.
-async function generateLessonOnWorkspacePage(page) {
-  await page.click('.planning-form button:has-text("Generate Lesson")')
+// The app opens on the mock Teacher Login. The demo teacher's email signs in
+// as a returning teacher, who lands on Class Setup.
+async function loginAsDemoTeacher(page) {
+  await page.goto(BASE_URL)
+  await page.waitForSelector('h2:has-text("Teacher Login")')
+  await page.fill('input[type="email"]', DEMO_TEACHER_EMAIL)
+  await page.fill('input[type="password"]', 'demo-password')
+  await page.click('.login-card button[type="submit"]:has-text("Login")')
+  await page.waitForSelector('h2:has-text("Class Setup")')
+}
+
+// The Lesson Workspace now lives on Lesson Planning: opening the demo
+// lesson's Lesson Planning from its class in the Library shows the
+// generated Zombie Fires lesson in the workspace, the same way a teacher
+// reaches it.
+async function gotoLessonWorkspace(page) {
+  await loginAsDemoTeacher(page)
+  await page.click('button[aria-label="Open prototype navigation"]')
+  await page.waitForSelector('text=Prototype Navigation')
+  await page.click('.nav-drawer button:has-text("Library")')
+  const demoClass = page.locator('article.library-class-card', { hasText: 'Period 4 · Earth Science' })
+  await demoClass.locator('button:has-text("View Lessons")').click()
+  await demoClass.locator('button:has-text("Zombie Fires: Matter and Energy Flow")').click()
+  await demoClass.locator('button:has-text("Lesson Planning")').click()
   await page.waitForSelector('text=Lesson Title: Zombie Fires')
 }
 
-async function gotoLessonWorkspace(page) {
-  await page.goto(BASE_URL)
-  await page.waitForSelector('text=Lesson Planning')
-  await page.click('button[aria-label="Open prototype navigation"]')
-  await page.waitForSelector('text=Prototype Navigation')
-  await page.click('.nav-drawer button:has-text("Lesson Workspace")')
-  await generateLessonOnWorkspacePage(page)
-}
-
-async function switchToTab(page, tabName) {
-  await page.click(`.state-tab:has-text("${tabName}")`)
-  await page.waitForSelector(`.state-tab.active:has-text("${tabName}")`)
+// Opens a flagged suggestion's conversation on the left by clicking its
+// highlighted phrase, and reveals the chat thread (it starts tucked behind
+// "Ask AI about this" whenever there's a proposal to review).
+async function openSuggestionChat(page, label, flag) {
+  await flag.click()
+  await page.waitForSelector('.revision-chat-panel')
+  const askButton = page.locator('.revision-chat-panel button:has-text("Ask AI about this")')
+  if (await askButton.count()) await askButton.click()
+  await page.waitForSelector('.revision-chat-thread')
 }
 
 async function run() {
@@ -150,8 +162,10 @@ async function run() {
     browser = await chromium.launch()
 
     // ====================================================================
-    // PART 0: two tabs, Generated default. Neither tab shows anything
-    // highlighted until the teacher has actually applied a change.
+    // PART 0: one working lesson (the Generated / AI Suggestions tab strip
+    // was folded into a single view). Pending suggestions are flagged in the
+    // text and summarized; nothing is marked "AI revised" until the teacher
+    // has actually applied a change.
     // ====================================================================
     const page = await browser.newPage({ viewport: { width: 1440, height: 1300 } })
     const consoleErrors = []
@@ -162,31 +176,25 @@ async function run() {
 
     await gotoLessonWorkspace(page)
 
-    const tabLabels = await page.locator('.state-tab').allInnerTexts()
     assert(
-      tabLabels.join(' | ') === 'Generated | AI Suggestions',
-      `the tab strip reads "Generated | AI Suggestions", with no Revised tab (got "${tabLabels.join(' | ')}")`,
+      (await page.locator('.state-tab').count()) === 0,
+      'the workspace shows a single working lesson — no Generated / AI Suggestions / Revised tab strip',
     )
     assert(
-      (await page.locator('.state-tab.active').innerText()) === 'Generated',
-      'Generated is the default active tab',
+      (await page.locator('.lesson-plan-content .ai-revised-tag').count()) === 0,
+      'the working lesson shows no "AI revised" tag before anything has been applied',
     )
+    const suggestionSummary = await page.locator('.lesson-suggestion-summary').innerText()
     assert(
-      (await page.locator('.lesson-plan-content .ai-highlight').count()) === 0,
-      'Generated (the working lesson) shows no highlighting before anything has been applied',
-    )
-
-    await switchToTab(page, 'AI Suggestions')
-    assert(
-      (await page.locator('[data-section-key="Assessment"] .ai-revised-tag').count()) === 0,
-      'AI Suggestions (the working lesson) shows no "AI revised" tag on Assessment before it has been applied',
+      /\d+ AI suggestions? to review/.test(suggestionSummary),
+      `pending AI suggestions are summarized above the lesson (got "${suggestionSummary}")`,
     )
 
     // ====================================================================
     // PART 1: the full workflow on Assessment, via the flagged suggestion —
-    // See AI Suggestions (left chat opens) -> the proposed change is
-    // immediately visible in full, with Apply Change as the only action ->
-    // Apply Change updates the working lesson (visible on both tabs).
+    // clicking it opens the left chat -> the suggested revision is
+    // immediately visible in full, with Apply to Lesson as the action ->
+    // Apply to Lesson updates the working lesson.
     // ====================================================================
     const assessmentFlag = page.locator('[data-section-key="Assessment"] .lesson-highlight-trigger.ai-highlight', {
       hasText: 'These questions are collected and added to a class Driving Question Board',
@@ -194,8 +202,6 @@ async function run() {
     assert((await assessmentFlag.count()) === 1, 'Assessment shows its flagged AI-suggestion trigger before any change')
 
     await assessmentFlag.click()
-    await page.waitForSelector('.suggestion-popover')
-    await page.click('.suggestion-popover button:has-text("See AI Suggestions")')
     await page.waitForSelector('.revision-chat-panel')
     assert(
       (await page.locator('.revision-chat-panel h4').innerText()) === 'Assessment',
@@ -207,8 +213,8 @@ async function run() {
     )
     const proposalCardText = await page.locator('.revision-chat-panel .inline-ai-preview').innerText()
     assert(
-      proposalCardText.includes('PROPOSED CHANGE') && proposalCardText.toUpperCase().includes('NOT YET APPLIED'),
-      'the proposed-change card is labeled "PROPOSED CHANGE — NOT YET APPLIED"',
+      proposalCardText.toUpperCase().includes('SUGGESTED REVISION — NOT YET APPLIED'),
+      'the suggested-revision card is labeled "Suggested revision — not yet applied"',
     )
     assert(
       proposalCardText.includes(PROPOSED_ASSESSMENT_TEXT),
@@ -218,13 +224,13 @@ async function run() {
     const assessmentParagraph = page.locator('[data-section-key="Assessment"] > p').first()
     assert(
       (await assessmentParagraph.innerText()).includes(ORIGINAL_ASSESSMENT_TEXT),
-      'the working lesson (AI Suggestions) is untouched until Apply Change — only the left card shows the proposal',
+      'the working lesson is untouched until Apply to Lesson — only the left card shows the proposal',
     )
 
-    await page.click('.revision-chat-panel .inline-ai-preview button:has-text("Apply Change")')
+    await page.click('.revision-chat-panel .inline-ai-preview button:has-text("Apply to Lesson")')
     await page.waitForSelector('[data-section-key="Assessment"] .ai-revised-tag')
     const afterFirstApply = await assessmentParagraph.innerText()
-    assert(!afterFirstApply.includes(ORIGINAL_ASSESSMENT_TEXT), 'the original Assessment sentence is gone from the working lesson after Apply Change')
+    assert(!afterFirstApply.includes(ORIGINAL_ASSESSMENT_TEXT), 'the original Assessment sentence is gone from the working lesson after Apply to Lesson')
     assert(afterFirstApply.includes(PROPOSED_ASSESSMENT_TEXT), 'the applied Assessment text is now visible in the working lesson')
     assert(
       (await page.locator('.revision-chat-panel .inline-ai-applied-note').innerText()).includes('Applied to Lesson'),
@@ -248,19 +254,21 @@ async function run() {
 
     // ====================================================================
     // PART 2: a follow-up produces a NEW proposal — applying it changes the
-    // working lesson further, visible on both Generated and AI Suggestions
-    // (there's only one working lesson, not a separate static baseline).
+    // same working lesson further (there's only one working lesson, not a
+    // separate static baseline).
     // ====================================================================
-    await page.fill('.revision-chat-panel input[placeholder="Ask about this section..."]', 'Can you make this revision more focused on matter and energy flow?')
+    const followUpInput = '.revision-chat-panel input[placeholder="Ask about this revision..."]'
+    await page.click('.revision-chat-panel button:has-text("Ask AI about this")')
+    await page.fill(followUpInput, 'Can you make this revision more focused on matter and energy flow?')
     await page.click('.revision-chat-panel button:has-text("Send")')
     await page.waitForSelector('.revision-chat-panel .inline-ai-preview')
-    await page.click('.revision-chat-panel .inline-ai-preview button:has-text("Apply Change")')
+    await page.click('.revision-chat-panel .inline-ai-preview button:has-text("Apply to Lesson")')
     await page.waitForSelector('.revision-chat-panel .inline-ai-applied-note')
 
     const workingAssessmentText = await assessmentParagraph.innerText()
     assert(
       workingAssessmentText.toLowerCase().includes('matter') && workingAssessmentText.toLowerCase().includes('label each addition'),
-      'the working lesson (AI Suggestions) now reflects the follow-up-refined proposal',
+      'the working lesson now reflects the follow-up-refined proposal',
     )
 
     // The follow-up's new text extends (rather than replaces) the earlier
@@ -277,74 +285,62 @@ async function run() {
       'the section\'s true original wording is still present, unhighlighted, after two rounds of applied changes',
     )
 
-    await switchToTab(page, 'Generated')
-    const generatedAssessmentText = await page.locator('[data-section-key="Assessment"] > p').first().innerText()
-    assert(
-      generatedAssessmentText.toLowerCase().includes('matter') && generatedAssessmentText.toLowerCase().includes('label each addition'),
-      'Generated (also the working lesson) reflects the same conversationally-applied text as AI Suggestions',
-    )
     assert(
       (await page.locator('[data-section-key="Assessment"] .ai-revised-tag').count()) === 1,
-      'Generated highlights the working-lesson change the same way AI Suggestions does',
+      'the working lesson marks Assessment "AI revised" once, after two applied rounds',
     )
-
-    await switchToTab(page, 'AI Suggestions')
 
     // ====================================================================
     // PART 2.5: a genuinely vague follow-up gets a clarifying question, and
     // a clear one ("make it more student-led") gets a fresh concrete
     // proposal.
     // ====================================================================
-    await page.fill('.revision-chat-panel input[placeholder="Ask about this section..."]', 'ok')
+    await page.fill(followUpInput, 'ok')
     await page.click('.revision-chat-panel button:has-text("Send")')
     await page.waitForTimeout(900)
     const vagueMessages = await page.locator('.revision-chat-thread .chat-message').allInnerTexts()
     assert(vagueMessages[vagueMessages.length - 1].trim().endsWith('?'), 'a too-vague follow-up gets a clarifying question back')
 
-    await page.fill('.revision-chat-panel input[placeholder="Ask about this section..."]', 'Make it more student-led.')
+    await page.fill(followUpInput, 'Make it more student-led.')
     await page.click('.revision-chat-panel button:has-text("Send")')
     await page.waitForSelector('.revision-chat-panel .inline-ai-preview')
     const studentLedReply = (await page.locator('.revision-chat-thread .chat-message').allInnerTexts()).slice(-1)[0]
     assert(!studentLedReply.trim().endsWith('?'), 'a clear follow-up gets a concrete proposal back, not another question')
     assert(
       (await page.locator('.revision-chat-panel .inline-ai-applied-note').count()) === 0,
-      'the new proposal is pending again until Apply Change is clicked once more',
+      'the new proposal is pending again until Apply to Lesson is clicked once more',
     )
 
     // ====================================================================
-    // PART 3: closing the chat returns the left AI Chat tab to the generic
-    // planning conversation, not a blank panel.
+    // PART 3: closing the chat returns the left panel to the planning
+    // options the teacher had before, not a blank panel.
     // ====================================================================
     await page.click('.revision-chat-panel .drawer-close')
     assert((await page.locator('.revision-chat-panel').count()) === 0, 'closing the conversation hides the revision chat panel')
     assert(
-      (await page.locator('.planning-thread').count()) === 1,
-      'the AI Chat tab falls back to the generic planning conversation once no section is being discussed',
+      await page.isVisible('text=Create a new lesson'),
+      'the left panel falls back to the lesson planning options once no section is being discussed',
     )
 
     await page.close()
 
     // ====================================================================
     // PART 4: every section with a flagged suggestion — not just
-    // Assessment — supports the See AI Suggestions -> Apply flow on
-    // AI Suggestions.
+    // Assessment — supports the open-suggestion -> Apply to Lesson flow.
     // ====================================================================
     const page2 = await browser.newPage({ viewport: { width: 1440, height: 1300 } })
+    page2.on('pageerror', (err) => consoleErrors.push(String(err)))
     await gotoLessonWorkspace(page2)
-    await switchToTab(page2, 'AI Suggestions')
     const seenProposals = new Set()
 
     for (const label of ALL_SECTION_LABELS) {
       const flag = page2.locator(`[data-section-key="${label}"] .lesson-highlight-trigger.ai-highlight`)
       const flagCount = await flag.count()
-      assert(flagCount >= 1, `"${label}" shows a flagged AI-suggestion trigger on AI Suggestions (got ${flagCount})`)
+      assert(flagCount >= 1, `"${label}" shows a flagged AI-suggestion trigger (got ${flagCount})`)
 
       const beforeText = await page2.locator(`[data-section-key="${label}"]`).first().innerText()
 
-      await flag.first().click()
-      await page2.waitForSelector('.suggestion-popover')
-      await page2.click('.suggestion-popover button:has-text("See AI Suggestions")')
-      await page2.waitForSelector('.revision-chat-panel')
+      await openSuggestionChat(page2, label, flag.first())
 
       assert(
         (await page2.locator('.revision-chat-panel h4').innerText()) === label,
@@ -358,14 +354,14 @@ async function run() {
       seenProposals.add(aiProposalMessage)
 
       assert(
-        (await page2.locator('.revision-chat-panel .inline-ai-preview button:has-text("Apply Change")').count()) === 1,
-        `"${label}" offers Apply Change immediately, with the proposal already visible`,
+        (await page2.locator('.revision-chat-panel .inline-ai-preview button:has-text("Apply to Lesson")').count()) === 1,
+        `"${label}" offers Apply to Lesson immediately, with the proposal already visible`,
       )
-      await page2.click('.revision-chat-panel .inline-ai-preview button:has-text("Apply Change")')
+      await page2.click('.revision-chat-panel .inline-ai-preview button:has-text("Apply to Lesson")')
       await page2.waitForSelector(`[data-section-key="${label}"] .ai-revised-tag`)
 
       const afterText = await page2.locator(`[data-section-key="${label}"]`).first().innerText()
-      assert(afterText !== beforeText, `"${label}" section text actually changed in the working lesson after Apply Change`)
+      assert(afterText !== beforeText, `"${label}" section text actually changed in the working lesson after Apply to Lesson`)
 
       // Only the part AI actually added should carry .ai-highlight — never
       // the section's original wording. The outer clickable wrapper itself
@@ -415,13 +411,15 @@ async function run() {
     // something concrete to propose.
     // ====================================================================
     const page3 = await browser.newPage({ viewport: { width: 1440, height: 1400 } })
+    page3.on('pageerror', (err) => consoleErrors.push(String(err)))
     await gotoLessonWorkspace(page3)
-    await switchToTab(page3, 'AI Suggestions')
 
-    assert(
-      (await page3.locator('.lesson-section-heading', { hasText: 'Standards & Learning Objectives' }).count()) === 1,
-      'Standards & Learning Objectives renders its own group heading',
-    )
+    for (const heading of ['Standards', 'Learning Objectives']) {
+      assert(
+        (await page3.locator('.lesson-section-heading', { hasText: new RegExp(`^${heading}$`) }).count()) === 1,
+        `${heading} renders its own group heading`,
+      )
+    }
     const objectiveChecks = [
       ['Learning Objective 1', '1.A'],
       ['Learning Objective 2', '1.B'],
@@ -455,33 +453,36 @@ async function run() {
     await page3.click('.ask-ai-chip')
     await page3.waitForSelector('.revision-chat-panel')
     assert(
-      (await page3.locator('.planning-tab.active').innerText()) === 'AI Chat',
-      'a freeform selection also switches the left workspace to AI Chat',
+      (await page3.locator('.revision-chat-panel h4').innerText()) === 'Standards',
+      'a freeform selection also switches the left workspace to that section’s AI chat',
     )
     const standardsOpener = await page3.locator('.revision-chat-thread .chat-message').first().innerText()
     assert(standardsOpener.includes('NGSS HS-LS2-3'), 'contextual "See AI Suggestions" works on Standards, scoped to its own selected text')
     assert(
       (await page3.locator('.revision-chat-panel .inline-ai-preview').count()) === 0,
-      'Standards has no canned proposal, so no proposed-change card or Apply Change is offered for it',
+      'Standards has no canned proposal, so no suggested-revision card or Apply to Lesson is offered for it',
     )
     await page3.click('.revision-chat-panel .drawer-close')
 
     // ====================================================================
-    // PART 6: clicking a flagged suggestion's popover, then Edit Lesson,
-    // must not hide that popover — it stays visible right next to the
+    // PART 6: opening a flagged suggestion's card, then Edit Lesson, must
+    // not hide that suggestion — it stays visible right next to the
     // section's now-editable textarea (Evaluate has never been touched by
     // any earlier part of this test, so its suggestion is still pending).
     // ====================================================================
-    const evaluateFlag = page3.locator('[data-section-key="Evaluate"] .lesson-highlight-trigger.ai-highlight', {
-      hasText: 'Two or three groups briefly share',
-    })
-    await evaluateFlag.click()
-    await page3.waitForSelector('[data-section-key="Evaluate"] .suggestion-popover')
+    assert(
+      (await page3.locator('[data-section-key="Evaluate"] .lesson-highlight-trigger.ai-highlight', {
+        hasText: 'Two or three groups briefly share',
+      }).count()) === 1,
+      'Evaluate flags the phrase its suggestion is about',
+    )
+    await page3.click('[data-section-key="Evaluate"] .lesson-suggestion-toggle')
+    await page3.waitForSelector('[data-section-key="Evaluate"] .lesson-suggestion-body')
     assert(
       (await page3.locator('[data-section-key="Evaluate"] .suggestion-popover').innerText()).includes(
         'Consider giving yourself a short checklist',
       ),
-      'Evaluate\'s AI Suggestion popover shows its suggestion text before editing',
+      'Evaluate\'s AI Suggestion card shows its suggestion text before editing',
     )
 
     await page3.click('button:has-text("Edit Lesson")')

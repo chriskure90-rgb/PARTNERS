@@ -1,8 +1,15 @@
 :root {
+  /* Text colors, chosen for WCAG 2.2 AA contrast (≥ 4.5:1 for normal text)
+     on white and on the light blue, gray, and yellow card backgrounds:
+     primary 13–15:1, secondary 6–7.6:1, placeholder 4.5:1+ on white. */
+  --text-primary: #1e293b;
+  --text-secondary: #475569;
+  --text-placeholder: #64748b;
+
   font-family: Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color: #1f2d3d;
+  color: var(--text-primary);
   background: #edf3f8;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -30,6 +37,12 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-placeholder);
+  opacity: 1;
 }
 
 button {
