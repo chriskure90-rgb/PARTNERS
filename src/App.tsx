@@ -24,6 +24,7 @@ import {
 import { ApiError, toApiError } from './api/core'
 import { listLessonsForClasses, saveLessonVersion, saveNewLesson, type LessonFields, type StoredLesson, type VersionCreatedBy } from './api/lessonPlanning'
 import { generateLesson, type GenerationUsage } from './api/lessonGeneration'
+import { reviseLessonSection } from './api/lessonRevision'
 import { authDebug, shortId } from './lib/authDebug'
 import { appMode, readStoredDemoSession, setSessionDataMode, storeDemoSession, usesSupabase } from './lib/dataSource'
 import './App.css'
@@ -2222,7 +2223,19 @@ type SectionRevisionState = {
   messages: ChatMessage[]
   proposal: string
   proposalSegments?: readonly LessonSegment[]
+  // Real AI (Supabase Mode): the saved conversation this chat's messages go
+  // to, and a problem with the last message (shown in the chat).
+  conversationId?: string
+  error?: string
 }
+
+// Answers a revision-chat message with the real AI (partners-revise-lesson),
+// which also saves the exchange to the lesson's revision history.
+type RemoteReviser = (
+  label: string,
+  question: string,
+  state: SectionRevisionState,
+) => Promise<{ reply: string; proposal: string | null; conversationId: string | null; historySaved: boolean }>
 
 // Drives the whole "See AI Suggestions / Apply Change" workflow for every
 // lesson section, in one place, regardless of whether a section's
@@ -2236,7 +2249,7 @@ type SectionRevisionState = {
 // `onApply` lets the lesson's manual-edit state (lifted to App) react to an
 // Apply Change, so an applied AI revision becomes the section's ordinary
 // current text — see its definition in App.
-function useRevisionWorkflow(onApply?: (label: string, text: string) => void) {
+function useRevisionWorkflow(onApply?: (label: string, text: string) => void, getRemoteReviser?: () => RemoteReviser | null) {
   const [activeLabel, setActiveLabel] = useState<string | null>(null)
   const [statesByLabel, setStatesByLabel] = useState<Record<string, SectionRevisionState>>({})
   const [revisedLesson, setRevisedLesson] = useState<Record<string, string>>({})
@@ -2379,6 +2392,45 @@ function useRevisionWorkflow(onApply?: (label: string, text: string) => void) {
   // good pending or already-applied proposal just because the teacher asked
   // a clarifying follow-up.
   const sendFollowUp = (label: string, question: string) => {
+    // Real AI: one request per message; the reply (and a new proposal, if
+    // any) arrives like the mock's. A failure is shown in the chat and the
+    // proposal stays as it was.
+    const remote = getRemoteReviser?.() ?? null
+    const current = statesByLabel[label]
+    if (remote && current) {
+      setStatesByLabel((prev) =>
+        prev[label] ? { ...prev, [label]: { ...prev[label], error: undefined, messages: [...prev[label].messages, { role: 'teacher', text: question }] } } : prev,
+      )
+      setIsThinking(true)
+      remote(label, question, current)
+        .then(({ reply, proposal, conversationId, historySaved }) =>
+          setStatesByLabel((prev) => {
+            const state = prev[label]
+            if (!state) return prev
+            const proposalChanged = proposal !== null && proposal !== state.proposal
+            return {
+              ...prev,
+              [label]: {
+                stage: proposalChanged ? 'chatting' : state.stage,
+                messages: [...state.messages, { role: 'ai', text: reply }],
+                proposal: proposalChanged ? proposal : state.proposal,
+                proposalSegments: proposalChanged ? undefined : state.proposalSegments,
+                conversationId: conversationId ?? state.conversationId,
+                error: historySaved ? undefined : 'This exchange wasn’t saved to the lesson’s revision history.',
+              },
+            }
+          }),
+        )
+        .catch((error) =>
+          setStatesByLabel((prev) =>
+            prev[label]
+              ? { ...prev, [label]: { ...prev[label], error: `No AI response: ${toApiError(error, 'The AI service couldn’t respond.').message}` } }
+              : prev,
+          ),
+        )
+        .finally(() => setIsThinking(false))
+      return
+    }
     setStatesByLabel((prev) => {
       const state = prev[label]
       if (!state) return prev
@@ -2631,6 +2683,11 @@ function RevisionChatPanel({
         <div className="revision-chat" id="revision-chat">
           <ChatThread messages={state.messages} className="revision-chat-thread" />
           {isThinking && <p className="empty-state-support">AI is thinking…</p>}
+          {state.error && (
+            <p className="lesson-save-status error" role="alert">
+              {state.error}
+            </p>
+          )}
 
           {/* Sending pauses while the proposal is being edited — a follow-up
               reply would replace the proposal and discard the teacher's edit. */}
@@ -2738,7 +2795,9 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
     })
     setDraftBySection((prev) => ({ ...prev, [label]: text }))
     setEditBaseline((prev) => ({ ...prev, [label]: text }))
-  })
+  }, () => remoteReviserRef.current)
+  // Set below, once the lesson state it reads is defined (null: mock replies).
+  const remoteReviserRef = useRef<RemoteReviser | null>(null)
 
   // Generate Lesson no longer navigates away from the Lesson Planning page —
   // it reveals the generated lesson in the workspace panel on the right,
@@ -2959,6 +3018,47 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
   const lastSavedLessonRef = useRef<{ lessonId: string; snapshot: string } | null>(null)
   // Each saved lesson's current version number.
   const lessonVersionNumbersRef = useRef(new Map<string, number>())
+
+  // Revise Lesson with the real AI (Supabase Mode, lessonRevision on): the
+  // section, its current proposal, the recent chat, and brief lesson context
+  // go through the privacy gateway to partners-revise-lesson. Only a lesson
+  // saved to the Library can be revised this way, so its chat can be saved.
+  remoteReviserRef.current =
+    lessonPersistence === 'supabase' && usesSupabase('lessonRevision')
+      ? async (label, question, state) => {
+          const lessonId = workspaceLessonId
+          if (!lessonId || !remoteLessonIdsRef.current.has(lessonId)) {
+            throw new Error('AI revision needs a lesson saved to your Library. Open Lesson Planning from a class and generate or open a saved lesson first.')
+          }
+          const clip = (text: string, max: number) => (text.length > max ? text.slice(0, max) : text)
+          const currentText = (step: LessonStep) => manualEdits[step.label] ?? revisionEditor.revisedLesson[step.label] ?? segmentsToText(step.segments)
+          const step = lessonDocument.steps.find((item) => item.label === label)
+          const form = lessonFormsRef.current.get(lessonId)
+          const suggestion = lessonDocument.suggestions[label]
+          const content = {
+            section: { label, text: clip(step ? currentText(step) : '', 4000) },
+            ...(suggestion ? { suggestion: clip(suggestion, 1500) } : {}),
+            ...(state.proposal ? { currentProposal: clip(state.proposal, 4000) } : {}),
+            history: state.messages.slice(-12).map((message) => ({ role: message.role, text: clip(message.text, 3000) })),
+            message: clip(question, 1000),
+            lesson: {
+              title: clip(lessonDocument.title, 200),
+              topic: clip(form?.topic.trim() ?? '', 200),
+              gradeLevel: form ? formatLessonGrade(form.gradeLevel) : '',
+              sciencePractices: practiceOptions.filter((practice) => form?.sciencePractices.includes(practice.id)).map((practice) => practice.label),
+              learningObjectives: lessonDocument.steps
+                .filter((item) => item.label.startsWith('Learning Objective '))
+                .slice(0, 10)
+                .map((item) => clip(currentText(item), 600)),
+            },
+          }
+          // Ids stay outside the gateway (it only rewrites lesson text).
+          const result = await callRemoteAiModel('lesson-revision', content, (request) =>
+            reviseLessonSection({ lessonId, ...(state.conversationId ? { revisionConversationId: state.conversationId } : {}), ...request }),
+          )
+          return { reply: result.reply, proposal: result.proposal, conversationId: result.revisionConversationId, historySaved: result.historySaved }
+        }
+      : null
   // The saved lesson the page's URL asks to reopen (a reload of Lesson
   // Planning); reopened once the teacher's lessons have loaded.
   const lessonRestoreRef = useRef<LessonPlanningRoute | null | undefined>(undefined)
