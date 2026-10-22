@@ -23,6 +23,7 @@ import {
 } from './api/classes'
 import { ApiError, toApiError } from './api/core'
 import { listLessonsForClasses, saveLessonVersion, saveNewLesson, type LessonFields, type StoredLesson, type VersionCreatedBy } from './api/lessonPlanning'
+import { generateLesson, type GenerationUsage } from './api/lessonGeneration'
 import { authDebug, shortId } from './lib/authDebug'
 import { appMode, readStoredDemoSession, setSessionDataMode, storeDemoSession, usesSupabase } from './lib/dataSource'
 import './App.css'
@@ -1449,6 +1450,11 @@ type LessonStep = {
   listStyle?: 'bullet'
   // Learning objectives (1-based) an activity works toward.
   objectives?: readonly number[]
+  // A practice-oriented learning objective (AI generation): the science
+  // practices it asks students to use, and the teacher's own wording when
+  // the AI rewrote it. Lessons saved before these existed simply lack them.
+  practices?: readonly string[]
+  originalText?: string
 }
 
 // A lesson shown in the workspace: its sections in order, the practices to
@@ -2905,6 +2911,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
           for (const item of stored) {
             const content = readSavedLessonContent(item.currentVersion?.content)
             if (content) lessonFormsRef.current.set(item.lessonId, content.form)
+            if (item.currentVersion) lessonVersionNumbersRef.current.set(item.lessonId, item.currentVersion.versionNumber)
           }
           loaded = loadedClasses.map((classroom) => ({
             ...classroom,
@@ -2950,6 +2957,12 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
   const remoteLessonIdsRef = useRef(new Set<string>())
   const lessonFormsRef = useRef(new Map<string, PlanningLessonDetails>())
   const lastSavedLessonRef = useRef<{ lessonId: string; snapshot: string } | null>(null)
+  // Each saved lesson's current version number.
+  const lessonVersionNumbersRef = useRef(new Map<string, number>())
+  // The saved lesson the page's URL asks to reopen (a reload of Lesson
+  // Planning); reopened once the teacher's lessons have loaded.
+  const lessonRestoreRef = useRef<LessonPlanningRoute | null | undefined>(undefined)
+  if (lessonRestoreRef.current === undefined) lessonRestoreRef.current = lessonPersistence === 'supabase' ? readLessonPlanningRoute() : null
 
   // Class Setup's writes in Supabase Mode: creating a class saves it;
   // editing a class and changing a roster aren't connected yet.
@@ -3163,6 +3176,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
     document: LessonDocument,
     lessonSourceKind: 'generated' | 'uploaded',
     uploadedFileName?: string,
+    generation?: LessonGenerationRecord,
   ) => {
     if (lessonPersistence === 'off') {
       setLessonSaveStatus({ kind: 'error', message: 'This lesson isn’t saved: Lesson Planning isn’t connected to Supabase in this configuration. Add “lessonPlanning” to VITE_SUPABASE_INTEGRATIONS.' })
@@ -3185,7 +3199,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
     const { classId, savedLessonId } = planningTarget
     const existingId = savedLessonId && remoteLessonIdsRef.current.has(savedLessonId) ? savedLessonId : null
     const studentProducts = identifyFeedbackActivities(existingId)
-    const content = lessonContentFrom(effectiveLessonDocument(document, {}, {}), details, studentProducts)
+    const content = lessonContentFrom(effectiveLessonDocument(document, {}, {}), details, studentProducts, generation)
     const framework = (currentAccount.state ?? 'NGSS') as StandardsFrameworkId
     setIsSavingLesson(true)
     setLessonSaveStatus({ kind: 'saving', message: 'Saving to your Library…' })
@@ -3196,6 +3210,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
       const lessonId = saved.lessonId
       remoteLessonIdsRef.current.add(lessonId)
       lessonFormsRef.current.set(lessonId, details)
+      lessonVersionNumbersRef.current.set(lessonId, saved.versionNumber)
       const savedDocument = { ...content.document, id: lessonId }
       lastSavedLessonRef.current = { lessonId, snapshot: JSON.stringify(savedDocument) }
       const record = (bannerColor: string): LibraryLesson => ({
@@ -3213,10 +3228,9 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
         setPlanningTarget({ classId, savedLessonId: lessonId })
       }
       setWorkspaceLessonId(lessonId)
-      setLessonSaveStatus({
-        kind: 'saved',
-        message: existingId ? `Saved as version ${saved.versionNumber}.` : `Saved to your Library for ${classDisplayName(planningTargetClass)}.`,
-      })
+      const savedMessage = existingId ? `Saved as version ${saved.versionNumber}.` : `Saved to your Library for ${classDisplayName(planningTargetClass)}.`
+      const review = generation?.warnings.length ? ` Please review: ${generation.warnings.join(' ')}` : ''
+      setLessonSaveStatus({ kind: 'saved', message: `${savedMessage}${review}` })
     } catch (error) {
       setLessonSaveStatus({ kind: 'error', message: `This lesson wasn’t saved: ${toApiError(error, 'Couldn’t save the lesson.').message}` })
     } finally {
@@ -3438,6 +3452,9 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
     if (pendingDemoLesson && unchanged) {
       const saved = pendingDemoLesson.lessonPlan.document ?? demoLessonDocument
       showLessonDocument(saved, pendingDemoLesson.id, pendingDemoLesson.lessonPlan.feedbackActivities ?? identifyFeedbackActivities(pendingDemoLesson.id))
+    } else if (lessonPersistence !== 'mock' && usesSupabase('lessonGeneration')) {
+      void generateWithAi(details, method)
+      return
     } else if (lessonPersistence !== 'mock') {
       // Supabase Mode: shown now, saved (or the reason it isn't) right after.
       const document = generateLessonDocument(details)
@@ -3457,6 +3474,43 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
       setLessonGeneratedWith(method)
       setIsGeneratingLesson(false)
     }, 900)
+  }
+
+  // Generate Lesson with the real AI. The lesson on screen (if any) stays
+  // until the new one arrives; a failure leaves it as it was, shows why,
+  // and saves nothing — there's no fallback to the mock. A generated lesson
+  // is saved the same way as before (partners-save-lesson, or a new version
+  // of the saved lesson it replaces).
+  const generateWithAi = async (details: PlanningLessonDetails, method: PlanningMethod) => {
+    // A lesson that couldn't be saved isn't worth a paid AI request.
+    if (lessonPersistence === 'off' || !planningTarget || !planningTargetClass) {
+      setLessonSaveStatus({
+        kind: 'info',
+        message:
+          lessonPersistence === 'off'
+            ? 'AI lesson generation needs Lesson Planning connected to Supabase (add “lessonPlanning” to VITE_SUPABASE_INTEGRATIONS).'
+            : 'To generate a lesson with AI, open Lesson Planning from a class (Class Setup → Continue to Lesson Planning, or Library → Add Lesson) so the lesson can be saved.',
+      })
+      return
+    }
+    setPendingDemoLesson(null)
+    setIsGeneratingLesson(true)
+    setLessonSaveStatus({ kind: 'saving', message: 'Generating your lesson with AI…' })
+    try {
+      const { document, generation } = await generateLessonDocumentWithAi(details)
+      const keepId = planningTarget?.savedLessonId && remoteLessonIdsRef.current.has(planningTarget.savedLessonId) ? planningTarget.savedLessonId : null
+      showLessonDocument(document, keepId)
+      if (keepId) lastSavedLessonRef.current = { lessonId: keepId, snapshot: JSON.stringify(effectiveLessonDocument({ ...document, id: keepId }, {}, {})) }
+      setLessonSource('ai-generated')
+      setLessonGenerated(true)
+      setLessonGeneratedWith(method)
+      setIsGeneratingLesson(false)
+      await persistPlannedLesson(details, document, 'generated', undefined, generation)
+    } catch (error) {
+      setLessonSaveStatus({ kind: 'error', message: `The lesson wasn’t generated: ${toApiError(error, 'The AI service couldn’t generate the lesson.').message}` })
+    } finally {
+      setIsGeneratingLesson(false)
+    }
   }
 
   // Upload is only wired up when adding a lesson to a class (see
@@ -3523,6 +3577,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
           fields: lessonFieldsFrom(form, lesson.title, classroom?.gradeLevel ?? ''),
         })
         lastSavedLessonRef.current = { lessonId, snapshot }
+        lessonVersionNumbersRef.current.set(lessonId, saved.versionNumber)
         setLibraryLessons((prev) =>
           prev.map((item) => (item.id === lessonId ? { ...item, lessonPlan: { ...item.lessonPlan, document: effective } } : item)),
         )
@@ -3585,6 +3640,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
     setPlanningTab,
     revisionEditor,
     isSavingVersion,
+    isGeneratingLesson,
     // A teacher's own state framework comes first; NGSS otherwise.
     defaultFramework: (currentAccount.state ?? 'NGSS') as StandardsFrameworkId,
     formSeed: planningFormSeed,
@@ -3606,8 +3662,64 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
       }
     }
     if (activePage === 'student-reports' && studentReportsRoute) hash = studentReportsHash(studentReportsRoute)
+    if (activePage === 'lesson-generator') {
+      const pendingRestore = lessonRestoreRef.current
+      if (pendingRestore) {
+        hash = lessonPlanningHash(pendingRestore)
+      } else if (
+        workspaceLessonId &&
+        planningTarget?.savedLessonId === workspaceLessonId &&
+        remoteLessonIdsRef.current.has(workspaceLessonId)
+      ) {
+        hash = lessonPlanningHash({ lessonId: workspaceLessonId, classId: planningTarget.classId })
+      }
+    }
     window.location.hash = hash
-  }, [activePage, studentAssignment, studentFeedbackClassId, studentFeedbackTask, studentReportsRoute])
+  }, [activePage, studentAssignment, studentFeedbackClassId, studentFeedbackTask, studentReportsRoute, workspaceLessonId, planningTarget])
+
+  // A reload of Lesson Planning reopens the saved lesson its URL names —
+  // its current version, read from Supabase (nothing is saved). Changes
+  // that weren't saved before the reload aren't part of it.
+  const remoteClassesState = remoteClassesStatus.state
+  useEffect(() => {
+    const route = lessonRestoreRef.current
+    if (!route || remoteClassesState === 'loading') return
+    lessonRestoreRef.current = null
+    if (remoteClassesState !== 'ready' || activePage !== 'lesson-generator' || lessonGenerated) return
+    const lesson = remoteLessonIdsRef.current.has(route.lessonId) ? libraryLessons.find((item) => item.id === route.lessonId) : undefined
+    const classroom = libraryClasses.find((item) => item.id === route.classId && item.lessonIds.includes(route.lessonId))
+    if (!lesson || !classroom) {
+      setRemoteLessonsError('The lesson you had open couldn’t be found in your Library, so Lesson Planning starts fresh.')
+      window.location.hash = 'lesson-generator'
+      return
+    }
+    openSavedLesson(lesson, classroom, 'library')
+    const versionNumber = lessonVersionNumbersRef.current.get(lesson.id)
+    if (lesson.lessonPlan.document && versionNumber !== undefined) {
+      setLessonSaveStatus({ kind: 'info', message: `Reopened your last saved version (version ${versionNumber}).` })
+    }
+    // Runs when the teacher's lessons finish loading; the rest is read then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remoteClassesState])
+
+  // Supabase Mode: leaving or reloading the page asks first while lesson
+  // changes aren't saved (being saved, a failed save, or Edit Lesson open
+  // with changes), so they're never lost as if they had been saved.
+  const hasUnsavedLessonChanges =
+    lessonPersistence === 'supabase' &&
+    (isSavingLesson ||
+      isSavingVersion ||
+      (lessonGenerated && lessonSaveStatus?.kind === 'error') ||
+      (isEditingLesson && Object.entries(draftBySection).some(([label, text]) => text !== editBaseline[label])))
+  useEffect(() => {
+    if (!hasUnsavedLessonChanges) return
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [hasUnsavedLessonChanges])
 
   useEffect(() => {
     // Follows a link opened in this tab — a Student Feedback link included.
@@ -5837,6 +5949,7 @@ function LessonPlanningPanel({
   setPlanningTab,
   revisionEditor,
   isSavingVersion,
+  isGeneratingLesson,
   defaultFramework,
   formSeed,
   savedLessonOpen,
@@ -5858,6 +5971,8 @@ function LessonPlanningPanel({
   revisionEditor: RevisionWorkflow
   // Supabase Mode: a lesson version is being saved (Apply to Lesson waits).
   isSavingVersion: boolean
+  // A lesson is being generated: Generate Lesson waits (one request at a time).
+  isGeneratingLesson: boolean
   // The teacher's state framework (from their profile), or NGSS.
   defaultFramework: StandardsFrameworkId
   // A saved demo lesson's form to start from (null: a blank form). Read once;
@@ -6954,7 +7069,7 @@ function LessonPlanningPanel({
             </section>
 
             <RequiredFieldsAlert show={showValidation} missing={missingRequired} />
-            <button type="button" className="primary-button generate-button" onClick={handleGenerate}>
+            <button type="button" className="primary-button generate-button" onClick={handleGenerate} disabled={isGeneratingLesson}>
               Generate Lesson
             </button>
           </div>
@@ -7381,7 +7496,7 @@ function LessonPlanningPanel({
                   hint="Apply the AI’s suggestions, or choose “Review the form” to fill them in."
                 />
                 <div className="brainstorm-actions">
-                  <button type="button" className="primary-button generate-button" onClick={handleGenerate}>
+                  <button type="button" className="primary-button generate-button" onClick={handleGenerate} disabled={isGeneratingLesson}>
                     Generate Lesson Plan
                   </button>
                 </div>
@@ -7427,7 +7542,14 @@ function LessonPlanningPanel({
 // swaps in a brief, lightweight "in progress" message (mirroring the same
 // plain-text convention "Regenerate Questions" uses on the dashboard)
 // between the click and the content actually appearing.
-function LessonWorkspacePlaceholder({ isGenerating }: { isGenerating: boolean }) {
+function LessonWorkspacePlaceholder({
+  isGenerating,
+  status = null,
+}: {
+  isGenerating: boolean
+  // Supabase Mode: why there's no lesson yet (e.g. AI generation failed).
+  status?: LessonWorkspaceCanvasProps['saveStatus']
+}) {
   return (
     <section className="workspace-placeholder lesson-workspace-panel">
       <div className="canvas-header">
@@ -7436,6 +7558,12 @@ function LessonWorkspacePlaceholder({ isGenerating }: { isGenerating: boolean })
           <h3>Lesson plan</h3>
         </div>
       </div>
+
+      {status && !isGenerating && (
+        <p className={`lesson-save-status ${status.kind}`} role={status.kind === 'error' ? 'alert' : 'status'}>
+          {status.message}
+        </p>
+      )}
 
       {isGenerating ? (
         <div className="empty-state">
@@ -7886,6 +8014,8 @@ type SavedLessonContent = {
   document: LessonDocument
   form: PlanningLessonDetails
   studentProducts: FeedbackActivity[]
+  // Present on a version the real AI generated (model, token usage, warnings).
+  generation?: LessonGenerationRecord
 }
 
 // The lesson as displayed: edited or AI-revised sections carry their current
@@ -7938,8 +8068,13 @@ function lessonFieldsFrom(details: PlanningLessonDetails, title: string, classGr
   }
 }
 
-function lessonContentFrom(document: LessonDocument, form: PlanningLessonDetails, studentProducts: readonly FeedbackActivity[]): SavedLessonContent {
-  return { format: lessonContentFormat, document, form, studentProducts: [...studentProducts] }
+function lessonContentFrom(
+  document: LessonDocument,
+  form: PlanningLessonDetails,
+  studentProducts: readonly FeedbackActivity[],
+  generation?: LessonGenerationRecord,
+): SavedLessonContent {
+  return { format: lessonContentFormat, document, form, studentProducts: [...studentProducts], ...(generation ? { generation } : {}) }
 }
 
 // The planning form to reopen a saved lesson with.
@@ -8872,6 +9007,18 @@ declare global {
 }
 
 function callAiModel<TInput, TOutput>(purpose: AiPurpose, input: TInput, model: (request: TInput) => TOutput): TOutput {
+  const { request, restore } = prepareAiRequest(purpose, input)
+  return restore(model(request))
+}
+
+// The same gateway for a model behind a server (an Edge Function): the
+// redacted request goes out, and roster placeholders in the reply come back.
+async function callRemoteAiModel<TInput, TOutput>(purpose: AiPurpose, input: TInput, model: (request: TInput) => Promise<TOutput>): Promise<TOutput> {
+  const { request, restore } = prepareAiRequest(purpose, input)
+  return restore(await model(request))
+}
+
+function prepareAiRequest<TInput>(purpose: AiPurpose, input: TInput): { request: TInput; restore: <T>(output: T) => T } {
   const namePattern = rosterIdentifierPattern()
   const placeholderFor = new Map<string, string>()
   const originalFor = new Map<string, string>()
@@ -8898,12 +9045,12 @@ function callAiModel<TInput, TOutput>(purpose: AiPurpose, input: TInput, model: 
 
   const placeholders = [...originalFor.keys()].sort((a, b) => b.length - a.length)
   // Whole placeholders only — "Student E" must not match inside "Student Evidence".
-  const restore = (text: string) =>
+  const restoreText = (text: string) =>
     placeholders.reduce(
       (result, key) => result.replace(new RegExp(`${escapeRegExp(key)}(?![\\p{L}\\p{N}])`, 'gu'), () => originalFor.get(key) ?? key),
       text,
     )
-  return mapStrings(model(request), restore) as TOutput
+  return { request, restore: <T,>(output: T) => mapStrings(output, restoreText) as T }
 }
 
 // ---------------------------------------------------------------------------
@@ -8953,10 +9100,16 @@ type LessonGenerationInput = {
   }
 }
 
-// The model's structured output (see lessonGenerationSchema).
+// The model's structured output (see lessonGenerationSchema). A learning
+// objective is a plain string (the mock, and the format before AI
+// generation) or, from partners-generate-lesson, a practice-oriented
+// objective with the teacher's original wording and its practices;
+// readLessonGenerationOutput reads both into the object form.
+type GeneratedLearningObjective = { text: string; practices: string[]; original?: string }
+
 type LessonGenerationOutput = {
   title: string
-  learningObjectives: string[]
+  learningObjectives: GeneratedLearningObjective[]
   activities: {
     sequenceStep: string
     title: string
@@ -9277,7 +9430,7 @@ function mockLessonGenerationReply(lesson: LessonGenerationInput): string {
 
   const output: LessonGenerationOutput = {
     title: `${lesson.topic.trim().replace(/\b\p{L}/gu, (letter) => letter.toUpperCase())}${lesson.sciencePractices[0] ? `: ${lesson.sciencePractices[0].label}` : ''}`,
-    learningObjectives,
+    learningObjectives: learningObjectives.map((text) => ({ text, practices: [] })),
     activities,
     customization,
     suggestions,
@@ -9285,21 +9438,31 @@ function mockLessonGenerationReply(lesson: LessonGenerationInput): string {
   return JSON.stringify(output)
 }
 
-// Reads the model's JSON, keeping only well-formed entries — anything
-// malformed is dropped rather than shown.
-function readLessonGenerationOutput(raw: string): LessonGenerationOutput {
+// Reads the model's JSON (text, or already parsed), keeping only well-formed
+// entries — anything malformed is dropped rather than shown.
+function readLessonGenerationOutput(raw: string | object): LessonGenerationOutput {
   let data: Record<string, unknown> = {}
   try {
-    const parsed: unknown = JSON.parse(raw)
+    const parsed: unknown = typeof raw === 'string' ? JSON.parse(raw) : raw
     if (parsed && typeof parsed === 'object') data = parsed as Record<string, unknown>
   } catch {
     // Treated as an empty response below.
   }
   const list = (value: unknown) => (Array.isArray(value) ? value.filter((item) => item && typeof item === 'object') : []) as Record<string, unknown>[]
   const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
+  const objective = (value: unknown): GeneratedLearningObjective => {
+    if (typeof value === 'string') return { text: value.trim(), practices: [] }
+    const item = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
+    const original = text(item.original)
+    return {
+      text: text(item.text),
+      practices: (Array.isArray(item.practices) ? item.practices : []).map(text).filter(Boolean),
+      ...(original ? { original } : {}),
+    }
+  }
   return {
     title: text(data.title),
-    learningObjectives: (Array.isArray(data.learningObjectives) ? data.learningObjectives : []).map(text).filter(Boolean),
+    learningObjectives: (Array.isArray(data.learningObjectives) ? data.learningObjectives : []).map(objective).filter((item) => item.text),
     activities: list(data.activities)
       .map((item) => ({
         sequenceStep: text(item.sequenceStep),
@@ -9412,7 +9575,8 @@ function buildGeneratedLessonDocument(details: PlanningLessonDetails, output: Le
   const steps: LessonStep[] = []
   const totalMinutes = details.durationMinutes ?? 0
 
-  const objectives = output.learningObjectives.length > 0 ? output.learningObjectives : [ensurePeriod(details.learningObjectives)]
+  const objectives: GeneratedLearningObjective[] =
+    output.learningObjectives.length > 0 ? output.learningObjectives : [{ text: ensurePeriod(details.learningObjectives), practices: [] }]
   const activities =
     output.activities.length > 0
       ? output.activities
@@ -9464,7 +9628,9 @@ function buildGeneratedLessonDocument(details: PlanningLessonDetails, output: Le
       label: `Learning Objective ${index + 1}`,
       displayPrefix: `${index + 1}.`,
       ...(index === 0 ? { sectionHeading: 'Learning Objectives', leadIn: 'By the end of the lesson, students will be able to:' } : {}),
-      segments: [{ text: objective }],
+      segments: [{ text: objective.text }],
+      ...(objective.practices.length > 0 ? { practices: objective.practices } : {}),
+      ...(objective.original && objective.original !== objective.text ? { originalText: objective.original } : {}),
     })
   })
 
@@ -9558,6 +9724,27 @@ function generateLessonDocument(details: PlanningLessonDetails): LessonDocument 
     (request) => mockLessonGenerationReply(request.lesson),
   )
   return buildGeneratedLessonDocument(details, readLessonGenerationOutput(raw))
+}
+
+// How a saved lesson version was generated (kept in its lesson_content).
+type LessonGenerationRecord = {
+  source: 'openai'
+  model: string
+  usage: GenerationUsage
+  warnings: string[]
+  generatedAt: string
+}
+
+// Generate Lesson with the real model (Supabase Mode, lessonGeneration on):
+// the planning form goes through the privacy gateway to
+// partners-generate-lesson, which owns the instructions, schema, model, and
+// cost limits. One request per Generate; a failure is thrown, never retried.
+async function generateLessonDocumentWithAi(details: PlanningLessonDetails): Promise<{ document: LessonDocument; generation: LessonGenerationRecord }> {
+  const result = await callRemoteAiModel('lesson-generation', { lesson: buildLessonGenerationInput(details) }, (request) => generateLesson(request.lesson))
+  return {
+    document: buildGeneratedLessonDocument(details, readLessonGenerationOutput(result.output)),
+    generation: { source: 'openai', model: result.usage.model, usage: result.usage, warnings: result.warnings, generatedAt: new Date().toISOString() },
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -11186,6 +11373,7 @@ type PlanningPanelProps = {
   setPlanningTab: (tab: PlanningTab) => void
   revisionEditor: RevisionWorkflow
   isSavingVersion: boolean
+  isGeneratingLesson: boolean
   defaultFramework: StandardsFrameworkId
   // A saved demo lesson's planning form to start from; null for a blank one.
   formSeed: PlanningFormSeed | null
@@ -11310,7 +11498,7 @@ function LessonPlanningPage({
       ) : lessonGenerated ? (
         <LessonWorkspaceCanvas {...canvasProps} />
       ) : (
-        <LessonWorkspacePlaceholder isGenerating={isGeneratingLesson} />
+        <LessonWorkspacePlaceholder isGenerating={isGeneratingLesson} status={canvasProps.saveStatus} />
       )}
     </div>
   )
@@ -11651,6 +11839,23 @@ function studentReportsHash(route: StudentReportsRoute): string {
   params.set('model', route.modelTab)
   params.set('work', route.work)
   return `student-reports?${params.toString()}`
+}
+
+// Supabase Mode: Lesson Planning's URL names the saved lesson open in the
+// workspace and its class, so a reload reopens that lesson's saved version.
+type LessonPlanningRoute = { lessonId: string; classId: string }
+
+function lessonPlanningHash(route: LessonPlanningRoute): string {
+  return `lesson-generator?${new URLSearchParams({ lesson: route.lessonId, class: route.classId }).toString()}`
+}
+
+function readLessonPlanningRoute(): LessonPlanningRoute | null {
+  const [page, query] = window.location.hash.replace('#', '').split('?')
+  if (page !== 'lesson-generator' || !query) return null
+  const params = new URLSearchParams(query)
+  const lessonId = params.get('lesson')
+  const classId = params.get('class')
+  return lessonId && classId ? { lessonId, classId } : null
 }
 
 function readStudentReportsRoute(): StudentReportsRoute | null {
@@ -12381,6 +12586,14 @@ function LessonWorkspaceCanvas({
                 {step.sectionHeading && <p className="card-label lesson-section-heading">{step.sectionHeading}</p>}
                 {step.leadIn && <p className="lesson-lead-in">{step.leadIn}</p>}
                 {renderLessonStep(step)}
+                {(step.practices?.length || step.originalText) && (
+                  // A practice-oriented objective: the practices it targets, and
+                  // the teacher's own wording when the AI rewrote it.
+                  <p className="objective-practice-note" data-section-key={`${step.label}-practices`}>
+                    {step.practices?.length ? <span>Science practices: {step.practices.join(', ')}</span> : null}
+                    {step.originalText ? <span>Your original objective: “{step.originalText}”</span> : null}
+                  </p>
+                )}
                 {step.afterSection === 'practices' && (
                   <div className="practice-tags-block" data-section-key="workspace-practices">
                     <p className="card-label">Science Practices to Emphasize</p>

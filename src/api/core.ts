@@ -53,14 +53,16 @@ export async function invokeFunction<TResponse>(name: string, body: unknown): Pr
   if (error) {
     if (error instanceof FunctionsHttpError) {
       let message: string | null = null
+      let code: string | null = null
       try {
-        const payload = (await error.context.json()) as { error?: unknown; message?: unknown }
+        const payload = (await error.context.json()) as { error?: unknown; message?: unknown; code?: unknown }
         const text = payload.error ?? payload.message
         message = typeof text === 'string' ? text : null
+        code = typeof payload.code === 'string' ? payload.code : null
       } catch {
         // Not JSON — fall back to the generic message below.
       }
-      throw new ApiError(message ?? `${name} failed.`, { status: error.context.status, cause: error })
+      throw new ApiError(message ?? `${name} failed.`, { code, status: error.context.status, cause: error })
     }
     throw toApiError(error, `${name} failed.`)
   }

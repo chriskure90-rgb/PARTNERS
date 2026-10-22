@@ -1836,6 +1836,15 @@ textarea {
   color: #8a1c1c;
 }
 
+.objective-practice-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: -4px 0 8px 22px;
+  font-size: 0.82rem;
+  color: #5b6472;
+}
+
 .lesson-save-retry {
   padding: 0;
   border: none;
