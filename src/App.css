@@ -4357,6 +4357,35 @@ textarea {
   font-weight: 600;
 }
 
+/* Explore Demo, below the login form. */
+.login-demo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid #dfe7ee;
+}
+
+.login-demo-button {
+  width: 100%;
+  font-weight: 600;
+}
+
+
 /* Teacher Preview: an outline button under Continue, for demonstrations. */
 .teacher-preview-entry {
   display: flex;

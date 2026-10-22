@@ -110,8 +110,10 @@ function assert(condition, message) {
 
 // The app opens on the mock Teacher Login. The demo teacher's email signs in
 // as a returning teacher, who lands on Class Setup.
+// Demo Mode opens without logging in; the tests still go through the mock
+// login on the Login page.
 async function loginAsDemoTeacher(page) {
-  await page.goto(BASE_URL)
+  await page.goto(`${BASE_URL}#login`)
   await page.waitForSelector('h2:has-text("Teacher Login")')
   await page.fill('input[type="email"]', DEMO_TEACHER_EMAIL)
   await page.fill('input[type="password"]', 'demo-password')
@@ -148,10 +150,13 @@ async function openSuggestionChat(page, label, flag) {
 
 async function run() {
   log(`starting Vite dev server on port ${PORT}...`)
+  // Always Demo Mode (mock login and data), even when .env.local selects
+  // Supabase Mode: variables already in the environment override .env files.
   const server = spawn(`npx vite --port ${PORT} --strictPort`, {
     cwd: projectRoot,
     shell: true,
     stdio: 'ignore',
+    env: { ...process.env, VITE_APP_MODE: 'demo' },
   })
 
   let browser

@@ -1,5 +1,6 @@
 import {
   Fragment,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -10,6 +11,19 @@ import {
   type RefObject,
   type SetStateAction,
 } from 'react'
+import { getTeacherSession, onTeacherSessionChange, signInTeacher, signOutTeacher, type TeacherSession } from './api/auth'
+import {
+  createClass as createRemoteClass,
+  getTeacherProfile,
+  listMyClasses,
+  listRosters,
+  registerStudentRoster,
+  type ClassRecord,
+  type RosterStudent,
+} from './api/classes'
+import { ApiError, toApiError } from './api/core'
+import { authDebug, shortId } from './lib/authDebug'
+import { appMode, readStoredDemoSession, setSessionDataMode, storeDemoSession, usesSupabase } from './lib/dataSource'
 import './App.css'
 
 type PageId =
@@ -57,6 +71,10 @@ const teacherStateOptions: { id: TeacherState; name: string }[] = [
 // account made by a first login (no Create Account form) has neither yet.
 type TeacherAccount = { email: string; onboardingComplete: boolean; state: TeacherState | null; district: string }
 
+// Who is using the app (see AppRoot): nobody yet, the demo (Explore Demo —
+// mock teacher and mock data only), or a teacher signed in with Supabase.
+type AppSession = { kind: 'none' } | { kind: 'demo' } | { kind: 'teacher'; teacher: TeacherSession }
+
 type MockLoginCredentials = {
   email: string
   password: string
@@ -73,7 +91,9 @@ function getPostLoginPage(): PageId {
   return 'class-setup'
 }
 
-function getInitialPage(): PageId {
+// The page from the URL; with none, Login — or, once someone has entered the
+// prototype (a signed-in teacher or the demo), where login leads.
+function getInitialPage(enteredPrototype: boolean): PageId {
   // A Student Feedback link carries its assignment after "?".
   const hash = window.location.hash.replace('#', '').split('?')[0]
   // Old links to the retired standalone Lesson Workspace page land on
@@ -82,7 +102,8 @@ function getInitialPage(): PageId {
   // Class Setup was briefly called Class Management.
   if (hash === 'class-management') return 'class-setup'
   const match = PAGE_CONFIG.find((page) => page.id === hash)
-  return match ? match.id : 'login'
+  if (match) return match.id
+  return enteredPrototype ? getPostLoginPage() : 'login'
 }
 
 // The three ways to start a lesson on the left of Lesson Planning.
@@ -2630,11 +2651,34 @@ function RevisionChatPanel({
   )
 }
 
-function App() {
+type AppProps = {
+  session: AppSession
+  // Where to open after a session change (sign-in, Explore Demo, leaving the demo).
+  entryPage: PageId | null
+  onSignIn: (email: string, password: string) => Promise<string | null>
+  onExploreDemo: () => Promise<string | null>
+  onExitDemo: () => void
+}
+
+function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppProps) {
   // A bare URL opens on the mock Login page; existing #page links still
   // jump straight to that page. Read once at init (not in an effect) so the
   // hash-writing effect below can't overwrite it first.
-  const [activePage, setActivePage] = useState<PageId>(getInitialPage)
+  // A signed-in teacher's app never opens on Login: the session can reach
+  // AppRoot (through onAuthStateChange) before sign-in has set where to go,
+  // while the URL still says #login.
+  const [activePage, setActivePage] = useState<PageId>(() => {
+    const page = entryPage ?? getInitialPage(session.kind !== 'none')
+    const start = session.kind === 'teacher' && page === 'login' ? getPostLoginPage() : page
+    authDebug('App start', { session: session.kind, entryPage, startPage: start })
+    return start
+  })
+  const enteredPrototypeRef = useRef(session.kind !== 'none')
+  useEffect(() => {
+    enteredPrototypeRef.current = session.kind !== 'none'
+  }, [session.kind])
+  // Supabase login for this session (never in the demo — see usesSupabase).
+  const realAuth = usesSupabase('auth')
   const [navOpen, setNavOpen] = useState(false)
 
   // Lifted out of the lesson workspace canvas so accepted revisions,
@@ -2785,21 +2829,132 @@ function App() {
   useEffect(() => {
     if (lastStoredClasses.current === libraryClasses) return
     lastStoredClasses.current = libraryClasses
-    storeLoginRosters(libraryClasses)
+    // Only mock rosters are mirrored — real Student IDs never go to the browser.
+    if (!usesSupabase('classes')) storeLoginRosters(libraryClasses)
   }, [libraryClasses])
 
-  const [teacherAccounts, setTeacherAccounts] = useState<Record<string, TeacherAccount>>({
+  // A Supabase teacher's classes and lessons still come from the mock data
+  // until those integrations are on, and onboarding status isn't stored in
+  // the database yet, so they're treated as returning teachers.
+  const signedInTeacher = session.kind === 'teacher' ? session.teacher : null
+  const [teacherAccounts, setTeacherAccounts] = useState<Record<string, TeacherAccount>>(() => ({
     [DEMO_TEACHER_EMAIL]: { email: DEMO_TEACHER_EMAIL, onboardingComplete: true, state: null, district: '' },
-  })
+    ...(signedInTeacher
+      ? { [signedInTeacher.email]: { email: signedInTeacher.email, onboardingComplete: true, state: null, district: '' } }
+      : {}),
+  }))
   // Pages opened without logging in (e.g. a #library link) act as the demo
-  // teacher, so the prototype stays navigable.
-  const [currentTeacherEmail, setCurrentTeacherEmail] = useState(DEMO_TEACHER_EMAIL)
+  // teacher, so the prototype stays navigable. With Supabase Auth, teacher
+  // pages need a session instead (see needsTeacherLogin).
+  const [currentTeacherEmail, setCurrentTeacherEmail] = useState(signedInTeacher?.email ?? DEMO_TEACHER_EMAIL)
   const currentAccount: TeacherAccount = teacherAccounts[currentTeacherEmail] ?? {
     email: currentTeacherEmail,
     onboardingComplete: false,
     state: null,
     district: '',
   }
+  // Supabase Mode with the `classes` integration: a signed-in teacher's
+  // classes and rosters come from the database (loaded once per session —
+  // AppRoot gives each session a fresh App). Mock classes stay in state for
+  // the pages that still use mock data, but they belong to the demo teacher,
+  // so they never show up as this teacher's.
+  const remoteClasses = usesSupabase('classes') && session.kind === 'teacher'
+  const [remoteClassesStatus, setRemoteClassesStatus] = useState<{ state: 'idle' | 'loading' | 'ready' | 'error'; message?: string }>(() => ({
+    state: remoteClasses ? 'loading' : 'idle',
+  }))
+  const [remoteTeacherName, setRemoteTeacherName] = useState('')
+  useEffect(() => {
+    if (!remoteClasses || session.kind !== 'teacher') return
+    let active = true
+    const email = session.teacher.email
+    ;(async () => {
+      authDebug('classes: loading')
+      const [profile, classRecords] = await Promise.all([getTeacherProfile(), listMyClasses()])
+      authDebug('classes: loaded', { hasProfile: profile !== null, classes: classRecords.length })
+      const rosters = await listRosters(classRecords.map((record) => record.classId))
+      if (!active) return
+      const teacher = { name: profile?.userName ?? '', email }
+      const loaded = classRecords.map((record, index) => libraryClassFromRecord(record, rosters[record.classId] ?? [], teacher, index))
+      const loadedStudents = new Map<string, Student>()
+      for (const roster of Object.values(rosters)) {
+        for (const student of roster) loadedStudents.set(student.studentId, { id: student.studentId, name: student.studentName })
+      }
+      setRemoteTeacherName(teacher.name)
+      setLibraryClasses((prev) => [...prev.filter((classroom) => classroom.ownerEmail !== email), ...loaded])
+      setStudents((prev) => [...prev.filter((student) => !loadedStudents.has(student.id)), ...loadedStudents.values()])
+      setRemoteClassesStatus({ state: 'ready' })
+    })().catch((error) => {
+      authDebug('classes: failed', { message: toApiError(error).message })
+      if (active) setRemoteClassesStatus({ state: 'error', message: toApiError(error, 'Couldn’t load your classes.').message })
+    })
+    return () => {
+      active = false
+    }
+    // Loaded once per teacher session (the session never changes within an App).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Class Setup's writes in Supabase Mode: creating a class saves it;
+  // editing a class and changing a roster aren't connected yet.
+  const classSetupRemote = remoteClasses
+    ? {
+        createClass: async (values: ClassFormValues): Promise<LibraryClass> => {
+          const record = await createRemoteClass({ className: values.name, gradeLevel: values.gradeLevel, period: values.period })
+          const index = libraryClasses.filter((classroom) => classroom.ownerEmail === currentTeacherEmail).length
+          return libraryClassFromRecord(record, [], { name: values.teacherName.trim() || remoteTeacherName, email: currentTeacherEmail }, index)
+        },
+        // Adds students with app-generated Student IDs through
+        // register_student_roster, then reads the roster back.
+        registerStudents: async (classroom: LibraryClass, names: readonly string[]): Promise<RegisteredStudents> => {
+          const before = (await listRosters([classroom.id]))[classroom.id] ?? []
+          const ids = planStudentIds(before, studentIdPrefixFor(classroom.teacherName || remoteTeacherName, classroom.name), names.length)
+          await registerStudentRoster(
+            classroom.id,
+            names.map((name, index) => ({ studentName: name, studentPseudonym: ids[index] })),
+          )
+          const after = (await listRosters([classroom.id]))[classroom.id] ?? []
+          // Success only when every new student is in the roster read back
+          // from Supabase — never on the RPC's word alone.
+          const missing = names.filter((_, index) => !after.some((student) => student.studentPseudonym === ids[index]))
+          if (missing.length > 0) {
+            throw new ApiError(
+              `${joinLabels(missing)} ${missing.length === 1 ? 'wasn’t' : 'weren’t'} found in the saved roster, so ${missing.length === 1 ? 'it' : 'they'} may not have been saved. Please refresh and check before adding again.`,
+              { code: 'not_saved' },
+            )
+          }
+          const duplicates = duplicateStudentIds(after)
+          return {
+            classroom: { ...classroom, ...rosterFieldsFor(after) },
+            students: after.map((student) => ({ id: student.studentId, name: student.studentName })),
+            added: names.map((name, index) => {
+              const saved = after.find((student) => student.studentPseudonym === ids[index])
+              return { key: saved?.studentId ?? null, name, studentId: ids[index] }
+            }),
+            warning:
+              duplicates.length > 0
+                ? `More than one student in this class now has ${joinLabels(duplicates)} — someone may have added students at the same time. Please check the roster.`
+                : null,
+          }
+        },
+        editBlocked: 'Editing classes isn’t connected to Supabase yet.',
+        rosterBlocked: 'Renaming or removing students isn’t connected to Supabase yet.',
+      }
+    : session.kind === 'teacher'
+      ? // A Supabase teacher with the `classes` integration off: Class Setup
+        // must not look like it saves when nothing reaches the database, so
+        // every write explains instead of falling back to the mock data.
+        {
+          createClass: async (): Promise<LibraryClass> => {
+            throw new ApiError(classSetupNotConnected, { code: 'not_connected' })
+          },
+          registerStudents: async (): Promise<RegisteredStudents> => {
+            throw new ApiError(classSetupNotConnected, { code: 'not_connected' })
+          },
+          editBlocked: classSetupNotConnected,
+          rosterBlocked: classSetupNotConnected,
+        }
+      : null
+
   const myClasses = libraryClasses.filter((classroom) => classroom.ownerEmail === currentTeacherEmail)
   const myLessons = libraryLessons.filter((lesson) => lesson.ownerEmail === currentTeacherEmail)
   const [libraryView, setLibraryView] = useState<LibraryViewState>({ expandedClassIds: [], openLessonKey: null })
@@ -3011,7 +3166,33 @@ function App() {
   // Returns an error message for the login form, or null on success. A
   // first login with an unknown email creates the account, like Create
   // Account does.
-  const handleLogin = ({ email: rawEmail, mode, state, district }: MockLoginCredentials): string | null => {
+  // Signing in with Supabase is handled by AppRoot, which then opens a fresh
+  // app for the teacher.
+  const handleLogin = async (credentials: MockLoginCredentials): Promise<string | null> => {
+    if (!realAuth) return handleMockLogin(credentials)
+    // New accounts need a teacher profile row too, which isn't connected
+    // yet; existing test accounts log in normally.
+    if (credentials.mode === 'create') return 'Creating accounts isn’t connected to Supabase yet. Log in with an existing teacher account.'
+    return onSignIn(credentials.email, credentials.password)
+  }
+
+  // Explore Demo: AppRoot signs out any Supabase session and starts the demo
+  // (a fresh app in Supabase Mode); here it opens as the mock demo teacher.
+  const handleExploreDemo = async (): Promise<string | null> => {
+    const error = await onExploreDemo()
+    if (error) return error
+    setCurrentTeacherEmail(DEMO_TEACHER_EMAIL)
+    setSelectedClassId(null)
+    navigateTo(getPostLoginPage())
+    return null
+  }
+
+  // Going to Login from the demo leaves it.
+  useEffect(() => {
+    if (session.kind === 'demo' && activePage === 'login') onExitDemo()
+  }, [session.kind, activePage, onExitDemo])
+
+  const handleMockLogin = ({ email: rawEmail, mode, state, district }: MockLoginCredentials): string | null => {
     const email = rawEmail.trim().toLowerCase() || DEMO_TEACHER_EMAIL
     const existing = teacherAccounts[email]
     if (mode === 'create' && existing) return 'An account with this email already exists. Log in instead.'
@@ -3227,7 +3408,7 @@ function App() {
       if (demoAssignment) setStudentFeedbackTab(demoAssignment.modelTab)
       const reportsRoute = readStudentReportsRoute()
       if (reportsRoute) setStudentReportsRoute(reportsRoute)
-      setActivePage(getInitialPage())
+      setActivePage(getInitialPage(enteredPrototypeRef.current))
     }
     window.addEventListener('hashchange', handleHashChange)
     return () => window.removeEventListener('hashchange', handleHashChange)
@@ -3254,7 +3435,15 @@ function App() {
     ? (studentAssignment.classId ?? studentFeedbackClassId)
     : (studentFeedbackClassId ?? demoStudentFeedbackClassId)
 
-  if (activePage === 'login') return <LoginPage onLogin={handleLogin} />
+  // With Supabase Auth, every teacher page needs a signed-in teacher;
+  // Student Feedback stays open to students.
+  // Leaving the demo in Supabase Mode: AppRoot is about to open a fresh app
+  // at Login, so don't show the demo's (mock) login form meanwhile.
+  if (appMode === 'supabase' && session.kind === 'demo' && activePage === 'login') return null
+  const needsTeacherLogin = realAuth && session.kind !== 'teacher' && activePage !== 'student-feedback'
+  if (activePage === 'login' || needsTeacherLogin) {
+    return <LoginPage authKind={realAuth ? 'supabase' : 'mock'} onLogin={handleLogin} onExploreDemo={handleExploreDemo} />
+  }
 
   return (
     <div className="app-shell">
@@ -3329,9 +3518,20 @@ function App() {
           />
         )}
 
-        {activePage === 'class-setup' && (
+        {activePage === 'class-setup' && remoteClassesStatus.state === 'loading' && (
+          <p className="empty-state-support" role="status">
+            Loading your classes…
+          </p>
+        )}
+        {activePage === 'class-setup' && remoteClassesStatus.state === 'error' && (
+          <p className="roster-error" role="alert">
+            {remoteClassesStatus.message}
+          </p>
+        )}
+        {activePage === 'class-setup' && remoteClassesStatus.state !== 'loading' && (
           <ClassSetupPage
             key={currentTeacherEmail}
+            remote={classSetupRemote}
             classes={myClasses}
             setClasses={setLibraryClasses}
             students={students}
@@ -7067,8 +7267,18 @@ function BrandWordmark() {
 // Mock login and account creation — no authentication. Submitting hands the
 // entered values to onLogin, which decides where to go (see
 // getPostLoginPage) and may return an error to show.
-function LoginPage({ onLogin }: { onLogin: (credentials: MockLoginCredentials) => string | null }) {
+function LoginPage({
+  authKind,
+  onLogin,
+  onExploreDemo,
+}: {
+  // 'supabase': the form signs in with Supabase; 'mock': the prototype's mock login.
+  authKind: 'supabase' | 'mock'
+  onLogin: (credentials: MockLoginCredentials) => Promise<string | null>
+  onExploreDemo: () => Promise<string | null>
+}) {
   const [mode, setMode] = useState<MockLoginCredentials['mode']>('login')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [state, setState] = useState<TeacherState | ''>('')
@@ -7080,9 +7290,18 @@ function LoginPage({ onLogin }: { onLogin: (credentials: MockLoginCredentials) =
     <div className="app-shell login-shell">
       <form
         className="login-card"
-        onSubmit={(event) => {
+        onSubmit={async (event) => {
           event.preventDefault()
-          setError(onLogin({ email, password, mode, state, district }))
+          if (isSubmitting) return
+          setIsSubmitting(true)
+          // The buttons always come back, even if signing in fails unexpectedly.
+          try {
+            setError(await onLogin({ email, password, mode, state, district }))
+          } catch (failure) {
+            setError(toApiError(failure, 'Couldn’t log in. Please try again.').message)
+          } finally {
+            setIsSubmitting(false)
+          }
         }}
       >
         <BrandWordmark />
@@ -7153,7 +7372,7 @@ function LoginPage({ onLogin }: { onLogin: (credentials: MockLoginCredentials) =
             {error}
           </p>
         )}
-        <button type="submit" className="primary-button login-submit">
+        <button type="submit" className="primary-button login-submit" disabled={isSubmitting}>
           {isCreate ? 'Create Account' : 'Login'}
         </button>
         <button
@@ -7166,10 +7385,35 @@ function LoginPage({ onLogin }: { onLogin: (credentials: MockLoginCredentials) =
         >
           {isCreate ? 'Already have an account? Log in' : 'New to PARTNERS? Create an account'}
         </button>
-        <p className="login-note">
-          Prototype only — no real authentication. {DEMO_TEACHER_EMAIL} (or a blank email) signs in as a returning teacher;
-          any other email is a first-time login.
-        </p>
+        {/* The demo: mock teacher and sample lessons, never the real backend. */}
+        <div className="login-demo">
+          <p className="login-divider">
+            <span>or</span>
+          </p>
+          <button
+            type="button"
+            className="secondary-button login-demo-button"
+            disabled={isSubmitting}
+            onClick={async () => {
+              setIsSubmitting(true)
+              try {
+                setError(await onExploreDemo())
+              } catch (failure) {
+                setError(toApiError(failure, 'Couldn’t open the demo. Please try again.').message)
+              } finally {
+                setIsSubmitting(false)
+              }
+            }}
+          >
+            Explore Demo
+          </button>
+        </div>
+        {authKind === 'mock' && (
+          <p className="login-note">
+            Prototype only — no real authentication. {DEMO_TEACHER_EMAIL} (or a blank email) signs in as a returning teacher; any other email is a
+            first-time login.
+          </p>
+        )}
       </form>
     </div>
   )
@@ -7499,6 +7743,84 @@ function withEnrolledStudents(classroom: LibraryClass, studentKeys: readonly str
     studentCodes,
     nextStudentNumber,
     studentIdPrefix: nextStudentNumber > 1 ? prefix : null,
+  }
+}
+
+// A class from Supabase in the app's class shape. Student IDs come from the
+// database (students.student_pseudonym); the next new one continues after
+// the highest number already used with the class's prefix. The teacher's
+// name comes from their profile (classes have no teacher column), and the
+// banner colour isn't stored, so it's picked by position as for new classes.
+// Shown for Class Setup writes by a Supabase teacher when the `classes`
+// integration is off (nothing would be saved).
+const classSetupNotConnected =
+  'Class Setup isn’t connected to Supabase in this configuration, so nothing would be saved. Add “classes” to VITE_SUPABASE_INTEGRATIONS (auth,classes) and restart the app.'
+
+// A stored Student ID as prefix and number ("SB-007" → SB, 7), or null.
+function parseClassStudentId(studentId: string): { prefix: string; number: number } | null {
+  const match = /^(\p{L}{2})-(\d+)$/u.exec(studentId.trim())
+  return match ? { prefix: match[1].toUpperCase(), number: Number(match[2]) } : null
+}
+
+// The roster part of a class from its stored enrollments: who's in it,
+// their Student IDs, the class's ID prefix, and the next number to use.
+function rosterFieldsFor(roster: readonly RosterStudent[]): Pick<LibraryClass, 'studentIds' | 'studentCodes' | 'nextStudentNumber' | 'studentIdPrefix'> {
+  const parsed = roster.flatMap((student) => parseClassStudentId(student.studentPseudonym) ?? [])
+  return {
+    studentIds: roster.map((student) => student.studentId),
+    studentCodes: Object.fromEntries(roster.map((student) => [student.studentId, student.studentPseudonym])),
+    nextStudentNumber: parsed.reduce((highest, item) => Math.max(highest, item.number), 0) + 1,
+    studentIdPrefix: parsed[0]?.prefix ?? null,
+  }
+}
+
+// New Student IDs for a class, generated by the app (sequential, e.g.
+// SB-001): the class's existing prefix — or, for its first students, the
+// teacher's and class's initials — then numbers after the highest one used
+// with that prefix, skipping any ID already in the class. `roster` is read
+// from the database just before, so students added elsewhere are counted.
+function planStudentIds(roster: readonly RosterStudent[], fallbackPrefix: string, count: number): string[] {
+  const taken = new Set(roster.map((student) => student.studentPseudonym.trim().toUpperCase()))
+  const parsed = roster.flatMap((student) => parseClassStudentId(student.studentPseudonym) ?? [])
+  const prefix = parsed[0]?.prefix ?? fallbackPrefix
+  let next = parsed.filter((item) => item.prefix === prefix).reduce((highest, item) => Math.max(highest, item.number), 0) + 1
+  const ids: string[] = []
+  while (ids.length < count) {
+    const id = formatClassStudentId(prefix, next++)
+    if (taken.has(id)) continue
+    taken.add(id)
+    ids.push(id)
+  }
+  return ids
+}
+
+// Student IDs used by more than one student in the class (e.g. two people
+// adding students at the same moment).
+function duplicateStudentIds(roster: readonly RosterStudent[]): string[] {
+  const seen = new Map<string, number>()
+  for (const student of roster) {
+    const id = student.studentPseudonym.trim().toUpperCase()
+    seen.set(id, (seen.get(id) ?? 0) + 1)
+  }
+  return [...seen].filter(([, count]) => count > 1).map(([id]) => id)
+}
+
+function libraryClassFromRecord(
+  record: ClassRecord,
+  roster: readonly RosterStudent[],
+  teacher: { name: string; email: string },
+  index: number,
+): LibraryClass {
+  return {
+    id: record.classId,
+    name: record.className,
+    gradeLevel: record.gradeLevel ?? '',
+    period: record.period ?? '',
+    teacherName: teacher.name,
+    ownerEmail: teacher.email,
+    bannerColor: classBannerColors[index % classBannerColors.length],
+    ...rosterFieldsFor(roster),
+    lessonIds: [],
   }
 }
 
@@ -9163,6 +9485,7 @@ function rosterResultCsv(result: RosterUploadResult): string[][] {
 // privacy notice and upload, then a collapsible Check & Edit Student
 // Roster, which starts collapsed).
 function ClassSetupPage({
+  remote = null,
   classes,
   setClasses,
   students,
@@ -9187,7 +9510,17 @@ function ClassSetupPage({
   onSelectClass: (classId: string) => void
   onContinueToPlanning: (classroom: LibraryClass) => void
   onViewInLibrary: (classId: string) => void
+  // Supabase Mode: creating a class saves it; the messages explain the
+  // writes that aren't connected yet. null: the mock data.
+  remote?: {
+    createClass: (values: ClassFormValues) => Promise<LibraryClass>
+    registerStudents: (classroom: LibraryClass, names: readonly string[]) => Promise<RegisteredStudents>
+    editBlocked: string
+    rosterBlocked: string
+  } | null
 }) {
+  const [classSaveError, setClassSaveError] = useState<string | null>(null)
+  const [isSavingClass, setIsSavingClass] = useState(false)
   const [editClassId, setEditClassId] = useState<string | null>(classes[0]?.id ?? null)
   // Class Management shows one form at a time: the teacher picks Add Class
   // or Edit Existing Class (null: neither yet). Opening from the Library's
@@ -9214,7 +9547,30 @@ function ClassSetupPage({
   const createdClass = findClass(createdClassId)
   const updatedClass = findClass(updatedClassId)
 
-  const createClass = (values: ClassFormValues) => {
+  const finishCreate = (id: string) => {
+    // The new class becomes the selected one, ready for its roster.
+    onSelectClass(id)
+    setCreatedClassId(id)
+    setAddFormKey((key) => key + 1)
+    setIsClassFormDirty(false)
+  }
+
+  const createClass = async (values: ClassFormValues) => {
+    setClassSaveError(null)
+    if (remote) {
+      if (isSavingClass) return
+      setIsSavingClass(true)
+      try {
+        const created = await remote.createClass(values)
+        setClasses((prev) => [...prev, created])
+        finishCreate(created.id)
+      } catch (error) {
+        setClassSaveError(toApiError(error, 'Couldn’t create the class.').message)
+      } finally {
+        setIsSavingClass(false)
+      }
+      return
+    }
     const id = `class-${Date.now()}`
     setClasses((prev) => [
       ...prev,
@@ -9230,15 +9586,15 @@ function ClassSetupPage({
         lessonIds: [],
       },
     ])
-    // The new class becomes the selected one, ready for its roster.
-    onSelectClass(id)
-    setCreatedClassId(id)
-    setAddFormKey((key) => key + 1)
-    setIsClassFormDirty(false)
+    finishCreate(id)
   }
 
   const updateClass = (values: ClassFormValues) => {
     if (!editClass) return
+    if (remote) {
+      setClassSaveError(remote.editBlocked)
+      return
+    }
     setClasses((prev) => prev.map((classroom) => (classroom.id === editClass.id ? { ...classroom, ...values } : classroom)))
     setUpdatedClassId(editClass.id)
     setIsClassFormDirty(false)
@@ -9357,6 +9713,11 @@ function ClassSetupPage({
             onSave={createClass}
             onDirtyChange={setIsClassFormDirty}
           />
+          {classSaveError && (
+            <p className="roster-error" role="alert">
+              {classSaveError}
+            </p>
+          )}
           {createdClass && (
             <div className="class-mgmt-notice" role="status">
               <span>
@@ -9418,6 +9779,11 @@ function ClassSetupPage({
                 }}
                 onDirtyChange={setIsClassFormDirty}
               />
+              {classSaveError && (
+                <p className="roster-error" role="alert">
+                  {classSaveError}
+                </p>
+              )}
               {updatedClass && (
                 <div className="class-mgmt-notice" role="status">
                   <span>
@@ -9468,6 +9834,8 @@ function ClassSetupPage({
         {rosterClass ? (
           <RosterUpload
             key={rosterClass.id}
+            registerStudents={remote?.registerStudents ?? null}
+            writeBlocked={remote?.rosterBlocked ?? null}
             classroom={rosterClass}
             classes={classes}
             students={students}
@@ -9489,6 +9857,8 @@ function ClassSetupPage({
           {rosterClass ? (
             <RosterEditor
               key={rosterClass.id}
+              registerStudents={remote?.registerStudents ?? null}
+              writeBlocked={remote?.rosterBlocked ?? null}
               classroom={rosterClass}
               classes={classes}
               students={students}
@@ -9749,7 +10119,22 @@ function downloadCsv(fileName: string, rows: string[][]) {
   URL.revokeObjectURL(url)
 }
 
+// The result of adding students in Supabase Mode: the class and students
+// as stored, each added student's key and Student ID, and a warning if the
+// class ended up with a duplicate Student ID.
+type RegisteredStudents = {
+  classroom: LibraryClass
+  students: Student[]
+  added: { key: string | null; name: string; studentId: string }[]
+  warning: string | null
+}
+
 type RosterSectionProps = {
+  // Supabase Mode: adds students through the database (see
+  // classSetupRemote); renaming and removing aren't connected yet, so those
+  // show `writeBlocked` instead of saving.
+  registerStudents?: ((classroom: LibraryClass, names: readonly string[]) => Promise<RegisteredStudents>) | null
+  writeBlocked?: string | null
   classroom: LibraryClass
   classes: readonly LibraryClass[]
   students: readonly Student[]
@@ -9769,6 +10154,17 @@ function addStudentsToClass(
   if (created.length > 0) setStudents((prev) => [...prev, ...created])
   setClasses((prev) => prev.map((other) => (other.id === classroom.id ? withEnrolledStudents(other, studentKeys) : other)))
   return withEnrolledStudents(classroom, studentKeys)
+}
+
+// Puts a Supabase roster update into app state: the class as stored, and its
+// students (replacing their earlier copies).
+function applyRegisteredStudents(
+  { setClasses, setStudents }: Pick<RosterSectionProps, 'setClasses' | 'setStudents'>,
+  result: RegisteredStudents,
+) {
+  const ids = new Set(result.students.map((student) => student.id))
+  setStudents((prev) => [...prev.filter((student) => !ids.has(student.id)), ...result.students])
+  setClasses((prev) => prev.map((other) => (other.id === result.classroom.id ? result.classroom : other)))
 }
 
 function otherClassesFor(classes: readonly LibraryClass[], classroom: LibraryClass, studentId: string) {
@@ -9890,7 +10286,50 @@ function RosterUpload(props: RosterSectionProps) {
     setIgnoredColumns([])
   }
 
+  const [isSaving, setIsSaving] = useState(false)
+
+  // Supabase Mode: everything not already on this class's roster is
+  // registered as a new student with an app-generated Student ID.
+  const confirmReviewRemote = async (register: NonNullable<RosterSectionProps['registerStudents']>) => {
+    if (isSaving) return
+    setIsSaving(true)
+    setUploadError(null)
+    try {
+      const result = await register(classroom, rowsToAdd.map((item) => item.row.name.trim().replace(/\s+/g, ' ')))
+      applyRegisteredStudents(props, result)
+      const addedByRow = new Map(rowsToAdd.map((item, index) => [item.row.key, result.added[index]]))
+      setResult({
+        rows: savable.map((item) => {
+          const added = addedByRow.get(item.row.key)
+          const studentId = added?.studentId ?? (item.resolvedId ? classroom.studentCodes[item.resolvedId] : '') ?? ''
+          return { name: added?.name ?? studentsById[item.resolvedId ?? '']?.name ?? item.row.name, studentId, extra: item.row.extra }
+        }),
+      })
+      const parts = [
+        ...(rowsToAdd.length > 0 ? [`added ${pluralize(rowsToAdd.length, 'student')}`] : []),
+        ...(keptCount > 0 ? [`${pluralize(keptCount, 'student')} already on the roster kept their Student IDs`] : []),
+      ]
+      setNotice(`Roster saved for ${classDisplayName(classroom)}: ${parts.join('; ')}.`)
+      if (result.warning) setUploadError(result.warning)
+      setReviewRows((prev) => prev.filter((row) => reviewed.some((item) => item.row.key === row.key && item.problem)))
+      setUploadName(null)
+      setIgnoredColumns([])
+    } catch (error) {
+      setUploadError(toApiError(error, 'Couldn’t save the roster.').message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const confirmReview = () => {
+    if (props.registerStudents) {
+      void confirmReviewRemote(props.registerStudents)
+      return
+    }
+    if (props.writeBlocked) {
+      setUploadError(props.writeBlocked)
+      return
+    }
     let keyNumber = nextStudentKeyNumber(students)
     const created: Student[] = []
     const keyByRow = new Map<string, string>()
@@ -9951,7 +10390,7 @@ function RosterUpload(props: RosterSectionProps) {
       </div>
       <p className="library-class-note">
         Each student receives a unique Student ID (e.g., <span className="roster-id">{formatClassStudentId(idPrefix, 1)}</span>).
-        Students use this ID to sign in to Student Feedback assignments. Existing IDs remain unchanged when the roster is updated.
+        Students sign in to Student Feedback assignments with their first name and this ID. Existing IDs remain unchanged when the roster is updated.
       </p>
       {uploadError && (
         <p className="roster-error" role="alert">
@@ -10106,7 +10545,7 @@ function RosterUpload(props: RosterSectionProps) {
               >
                 Download Roster with Student IDs
               </button>
-              <p className="roster-download-note">Share each Student ID privately with the corresponding student.</p>
+              <p className="roster-download-note">Share each Student ID privately with the corresponding student. Students sign in with their first name and Student ID.</p>
             </div>
           </div>
           <div className="class-mgmt-table-wrap">
@@ -10146,12 +10585,35 @@ function RosterEditor(props: RosterSectionProps) {
   const roster = classroom.studentIds.map((id) => studentsById[id]).filter(Boolean)
   const cleanName = (name: string) => name.trim().replace(/\s+/g, ' ')
 
-  const addStudent = () => {
+  const [isAdding, setIsAdding] = useState(false)
+  const addStudent = async () => {
     const name = cleanName(newName)
     setNotice(null)
     const problem = rosterNameProblem(name)
     if (problem) {
       setAddError(problem)
+      return
+    }
+    // Supabase Mode: saved through the database with an app-generated ID.
+    if (props.registerStudents) {
+      if (isAdding) return
+      setIsAdding(true)
+      setAddError(null)
+      try {
+        const sameName = roster.some((other) => normalizeStudentName(other.name) === normalizeStudentName(name))
+        const result = await props.registerStudents(classroom, [name])
+        applyRegisteredStudents(props, result)
+        setNotice(
+          `Added ${name} as ${result.added[0]?.studentId}.` +
+            (sameName ? ' Another student in this class has the same name — consider adding an initial.' : ''),
+        )
+        if (result.warning) setAddError(result.warning)
+        setNewName('')
+      } catch (error) {
+        setAddError(toApiError(error, 'Couldn’t add the student.').message)
+      } finally {
+        setIsAdding(false)
+      }
       return
     }
     const student = createStudent(nextStudentKeyNumber(students), name)
@@ -10168,6 +10630,10 @@ function RosterEditor(props: RosterSectionProps) {
   const editProblem = editing ? rosterNameProblem(cleanName(editing.name)) : null
   const saveName = () => {
     if (!editing) return
+    if (props.writeBlocked) {
+      setAddError(props.writeBlocked)
+      return
+    }
     const name = cleanName(editing.name)
     if (rosterNameProblem(name)) return
     setStudents((prev) => prev.map((student) => (student.id === editing.id ? { ...student, name } : student)))
@@ -10175,6 +10641,10 @@ function RosterEditor(props: RosterSectionProps) {
   }
 
   const removeFromClass = (student: Student) => {
+    if (props.writeBlocked) {
+      setAddError(props.writeBlocked)
+      return
+    }
     const studentId = classroom.studentCodes[student.id]
     setClasses((prev) =>
       prev.map((other) =>
@@ -10328,7 +10798,7 @@ function RosterEditor(props: RosterSectionProps) {
           >
             Download Roster with Student IDs
           </button>
-          <p className="roster-download-note">Share each Student ID privately with the corresponding student.</p>
+          <p className="roster-download-note">Share each Student ID privately with the corresponding student. Students sign in with their first name and Student ID.</p>
         </div>
       )}
     </div>
@@ -14792,4 +15262,159 @@ function FeedbackDashboardPage({
   )
 }
 
-export default App
+// ---------------------------------------------------------------------------
+// AppRoot — who is using the app
+//
+// Holds the session (nobody, the demo, or a Supabase teacher) and gives each
+// one its own App: a new session means a new App with fresh state, so the
+// demo's mock data and a teacher's real data never share state. In Supabase
+// Mode:
+//   - Explore Demo signs out any Supabase session first, then marks the
+//     session as demo, so nothing in the demo can reach Supabase (see
+//     getSupabase). The choice is kept for this tab across a refresh.
+//   - Going to Login from the demo leaves it.
+// Demo Mode (VITE_APP_MODE=demo) only ever has mock data, so it keeps one App
+// and the existing mock login.
+// ---------------------------------------------------------------------------
+
+const supabaseBuild = appMode === 'supabase'
+
+// Supabase requests have no timeout of their own; a sign-in that never gets
+// an answer would otherwise leave the Login form waiting (and its buttons
+// disabled) forever. A late answer still counts: a sign-in that completes
+// after the timeout is picked up by onTeacherSessionChange.
+const authTimeoutMs = 20_000
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new ApiError(message, { code: 'timeout' })), ms)
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer)
+        resolve(value)
+      },
+      (error: unknown) => {
+        window.clearTimeout(timer)
+        reject(error)
+      },
+    )
+  })
+}
+
+function AppRoot() {
+  const [session, setSession] = useState<AppSession>(() => {
+    const demo = readStoredDemoSession()
+    setSessionDataMode(demo ? 'demo' : 'none')
+    return demo ? { kind: 'demo' } : { kind: 'none' }
+  })
+  // A teacher's saved Supabase session is checked once on load.
+  const [isSessionChecked, setIsSessionChecked] = useState(() => session.kind === 'demo' || !usesSupabase('auth'))
+  const [entryPage, setEntryPage] = useState<PageId | null>(null)
+  const sessionRef = useRef(session)
+  useEffect(() => {
+    sessionRef.current = session
+  }, [session])
+
+  const isDemo = session.kind === 'demo'
+  useEffect(() => {
+    if (isDemo || !usesSupabase('auth')) return
+    let active = true
+    const applyTeacher = (teacher: TeacherSession | null) => {
+      authDebug('AppRoot: session from Supabase', { signedIn: teacher !== null, user: shortId(teacher?.userId), current: sessionRef.current.kind })
+      if (!active || sessionRef.current.kind === 'demo') return
+      setSessionDataMode(teacher ? 'real' : 'none')
+      // Signed in while on Login (e.g. a slow sign-in that finished after
+      // the form gave up): continue where a sign-in goes.
+      const onLoginPage = /^#?(login)?$/.test(window.location.hash.split('?')[0])
+      if (teacher && sessionRef.current.kind === 'none' && onLoginPage) setEntryPage(getPostLoginPage())
+      setSession((current) => {
+        if (current.kind === 'demo') return current
+        if (!teacher) return current.kind === 'none' ? current : { kind: 'none' }
+        return current.kind === 'teacher' && current.teacher.userId === teacher.userId ? current : { kind: 'teacher', teacher }
+      })
+    }
+    getTeacherSession()
+      .then(applyTeacher)
+      .catch(() => applyTeacher(null))
+      .finally(() => {
+        if (active) setIsSessionChecked(true)
+      })
+    // Follows sign-in / sign-out in other tabs. Missing or unsafe
+    // configuration throws here; the login form then shows the reason.
+    let unsubscribe = () => {}
+    try {
+      unsubscribe = onTeacherSessionChange(applyTeacher)
+    } catch {
+      // See above.
+    }
+    return () => {
+      active = false
+      unsubscribe()
+    }
+  }, [isDemo])
+
+  const signIn = async (email: string, password: string): Promise<string | null> => {
+    try {
+      authDebug('signIn: calling signInWithPassword')
+      const teacher = await withTimeout(signInTeacher(email, password), authTimeoutMs, 'Signing in is taking longer than expected. Check your connection and try again.')
+      authDebug('signIn: signInWithPassword resolved', { user: shortId(teacher.userId) })
+      setSessionDataMode('real')
+      setEntryPage(getPostLoginPage())
+      setSession({ kind: 'teacher', teacher })
+      return null
+    } catch (error) {
+      authDebug('signIn: failed', { message: toApiError(error).message })
+      return toApiError(error, 'Couldn’t log in. Please try again.').message
+    }
+  }
+
+  const exploreDemo = async (): Promise<string | null> => {
+    if (usesSupabase('auth')) {
+      // No real session may stay active underneath the demo.
+      try {
+        await withTimeout(signOutTeacher(), authTimeoutMs, 'Signing out timed out.')
+      } catch {
+        // Checked below.
+      }
+      try {
+        if (await withTimeout(getTeacherSession(), authTimeoutMs, 'Checking your session timed out.')) {
+          return 'Couldn’t sign out of your account. Please try again before exploring the demo.'
+        }
+      } catch (error) {
+        // Can't confirm the sign-out, so don't start the demo over a session.
+        if (error instanceof ApiError && error.code === 'timeout') {
+          return 'Couldn’t confirm you’re signed out. Check your connection and try again.'
+        }
+        // Otherwise there's no usable client, so no session either.
+      }
+    }
+    storeDemoSession(true)
+    setSessionDataMode('demo')
+    setEntryPage(getPostLoginPage())
+    setSession({ kind: 'demo' })
+    return null
+  }
+
+  const exitDemo = useCallback(() => {
+    storeDemoSession(false)
+    setSessionDataMode('none')
+    setEntryPage('login')
+    setSession({ kind: 'none' })
+  }, [])
+
+  if (!isSessionChecked) {
+    return (
+      <div className="app-shell login-shell">
+        <p className="empty-state-support" role="status">
+          Checking your session…
+        </p>
+      </div>
+    )
+  }
+
+  const appKey = supabaseBuild ? (session.kind === 'teacher' ? `teacher:${session.teacher.userId}` : session.kind) : 'demo-build'
+  authDebug('AppRoot render', { session: session.kind, appKey: session.kind === 'teacher' ? `teacher:${shortId(session.teacher.userId)}` : appKey, entryPage })
+  return <App key={appKey} session={session} entryPage={entryPage} onSignIn={signIn} onExploreDemo={exploreDemo} onExitDemo={exitDemo} />
+}
+
+export default AppRoot
