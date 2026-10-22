@@ -3619,13 +3619,16 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
   const handleUploadLesson = (file: File, details: PlanningLessonDetails) => {
     if (isGeneratingLesson || isSavingLesson) return
     setLessonSaveStatus(null)
-    // Uploaded files aren't read yet, so the prototype shows its demo lesson.
+    // Uploaded files aren't read yet. A signed-in teacher's upload is never
+    // shown or saved as the demo lesson; the demo still shows it.
     if (lessonPersistence !== 'mock') {
-      showLessonDocument(demoLessonDocument, null)
-      void persistPlannedLesson(details, demoLessonDocument, 'uploaded', file.name)
-    } else {
-      showLessonDocument(demoLessonDocument, saveLessonForPlanningTarget(details, demoLessonDocument, file.name))
+      setLessonSaveStatus({
+        kind: 'info',
+        message: `“${file.name}” wasn’t uploaded: reading uploaded lesson files isn’t supported yet, so nothing was saved. Use Fill in Form or Brainstorm with AI to plan this lesson.`,
+      })
+      return
     }
+    showLessonDocument(demoLessonDocument, saveLessonForPlanningTarget(details, demoLessonDocument, file.name))
     setLessonSource('uploaded')
     setIsGeneratingLesson(true)
     generateLessonTimeoutRef.current = window.setTimeout(() => {
