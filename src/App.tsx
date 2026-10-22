@@ -22,6 +22,7 @@ import {
   type RosterStudent,
 } from './api/classes'
 import { ApiError, toApiError } from './api/core'
+import { listLessonsForClasses, saveLessonVersion, saveNewLesson, type LessonFields, type StoredLesson, type VersionCreatedBy } from './api/lessonPlanning'
 import { authDebug, shortId } from './lib/authDebug'
 import { appMode, readStoredDemoSession, setSessionDataMode, storeDemoSession, usesSupabase } from './lib/dataSource'
 import './App.css'
@@ -2501,6 +2502,7 @@ function RevisionChatPanel({
   label,
   state,
   isThinking,
+  isSaving,
   draft,
   onDraftChange,
   onSend,
@@ -2510,6 +2512,8 @@ function RevisionChatPanel({
   label: string
   state: SectionRevisionState
   isThinking: boolean
+  // A lesson version is being saved; Apply to Lesson waits for it.
+  isSaving: boolean
   draft: string
   onDraftChange: (value: string) => void
   onSend: () => void
@@ -2569,7 +2573,7 @@ function RevisionChatPanel({
               type="button"
               className="accept-button"
               onClick={() => onApply(proposalDraft ?? undefined)}
-              disabled={isThinking || (isEditingProposal && !proposalDraft.trim())}
+              disabled={isThinking || isSaving || (isEditingProposal && !proposalDraft.trim())}
             >
               Apply to Lesson
             </button>
@@ -2696,6 +2700,19 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
   const [lessonSource, setLessonSource] = useState<LessonSource>('ai-generated')
   const [isEditingLesson, setIsEditingLesson] = useState(false)
   const [manualEdits, setManualEdits] = useState<Record<string, string>>({})
+  // Supabase Mode: a new lesson version is saved only when the teacher
+  // confirms a change — Apply to Lesson ('ai_teacher') or saving their
+  // manual edits ('teacher'). Each confirmation is one request, saved once
+  // the change it confirms has rendered.
+  // A request is saving until its save finishes (saves run in order, so the
+  // newest finished request means none is pending).
+  const [versionRequest, setVersionRequest] = useState<{ id: number; createdBy: VersionCreatedBy } | null>(null)
+  const [finishedVersionRequestId, setFinishedVersionRequestId] = useState(0)
+  const isSavingVersion = versionRequest !== null && versionRequest.id !== finishedVersionRequestId
+  const requestLessonVersion = (createdBy: VersionCreatedBy) => {
+    if (lessonPersistence !== 'supabase' || !workspaceLessonId || !remoteLessonIdsRef.current.has(workspaceLessonId)) return
+    setVersionRequest((prev) => ({ id: (prev?.id ?? 0) + 1, createdBy }))
+  }
   const [draftBySection, setDraftBySection] = useState<Record<string, string>>({})
   const [editBaseline, setEditBaseline] = useState<Record<string, string>>({})
   // An applied AI revision is the section's newest wording, so it replaces
@@ -2706,6 +2723,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
   // further changes doesn't record the AI text as a manual edit. From here
   // on it's ordinary lesson content the teacher can edit like any other.
   const revisionEditor = useRevisionWorkflow((label, text) => {
+    requestLessonVersion('ai_teacher')
     setManualEdits((prev) => {
       if (!(label in prev)) return prev
       const next = { ...prev }
@@ -2874,7 +2892,31 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
       const rosters = await listRosters(classRecords.map((record) => record.classId))
       if (!active) return
       const teacher = { name: profile?.userName ?? '', email }
-      const loaded = classRecords.map((record, index) => libraryClassFromRecord(record, rosters[record.classId] ?? [], teacher, index))
+      const loadedClasses = classRecords.map((record, index) => libraryClassFromRecord(record, rosters[record.classId] ?? [], teacher, index))
+      // The classes' saved lessons (Lesson Planning integration).
+      let loaded = loadedClasses
+      if (usesSupabase('lessonPlanning')) {
+        try {
+          const stored = await listLessonsForClasses(classRecords.map((record) => record.classId))
+          if (!active) return
+          const framework = (currentAccount.state ?? 'NGSS') as StandardsFrameworkId
+          const lessons = stored.map((item, index) => libraryLessonFromStored(item, index, email, framework))
+          remoteLessonIdsRef.current = new Set(stored.map((item) => item.lessonId))
+          for (const item of stored) {
+            const content = readSavedLessonContent(item.currentVersion?.content)
+            if (content) lessonFormsRef.current.set(item.lessonId, content.form)
+          }
+          loaded = loadedClasses.map((classroom) => ({
+            ...classroom,
+            lessonIds: stored.filter((item) => item.classId === classroom.id).map((item) => item.lessonId),
+          }))
+          setLibraryLessons((prev) => [...prev.filter((lesson) => lesson.ownerEmail !== email), ...lessons])
+          authDebug('lessons: loaded', { lessons: stored.length })
+        } catch (error) {
+          if (!active) return
+          setRemoteLessonsError(`Couldn’t load your lessons: ${toApiError(error).message}`)
+        }
+      }
       const loadedStudents = new Map<string, Student>()
       for (const roster of Object.values(rosters)) {
         for (const student of roster) loadedStudents.set(student.studentId, { id: student.studentId, name: student.studentName })
@@ -2893,6 +2935,21 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
     // Loaded once per teacher session (the session never changes within an App).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Lesson Planning in Supabase Mode (`lessonPlanning` integration, a
+  // signed-in teacher): lessons are saved through partners-save-lesson /
+  // update_lesson_version and loaded with the classes. A teacher with the
+  // integration off gets a clear "not saved" message, never a mock save.
+  const lessonPersistence: 'mock' | 'supabase' | 'off' =
+    session.kind !== 'teacher' ? 'mock' : usesSupabase('lessonPlanning') ? 'supabase' : 'off'
+  const [lessonSaveStatus, setLessonSaveStatus] = useState<{ kind: 'saving' | 'saved' | 'error' | 'info'; message: string; retry?: VersionCreatedBy } | null>(null)
+  const [remoteLessonsError, setRemoteLessonsError] = useState<string | null>(null)
+  const [isSavingLesson, setIsSavingLesson] = useState(false)
+  // Lessons that live in Supabase, the form each was made from, and what was
+  // last saved for the lesson in the workspace (so only real changes save).
+  const remoteLessonIdsRef = useRef(new Set<string>())
+  const lessonFormsRef = useRef(new Map<string, PlanningLessonDetails>())
+  const lastSavedLessonRef = useRef<{ lessonId: string; snapshot: string } | null>(null)
 
   // Class Setup's writes in Supabase Mode: creating a class saves it;
   // editing a class and changing a roster aren't connected yet.
@@ -3097,6 +3154,76 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
     navigateTo('library')
   }
 
+  // Supabase Mode: saves a generated or uploaded lesson for the class
+  // Lesson Planning was opened for — a new lesson, or a new version when
+  // re-generating one that's already saved. The lesson joins the Library
+  // only once Supabase confirms it; failures are shown, never hidden.
+  const persistPlannedLesson = async (
+    details: PlanningLessonDetails,
+    document: LessonDocument,
+    lessonSourceKind: 'generated' | 'uploaded',
+    uploadedFileName?: string,
+  ) => {
+    if (lessonPersistence === 'off') {
+      setLessonSaveStatus({ kind: 'error', message: 'This lesson isn’t saved: Lesson Planning isn’t connected to Supabase in this configuration. Add “lessonPlanning” to VITE_SUPABASE_INTEGRATIONS.' })
+      return
+    }
+    if (!planningTarget || !planningTargetClass) {
+      setLessonSaveStatus({ kind: 'info', message: 'This lesson isn’t saved because it isn’t linked to a class. To save it, open Lesson Planning from a class (Class Setup → Continue to Lesson Planning, or Library → Add Lesson).' })
+      return
+    }
+    if (!usesSupabase('classes')) {
+      setLessonSaveStatus({ kind: 'error', message: 'This lesson isn’t saved: saving lessons needs the classes integration too (VITE_SUPABASE_INTEGRATIONS=auth,classes,lessonPlanning).' })
+      return
+    }
+    const title = lessonTitleFrom(details, uploadedFileName)
+    const fields = lessonFieldsFrom(details, title, planningTargetClass.gradeLevel)
+    if (!fields.grade_level) {
+      setLessonSaveStatus({ kind: 'error', message: 'This lesson isn’t saved: choose a grade level first.' })
+      return
+    }
+    const { classId, savedLessonId } = planningTarget
+    const existingId = savedLessonId && remoteLessonIdsRef.current.has(savedLessonId) ? savedLessonId : null
+    const studentProducts = identifyFeedbackActivities(existingId)
+    const content = lessonContentFrom(effectiveLessonDocument(document, {}, {}), details, studentProducts)
+    const framework = (currentAccount.state ?? 'NGSS') as StandardsFrameworkId
+    setIsSavingLesson(true)
+    setLessonSaveStatus({ kind: 'saving', message: 'Saving to your Library…' })
+    try {
+      const saved = existingId
+        ? await saveLessonVersion({ lessonId: existingId, content, createdBy: lessonSourceKind === 'uploaded' ? 'teacher' : 'ai', fields })
+        : await saveNewLesson({ classId, lessonSource: lessonSourceKind, fields, content })
+      const lessonId = saved.lessonId
+      remoteLessonIdsRef.current.add(lessonId)
+      lessonFormsRef.current.set(lessonId, details)
+      const savedDocument = { ...content.document, id: lessonId }
+      lastSavedLessonRef.current = { lessonId, snapshot: JSON.stringify(savedDocument) }
+      const record = (bannerColor: string): LibraryLesson => ({
+        ...createLibraryLessonFromPlanning(lessonId, details, bannerColor, currentTeacherEmail, uploadedFileName, savedDocument),
+        title,
+        lessonPlan: { hasDemoContent: true, document: savedDocument, feedbackActivities: studentProducts, formSeed: formSeedFromDetails(details, framework) },
+      })
+      if (existingId) {
+        setLibraryLessons((prev) => prev.map((lesson) => (lesson.id === lessonId ? record(lesson.bannerColor) : lesson)))
+      } else {
+        setLibraryLessons((prev) => [...prev, record(lessonBannerColors[prev.filter((lesson) => lesson.ownerEmail === currentTeacherEmail).length % lessonBannerColors.length])])
+        setLibraryClasses((prev) =>
+          prev.map((classroom) => (classroom.id === classId ? { ...classroom, lessonIds: [...classroom.lessonIds, lessonId] } : classroom)),
+        )
+        setPlanningTarget({ classId, savedLessonId: lessonId })
+      }
+      setWorkspaceLessonId(lessonId)
+      setLessonSaveStatus({
+        kind: 'saved',
+        message: existingId ? `Saved as version ${saved.versionNumber}.` : `Saved to your Library for ${classDisplayName(planningTargetClass)}.`,
+      })
+    } catch (error) {
+      setLessonSaveStatus({ kind: 'error', message: `This lesson wasn’t saved: ${toApiError(error, 'Couldn’t save the lesson.').message}` })
+    } finally {
+      setIsSavingLesson(false)
+    }
+  }
+
   const saveLessonForPlanningTarget = (
     details: PlanningLessonDetails,
     document: LessonDocument,
@@ -3243,9 +3370,15 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
     const document = lesson.lessonPlan.document ?? demoLessonDocument
     showLessonDocument(document, lesson.id, lesson.lessonPlan.feedbackActivities ?? identifyFeedbackActivities(lesson.id))
     setLessonGenerated(lesson.lessonPlan.hasDemoContent)
-    setPlanningFormSeed(demoLessonFormSeeds[lesson.id] ?? null)
+    setPlanningFormSeed(demoLessonFormSeeds[lesson.id] ?? lesson.lessonPlan.formSeed ?? null)
     setPlanningSessionKey((key) => key + 1)
-    setPlanningTarget(null)
+    // A lesson saved in Supabase stays linked to its class, so re-generating
+    // saves a new version of it.
+    const isRemote = remoteLessonIdsRef.current.has(lesson.id)
+    setPlanningTarget(isRemote && classroom ? { classId: classroom.id, savedLessonId: lesson.id } : null)
+    setLessonSaveStatus(
+      isRemote && !lesson.lessonPlan.document ? { kind: 'error', message: 'This lesson’s saved content couldn’t be read, so it can’t be shown.' } : null,
+    )
     setLibraryContext({ lesson, className: classroom ? classDisplayName(classroom) : undefined, page: 'lesson-generator', source })
     setActivePage('lesson-generator')
   }
@@ -3288,7 +3421,8 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
   }
 
   const handleGenerateLessonPlan = (details: PlanningLessonDetails) => {
-    if (isGeneratingLesson) return
+    if (isGeneratingLesson || isSavingLesson) return
+    setLessonSaveStatus(null)
     // Generate Lesson is on the form and in Brainstorm with AI.
     const method: PlanningMethod = planningTab === 'brainstorm' ? 'brainstorm' : 'create'
     // A demo class's form, still as saved: show its saved mock lesson (with
@@ -3304,6 +3438,13 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
     if (pendingDemoLesson && unchanged) {
       const saved = pendingDemoLesson.lessonPlan.document ?? demoLessonDocument
       showLessonDocument(saved, pendingDemoLesson.id, pendingDemoLesson.lessonPlan.feedbackActivities ?? identifyFeedbackActivities(pendingDemoLesson.id))
+    } else if (lessonPersistence !== 'mock') {
+      // Supabase Mode: shown now, saved (or the reason it isn't) right after.
+      const document = generateLessonDocument(details)
+      const keepId = planningTarget?.savedLessonId && remoteLessonIdsRef.current.has(planningTarget.savedLessonId) ? planningTarget.savedLessonId : null
+      showLessonDocument(document, keepId)
+      if (keepId) lastSavedLessonRef.current = { lessonId: keepId, snapshot: JSON.stringify(effectiveLessonDocument({ ...document, id: keepId }, {}, {})) }
+      void persistPlannedLesson(details, document, 'generated')
     } else {
       const document = generateLessonDocument(details)
       showLessonDocument(document, saveLessonForPlanningTarget(details, document))
@@ -3322,9 +3463,15 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
   // onUploadLesson on LessonPlanningPanel): it saves the file as that class's
   // lesson and opens it in the workspace the same way Generate does.
   const handleUploadLesson = (file: File, details: PlanningLessonDetails) => {
-    if (isGeneratingLesson) return
+    if (isGeneratingLesson || isSavingLesson) return
+    setLessonSaveStatus(null)
     // Uploaded files aren't read yet, so the prototype shows its demo lesson.
-    showLessonDocument(demoLessonDocument, saveLessonForPlanningTarget(details, demoLessonDocument, file.name))
+    if (lessonPersistence !== 'mock') {
+      showLessonDocument(demoLessonDocument, null)
+      void persistPlannedLesson(details, demoLessonDocument, 'uploaded', file.name)
+    } else {
+      showLessonDocument(demoLessonDocument, saveLessonForPlanningTarget(details, demoLessonDocument, file.name))
+    }
     setLessonSource('uploaded')
     setIsGeneratingLesson(true)
     generateLessonTimeoutRef.current = window.setTimeout(() => {
@@ -3334,7 +3481,71 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
     }, 900)
   }
 
+  // Supabase Mode: a confirmed change (Apply to Lesson, or saving manual
+  // edits) becomes exactly one new version of the lesson — content and
+  // lesson fields together (update_lesson_version). Nothing else saves a
+  // version. Saves run one at a time, in the order they were confirmed.
+  const revisedLesson = revisionEditor.revisedLesson
+  const handledVersionRequestRef = useRef(0)
+  const versionSaveQueueRef = useRef<Promise<void>>(Promise.resolve())
+  useEffect(() => {
+    if (!versionRequest || versionRequest.id === handledVersionRequestRef.current) return
+    handledVersionRequestRef.current = versionRequest.id
+    const { id: requestId, createdBy } = versionRequest
+    // requestLessonVersion only asks for a remote lesson open in the workspace.
+    const lessonId = workspaceLessonId!
+    const effective = effectiveLessonDocument({ ...lessonDocument, id: lessonId }, manualEdits, revisedLesson)
+    const snapshot = JSON.stringify(effective)
+    const form = lessonFormsRef.current.get(lessonId)
+    const lesson = libraryLessons.find((item) => item.id === lessonId)
+    const classroom = libraryClasses.find((item) => item.lessonIds.includes(lessonId))
+    const activities = feedbackActivities
+    versionSaveQueueRef.current = versionSaveQueueRef.current.then(async () => {
+      if (!form || !lesson) {
+        setLessonSaveStatus({ kind: 'error', message: 'Your changes aren’t saved: this lesson’s saved form couldn’t be found. Reload the page and try again.' })
+        setFinishedVersionRequestId(requestId)
+        return
+      }
+      // Saving manual edits that change nothing adds no version.
+      const last = lastSavedLessonRef.current
+      if (createdBy === 'teacher' && last?.lessonId === lessonId && last.snapshot === snapshot) {
+        setFinishedVersionRequestId(requestId)
+        return
+      }
+      setLessonSaveStatus({ kind: 'saving', message: 'Saving your changes…' })
+      // A failed save leaves the teacher's changes in the lesson on screen
+      // (only the Library copy waits for a confirmed save), so Try again saves them.
+      try {
+        const saved = await saveLessonVersion({
+          lessonId,
+          content: lessonContentFrom(effective, form, activities),
+          createdBy,
+          fields: lessonFieldsFrom(form, lesson.title, classroom?.gradeLevel ?? ''),
+        })
+        lastSavedLessonRef.current = { lessonId, snapshot }
+        setLibraryLessons((prev) =>
+          prev.map((item) => (item.id === lessonId ? { ...item, lessonPlan: { ...item.lessonPlan, document: effective } } : item)),
+        )
+        setLessonSaveStatus({ kind: 'saved', message: `Changes saved as version ${saved.versionNumber}.` })
+      } catch (error) {
+        setLessonSaveStatus({
+          kind: 'error',
+          message: `Your changes weren’t saved: ${toApiError(error, 'Couldn’t save the changes.').message.replace(/[.!?]?$/, '.')} They’re still in the lesson below.`,
+          retry: createdBy,
+        })
+      } finally {
+        setFinishedVersionRequestId(requestId)
+      }
+    })
+    // Only a confirmation saves; the lesson's current content is read when it arrives.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [versionRequest])
+
   const canvasProps: LessonWorkspaceCanvasProps = {
+    saveStatus: lessonSaveStatus,
+    isSavingVersion,
+    onEditsSaved: () => requestLessonVersion('teacher'),
+    onRetrySave: requestLessonVersion,
     editor: revisionEditor,
     lesson: lessonDocument,
     lessonLinkId,
@@ -3373,6 +3584,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
     planningTab,
     setPlanningTab,
     revisionEditor,
+    isSavingVersion,
     // A teacher's own state framework comes first; NGSS otherwise.
     defaultFramework: (currentAccount.state ?? 'NGSS') as StandardsFrameworkId,
     formSeed: planningFormSeed,
@@ -3518,6 +3730,11 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
           />
         )}
 
+        {remoteLessonsError && (activePage === 'library' || activePage === 'lesson-generator') && (
+          <p className="roster-error" role="alert">
+            {remoteLessonsError}
+          </p>
+        )}
         {activePage === 'class-setup' && remoteClassesStatus.state === 'loading' && (
           <p className="empty-state-support" role="status">
             Loading your classes…
@@ -5619,6 +5836,7 @@ function LessonPlanningPanel({
   planningTab,
   setPlanningTab,
   revisionEditor,
+  isSavingVersion,
   defaultFramework,
   formSeed,
   savedLessonOpen,
@@ -5638,6 +5856,8 @@ function LessonPlanningPanel({
   planningTab: PlanningTab
   setPlanningTab: (tab: PlanningTab) => void
   revisionEditor: RevisionWorkflow
+  // Supabase Mode: a lesson version is being saved (Apply to Lesson waits).
+  isSavingVersion: boolean
   // The teacher's state framework (from their profile), or NGSS.
   defaultFramework: StandardsFrameworkId
   // A saved demo lesson's form to start from (null: a blank form). Read once;
@@ -7177,6 +7397,7 @@ function LessonPlanningPanel({
               label={revisionEditor.activeLabel}
               state={revisionState}
               isThinking={revisionEditor.isThinking}
+              isSaving={isSavingVersion}
               draft={revisionDraft}
               onDraftChange={setRevisionDraft}
               onSend={() => {
@@ -7445,7 +7666,8 @@ type LibraryLesson = {
   bannerColor: string
   // `document` is the lesson generated for it on Lesson Planning; lessons
   // without one show the demo lesson when hasDemoContent is set.
-  lessonPlan: { hasDemoContent: boolean; document?: LessonDocument; feedbackActivities?: FeedbackActivity[] }
+  // `formSeed`: the planning form a lesson saved in Supabase was made from.
+  lessonPlan: { hasDemoContent: boolean; document?: LessonDocument; feedbackActivities?: FeedbackActivity[]; formSeed?: PlanningFormSeed }
   studentFeedback: StudentFeedbackAssignment[]
   classFeedback: { available: boolean }
   // The teacher whose Library this lesson is in.
@@ -7648,6 +7870,132 @@ const lessonBannerColors = ['#5b7f95', '#6f8f6a', '#8a7299', '#9a7b5b', '#5f7f8a
 // Planning after a class's Add Lesson. Title and grade come from the
 // planning form (or the uploaded file's name); the plan opens the demo
 // lesson workspace, and a brand-new lesson has no feedback yet.
+// ---------------------------------------------------------------------------
+// Lesson Planning ↔ Supabase (see src/api/lessonPlanning.ts)
+//
+// A saved lesson version holds the lesson as the teacher sees it — manual
+// edits and applied AI revisions folded into its sections — plus the
+// planning form it came from and its student products. The lessons row's
+// columns come from the same form, so the two never disagree.
+// ---------------------------------------------------------------------------
+
+const lessonContentFormat = 'partners-lesson/v1'
+
+type SavedLessonContent = {
+  format: typeof lessonContentFormat
+  document: LessonDocument
+  form: PlanningLessonDetails
+  studentProducts: FeedbackActivity[]
+}
+
+// The lesson as displayed: edited or AI-revised sections carry their current
+// text, and suggestions already acted on (edited or applied) are dropped.
+function effectiveLessonDocument(
+  document: LessonDocument,
+  manualEdits: Record<string, string>,
+  revisedLesson: Record<string, string>,
+): LessonDocument {
+  const changedText = (label: string) => manualEdits[label] ?? revisedLesson[label]
+  const actedOn = new Set([...Object.keys(manualEdits), ...Object.keys(revisedLesson)])
+  const keep = <T,>(record: Record<string, T>) => Object.fromEntries(Object.entries(record).filter(([label]) => !actedOn.has(label)))
+  return {
+    ...document,
+    steps: document.steps.map((step) => {
+      const text = changedText(step.label)
+      return text === undefined ? step : { ...step, segments: [{ text }] }
+    }),
+    suggestions: keep(document.suggestions),
+    suggestionSummaries: keep(document.suggestionSummaries),
+    revisionSegments: keep(document.revisionSegments),
+    workflows: keep(document.workflows),
+  }
+}
+
+function lessonTitleFrom(details: PlanningLessonDetails, uploadedFileName?: string): string {
+  const title = uploadedFileName ? uploadedFileName.replace(/\.[^.]+$/, '') : details.topic.trim()
+  return title || 'Untitled Lesson'
+}
+
+// The lessons columns for a lesson, from its planning form. Grade level
+// falls back to the class's (an uploaded lesson's form may not have one).
+function lessonFieldsFrom(details: PlanningLessonDetails, title: string, classGrade: string): LessonFields {
+  const text = (value: string | undefined) => (value && value.trim() ? value.trim() : null)
+  return {
+    lesson_title: title,
+    grade_level: details.gradeLevel.trim() || classGrade.trim(),
+    topic: details.topic.trim() || title,
+    standards: details.standards.length > 0 ? details.standards.map((standard) => standard.code) : null,
+    science_practices: details.sciencePractices.length > 0 ? [...details.sciencePractices] : null,
+    learning_objectives: text(details.learningObjectives),
+    duration: details.durationMinutes ? Math.round(details.durationMinutes) : null,
+    prior_instruction: text(details.optionalContext.priorInstruction),
+    subsequent_instruction: text(details.optionalContext.subsequentInstruction),
+    instructional_sequence: text(details.instructionalSequence),
+    materials_equipment: text(details.optionalContext.materialsAndEquipment),
+    // Uploaded files aren't stored yet.
+    lesson_template_path: null,
+    rubric_path: null,
+  }
+}
+
+function lessonContentFrom(document: LessonDocument, form: PlanningLessonDetails, studentProducts: readonly FeedbackActivity[]): SavedLessonContent {
+  return { format: lessonContentFormat, document, form, studentProducts: [...studentProducts] }
+}
+
+// The planning form to reopen a saved lesson with.
+function formSeedFromDetails(details: PlanningLessonDetails, defaultFramework: StandardsFrameworkId): PlanningFormSeed {
+  const minutes = details.durationMinutes
+  const preset = minutes !== null && pacingOptions.some((option) => option.id === String(minutes)) ? String(minutes) : null
+  return {
+    gradeLevel: details.gradeLevel,
+    topic: details.topic,
+    framework: details.standards.find((standard) => !standard.custom)?.framework ?? defaultFramework,
+    standards: details.standards.filter((standard) => !standard.custom).map((standard) => standard.code),
+    customStandards: details.standards.filter((standard) => standard.custom).map((standard) => standard.code),
+    practices: [...details.sciencePractices],
+    learningObjectives: details.learningObjectives,
+    instructionalSequence: details.instructionalSequence,
+    pacingSelection: preset ?? (minutes ? 'custom' : ''),
+    customPacingMinutes: preset || !minutes ? '' : String(minutes),
+    priorInstruction: details.optionalContext.priorInstruction ?? '',
+    subsequentInstruction: details.optionalContext.subsequentInstruction ?? '',
+    differentiation: details.optionalContext.differentiation ?? '',
+    materialsAndEquipment: details.optionalContext.materialsAndEquipment ?? '',
+  }
+}
+
+// A saved lesson's content, if it's in the format this app writes.
+function readSavedLessonContent(content: Record<string, unknown> | undefined): SavedLessonContent | null {
+  const candidate = content as Partial<SavedLessonContent> | undefined
+  return candidate?.format === lessonContentFormat && Array.isArray(candidate.document?.steps) && candidate.form ? (candidate as SavedLessonContent) : null
+}
+
+// A lesson from Supabase as a Library lesson (its current version).
+function libraryLessonFromStored(stored: StoredLesson, index: number, ownerEmail: string, defaultFramework: StandardsFrameworkId): LibraryLesson {
+  const content = readSavedLessonContent(stored.currentVersion?.content)
+  const fields = stored.fields
+  return {
+    id: stored.lessonId,
+    title: fields.lesson_title || 'Untitled Lesson',
+    grade: fields.grade_level || null,
+    topic: fields.topic || 'Not specified',
+    bannerColor: lessonBannerColors[index % lessonBannerColors.length],
+    lessonPlan: {
+      // Without readable content the lesson opens empty (never the demo lesson).
+      hasDemoContent: content !== null,
+      document: content ? { ...content.document, id: stored.lessonId } : undefined,
+      feedbackActivities: content?.studentProducts,
+      formSeed: content ? formSeedFromDetails(content.form, defaultFramework) : undefined,
+    },
+    studentFeedback: [],
+    classFeedback: { available: false },
+    ownerEmail,
+    standards: content?.form.standards ?? (fields.standards ?? []).map((code) => ({ code, framework: defaultFramework, custom: false })),
+    sciencePractices: fields.science_practices ?? [],
+    durationMinutes: fields.duration,
+  }
+}
+
 function createLibraryLessonFromPlanning(
   id: string,
   details: PlanningLessonDetails,
@@ -10837,6 +11185,7 @@ type PlanningPanelProps = {
   planningTab: PlanningTab
   setPlanningTab: (tab: PlanningTab) => void
   revisionEditor: RevisionWorkflow
+  isSavingVersion: boolean
   defaultFramework: StandardsFrameworkId
   // A saved demo lesson's planning form to start from; null for a blank one.
   formSeed: PlanningFormSeed | null
@@ -11564,6 +11913,14 @@ function StudentFeedbackActivities({
 }
 
 type LessonWorkspaceCanvasProps = {
+  // Supabase Mode: whether the lesson is saved (shown under the header).
+  saveStatus?: { kind: 'saving' | 'saved' | 'error' | 'info'; message: string; retry?: VersionCreatedBy } | null
+  // A lesson version is being saved; Save Edits waits for it.
+  isSavingVersion?: boolean
+  // Called when the teacher saves manual edits that changed the lesson.
+  onEditsSaved?: () => void
+  // Saves the lesson's current changes again after a failed save.
+  onRetrySave?: (createdBy: VersionCreatedBy) => void
   editor: RevisionWorkflow
   lesson: LessonDocument
   // The id used in the lesson's Student Feedback link.
@@ -11592,6 +11949,10 @@ type LessonWorkspaceCanvasProps = {
 // navigating to another page and back never loses a revision,
 // conversation, or manual edit.
 function LessonWorkspaceCanvas({
+  saveStatus = null,
+  isSavingVersion = false,
+  onEditsSaved,
+  onRetrySave,
   editor,
   lesson,
   lessonLinkId,
@@ -11640,16 +12001,16 @@ function LessonWorkspaceCanvas({
   }
 
   const saveEditing = () => {
+    const changed = Object.entries(draftBySection).filter(([label, text]) => text !== editBaseline[label])
     setManualEdits((prev) => {
       const next = { ...prev }
-      for (const [label, text] of Object.entries(draftBySection)) {
-        if (text !== editBaseline[label]) {
-          next[label] = text
-        }
+      for (const [label, text] of changed) {
+        next[label] = text
       }
       return next
     })
     setIsEditing(false)
+    if (changed.length > 0) onEditsSaved?.()
   }
 
   // The single entry point for "Revise Lesson" — opens (or restarts) a
@@ -11960,6 +12321,7 @@ function LessonWorkspaceCanvas({
               type="button"
               className="secondary-button"
               onClick={() => (isEditing ? saveEditing() : startEditing())}
+              disabled={isSavingVersion}
             >
               {isEditing ? 'Save Edits' : 'Edit Lesson'}
             </button>
@@ -11969,6 +12331,19 @@ function LessonWorkspaceCanvas({
           </div>
         </div>
 
+        {saveStatus && (
+          <p className={`lesson-save-status ${saveStatus.kind}`} role={saveStatus.kind === 'error' ? 'alert' : 'status'}>
+            {saveStatus.message}
+            {saveStatus.retry && onRetrySave && (
+              <>
+                {' '}
+                <button type="button" className="lesson-save-retry" onClick={() => onRetrySave(saveStatus.retry!)} disabled={isSavingVersion}>
+                  Try again
+                </button>
+              </>
+            )}
+          </p>
+        )}
         <p className="lesson-suggestion-summary" role="status">
           {pendingSuggestionCount > 0
             ? `${pluralize(pendingSuggestionCount, 'AI suggestion')} to review — each appears under its section.`

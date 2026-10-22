@@ -1807,6 +1807,51 @@ textarea {
   color: #7a5412;
 }
 
+/* Supabase Mode: whether the lesson in the workspace is saved. */
+.lesson-save-status {
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.lesson-save-status.saving {
+  background: #eef4fb;
+  color: #1e3a5f;
+}
+
+.lesson-save-status.saved {
+  background: #ecf7ef;
+  color: #1d5c34;
+}
+
+.lesson-save-status.info {
+  background: #fff7e6;
+  color: #7a5412;
+}
+
+.lesson-save-status.error {
+  background: #fdecec;
+  color: #8a1c1c;
+}
+
+.lesson-save-retry {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.lesson-save-retry:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .lesson-suggestion-restore,
 .lesson-suggestion-dismiss {
   padding: 2px 6px;
