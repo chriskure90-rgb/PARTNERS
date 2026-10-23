@@ -24,7 +24,11 @@ import {
 import { ApiError, toApiError } from './api/core'
 import { listLessonsForClasses, saveLessonVersion, saveNewLesson, type LessonFields, type StoredLesson, type VersionCreatedBy } from './api/lessonPlanning'
 import { generateLesson, type GenerationUsage } from './api/lessonGeneration'
-import { reviseLessonSection } from './api/lessonRevision'
+import { reviseLessonSection, revisionSuggestionForConversation, saveRevisionAction, saveRevisionSuggestion } from './api/lessonRevision'
+import { brainstormReplyFromAi, saveBrainstormConversation, type BrainstormRequest } from './api/brainstorm'
+import { generateActivityDraft, studentFeedbackPageFor, type GeneratedActivity } from './api/practiceActivity'
+import { reviewUploadedLesson, type LessonReview } from './api/lessonReview'
+import { LessonFileError, lessonFileAccept, readLessonFile } from './lib/lessonFile'
 import { authDebug, shortId } from './lib/authDebug'
 import { appMode, readStoredDemoSession, setSessionDataMode, storeDemoSession, usesSupabase } from './lib/dataSource'
 import './App.css'
@@ -1456,6 +1460,9 @@ type LessonStep = {
   // the AI rewrote it. Lessons saved before these existed simply lack them.
   practices?: readonly string[]
   originalText?: string
+  // An uploaded lesson's section: the teacher's text, shown with its own
+  // line breaks.
+  preformatted?: boolean
 }
 
 // A lesson shown in the workspace: its sections in order, the practices to
@@ -2786,6 +2793,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
   // further changes doesn't record the AI text as a manual edit. From here
   // on it's ordinary lesson content the teacher can edit like any other.
   const revisionEditor = useRevisionWorkflow((label, text) => {
+    queueAppliedRevision(label, text)
     requestLessonVersion('ai_teacher')
     setManualEdits((prev) => {
       if (!(label in prev)) return prev
@@ -2970,7 +2978,10 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
           for (const item of stored) {
             const content = readSavedLessonContent(item.currentVersion?.content)
             if (content) lessonFormsRef.current.set(item.lessonId, content.form)
-            if (item.currentVersion) lessonVersionNumbersRef.current.set(item.lessonId, item.currentVersion.versionNumber)
+            if (item.currentVersion) {
+              lessonVersionNumbersRef.current.set(item.lessonId, item.currentVersion.versionNumber)
+              lessonVersionIdsRef.current.set(item.lessonId, item.currentVersion.lessonVersionId)
+            }
           }
           loaded = loadedClasses.map((classroom) => ({
             ...classroom,
@@ -3016,8 +3027,88 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
   const remoteLessonIdsRef = useRef(new Set<string>())
   const lessonFormsRef = useRef(new Map<string, PlanningLessonDetails>())
   const lastSavedLessonRef = useRef<{ lessonId: string; snapshot: string } | null>(null)
-  // Each saved lesson's current version number.
+  // Each saved lesson's current version number and version id.
   const lessonVersionNumbersRef = useRef(new Map<string, number>())
+  const lessonVersionIdsRef = useRef(new Map<string, string>())
+
+  // Apply / Dismiss on AI suggestions, recorded in lesson_revision_actions
+  // (Supabase Mode, lessonRevision on, saved lessons only). An Apply is
+  // recorded once its version is saved, with that version; a Dismiss right
+  // away, with none. Each attaches to the suggestion's row — the one its chat
+  // was saved under, else one created from the suggestion (and reused).
+  type RevisionActionEntry = {
+    lessonId: string
+    label: string
+    sourceVersionId: string
+    suggestion: string | null
+    change: string | null
+    conversationId?: string
+  }
+  const pendingAppliedRevisionsRef = useRef<RevisionActionEntry[]>([])
+  const revisionSuggestionIdsRef = useRef(new Map<string, string>())
+  const revisionActionEntry = (label: string, change: string | null): RevisionActionEntry | null => {
+    const lessonId = workspaceLessonId
+    const sourceVersionId = lessonId ? lessonVersionIdsRef.current.get(lessonId) : undefined
+    if (lessonPersistence !== 'supabase' || !usesSupabase('lessonRevision') || !lessonId || !remoteLessonIdsRef.current.has(lessonId) || !sourceVersionId) {
+      return null
+    }
+    return {
+      lessonId,
+      label,
+      sourceVersionId,
+      suggestion: lessonDocument.suggestions[label] ?? null,
+      change,
+      conversationId: revisionEditor.statesByLabel[label]?.conversationId,
+    }
+  }
+  const revisionSuggestionIdFor = async (entry: RevisionActionEntry): Promise<string> => {
+    const key = `${entry.lessonId}:${entry.label}:${entry.conversationId ?? ''}`
+    const known = revisionSuggestionIdsRef.current.get(key)
+    if (known) return known
+    const id = entry.conversationId
+      ? await revisionSuggestionForConversation(entry.conversationId)
+      : await saveRevisionSuggestion({
+          lessonId: entry.lessonId,
+          sourceVersionId: entry.sourceVersionId,
+          targetSection: entry.label,
+          suggestionContent: entry.suggestion,
+          suggestedChange: entry.change,
+        })
+    revisionSuggestionIdsRef.current.set(key, id)
+    return id
+  }
+  const queueAppliedRevision = (label: string, text: string) => {
+    const entry = revisionActionEntry(label, text)
+    if (entry) pendingAppliedRevisionsRef.current.push(entry)
+  }
+  // Called once an applied revision's version is saved; returns why
+  // recording failed, if it did.
+  const recordAppliedRevisions = async (lessonId: string, resultingVersionId: string): Promise<string | null> => {
+    const entries = pendingAppliedRevisionsRef.current.filter((entry) => entry.lessonId === lessonId)
+    if (entries.length === 0) return null
+    pendingAppliedRevisionsRef.current = pendingAppliedRevisionsRef.current.filter((entry) => entry.lessonId !== lessonId)
+    try {
+      for (const entry of entries) await saveRevisionAction(await revisionSuggestionIdFor(entry), 'apply', resultingVersionId)
+      return null
+    } catch (error) {
+      return toApiError(error).message
+    }
+  }
+  const recordDismissedSuggestion = (label: string) => {
+    const proposal = lessonDocument.revisionSegments[label]
+    const entry = revisionActionEntry(label, proposal ? segmentsToText(proposal) : null)
+    if (!entry) return
+    void revisionSuggestionIdFor(entry)
+      .then((id) => saveRevisionAction(id, 'dismiss', null))
+      .catch((error) =>
+        setLessonSaveStatus({ kind: 'error', message: `The dismissal wasn’t recorded in the revision history: ${toApiError(error).message}` }),
+      )
+  }
+  // How many of this planning session's brainstorm messages are saved.
+  const savedBrainstormCountRef = useRef(0)
+  useEffect(() => {
+    savedBrainstormCountRef.current = 0
+  }, [planningSessionKey])
 
   // Revise Lesson with the real AI (Supabase Mode, lessonRevision on): the
   // section, its current proposal, the recent chat, and brief lesson context
@@ -3277,6 +3368,8 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
     lessonSourceKind: 'generated' | 'uploaded',
     uploadedFileName?: string,
     generation?: LessonGenerationRecord,
+    brainstorm?: readonly ChatMessage[],
+    upload?: { fileName: string; text: string },
   ) => {
     if (lessonPersistence === 'off') {
       setLessonSaveStatus({ kind: 'error', message: 'This lesson isn’t saved: Lesson Planning isn’t connected to Supabase in this configuration. Add “lessonPlanning” to VITE_SUPABASE_INTEGRATIONS.' })
@@ -3299,7 +3392,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
     const { classId, savedLessonId } = planningTarget
     const existingId = savedLessonId && remoteLessonIdsRef.current.has(savedLessonId) ? savedLessonId : null
     const studentProducts = identifyFeedbackActivities(existingId)
-    const content = lessonContentFrom(effectiveLessonDocument(document, {}, {}), details, studentProducts, generation)
+    const content = lessonContentFrom(effectiveLessonDocument(document, {}, {}), details, studentProducts, generation, upload)
     const framework = (currentAccount.state ?? 'NGSS') as StandardsFrameworkId
     setIsSavingLesson(true)
     setLessonSaveStatus({ kind: 'saving', message: 'Saving to your Library…' })
@@ -3311,6 +3404,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
       remoteLessonIdsRef.current.add(lessonId)
       lessonFormsRef.current.set(lessonId, details)
       lessonVersionNumbersRef.current.set(lessonId, saved.versionNumber)
+      lessonVersionIdsRef.current.set(lessonId, saved.lessonVersionId)
       const savedDocument = { ...content.document, id: lessonId }
       lastSavedLessonRef.current = { lessonId, snapshot: JSON.stringify(savedDocument) }
       const record = (bannerColor: string): LibraryLesson => ({
@@ -3328,9 +3422,25 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
         setPlanningTarget({ classId, savedLessonId: lessonId })
       }
       setWorkspaceLessonId(lessonId)
+      // Brainstorm with AI: the messages not saved with an earlier version of
+      // this planning session go with this one.
+      let brainstormNote = ''
+      const unsavedBrainstorm = brainstorm?.slice(savedBrainstormCountRef.current) ?? []
+      if (brainstorm && unsavedBrainstorm.length > 0) {
+        try {
+          await saveBrainstormConversation(
+            lessonId,
+            saved.lessonVersionId,
+            unsavedBrainstorm.map((message) => ({ sender_type: message.role, message_content: message.text })),
+          )
+          savedBrainstormCountRef.current = brainstorm.length
+        } catch (error) {
+          brainstormNote = ` The brainstorm conversation wasn’t saved: ${toApiError(error).message}`
+        }
+      }
       const savedMessage = existingId ? `Saved as version ${saved.versionNumber}.` : `Saved to your Library for ${classDisplayName(planningTargetClass)}.`
       const review = generation?.warnings.length ? ` Please review: ${generation.warnings.join(' ')}` : ''
-      setLessonSaveStatus({ kind: 'saved', message: `${savedMessage}${review}` })
+      setLessonSaveStatus({ kind: brainstormNote ? 'error' : 'saved', message: `${savedMessage}${review}${brainstormNote}` })
     } catch (error) {
       setLessonSaveStatus({ kind: 'error', message: `This lesson wasn’t saved: ${toApiError(error, 'Couldn’t save the lesson.').message}` })
     } finally {
@@ -3534,7 +3644,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
     setActivePage('class-feedback-dashboard')
   }
 
-  const handleGenerateLessonPlan = (details: PlanningLessonDetails) => {
+  const handleGenerateLessonPlan = (details: PlanningLessonDetails, brainstorm?: ChatMessage[]) => {
     if (isGeneratingLesson || isSavingLesson) return
     setLessonSaveStatus(null)
     // Generate Lesson is on the form and in Brainstorm with AI.
@@ -3553,7 +3663,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
       const saved = pendingDemoLesson.lessonPlan.document ?? demoLessonDocument
       showLessonDocument(saved, pendingDemoLesson.id, pendingDemoLesson.lessonPlan.feedbackActivities ?? identifyFeedbackActivities(pendingDemoLesson.id))
     } else if (lessonPersistence !== 'mock' && usesSupabase('lessonGeneration')) {
-      void generateWithAi(details, method)
+      void generateWithAi(details, method, brainstorm)
       return
     } else if (lessonPersistence !== 'mock') {
       // Supabase Mode: shown now, saved (or the reason it isn't) right after.
@@ -3561,7 +3671,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
       const keepId = planningTarget?.savedLessonId && remoteLessonIdsRef.current.has(planningTarget.savedLessonId) ? planningTarget.savedLessonId : null
       showLessonDocument(document, keepId)
       if (keepId) lastSavedLessonRef.current = { lessonId: keepId, snapshot: JSON.stringify(effectiveLessonDocument({ ...document, id: keepId }, {}, {})) }
-      void persistPlannedLesson(details, document, 'generated')
+      void persistPlannedLesson(details, document, 'generated', undefined, undefined, brainstorm)
     } else {
       const document = generateLessonDocument(details)
       showLessonDocument(document, saveLessonForPlanningTarget(details, document))
@@ -3581,7 +3691,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
   // and saves nothing — there's no fallback to the mock. A generated lesson
   // is saved the same way as before (partners-save-lesson, or a new version
   // of the saved lesson it replaces).
-  const generateWithAi = async (details: PlanningLessonDetails, method: PlanningMethod) => {
+  const generateWithAi = async (details: PlanningLessonDetails, method: PlanningMethod, brainstorm?: ChatMessage[]) => {
     // A lesson that couldn't be saved isn't worth a paid AI request.
     if (lessonPersistence === 'off' || !planningTarget || !planningTargetClass) {
       setLessonSaveStatus({
@@ -3605,9 +3715,62 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
       setLessonGenerated(true)
       setLessonGeneratedWith(method)
       setIsGeneratingLesson(false)
-      await persistPlannedLesson(details, document, 'generated', undefined, generation)
+      await persistPlannedLesson(details, document, 'generated', undefined, generation, brainstorm)
     } catch (error) {
       setLessonSaveStatus({ kind: 'error', message: `The lesson wasn’t generated: ${toApiError(error, 'The AI service couldn’t generate the lesson.').message}` })
+    } finally {
+      setIsGeneratingLesson(false)
+    }
+  }
+
+  // Upload Existing Lesson with the real AI: the file's text is read in the
+  // browser, reviewed by partners-review-lesson (section starts and
+  // suggestions only), shown as the teacher wrote it, and saved like any
+  // uploaded lesson (version 1 by the teacher) with the text it came from. A
+  // failure shows why and saves nothing.
+  const uploadWithAi = async (file: File, details: PlanningLessonDetails) => {
+    if (lessonPersistence === 'off' || !planningTarget || !planningTargetClass) {
+      setLessonSaveStatus({
+        kind: 'info',
+        message:
+          lessonPersistence === 'off'
+            ? 'Uploaded lessons need Lesson Planning connected to Supabase (add “lessonPlanning” to VITE_SUPABASE_INTEGRATIONS).'
+            : 'To upload a lesson, open Lesson Planning from a class (Class Setup → Continue to Lesson Planning, or Library → Add Lesson) so it can be saved.',
+      })
+      return
+    }
+    let text: string
+    try {
+      text = await readLessonFile(file)
+    } catch (error) {
+      setLessonSaveStatus({ kind: 'error', message: `“${file.name}” wasn’t uploaded: ${error instanceof LessonFileError ? error.message : 'It couldn’t be read.'}` })
+      return
+    }
+    setPendingDemoLesson(null)
+    setIsGeneratingLesson(true)
+    setLessonSaveStatus({ kind: 'saving', message: `Reviewing “${file.name}” with AI…` })
+    try {
+      const gradeLevel = details.gradeLevel ? formatLessonGrade(details.gradeLevel) : planningTargetClass.gradeLevel
+      const result = await callRemoteAiModel('lesson-review', { lessonText: text, fileName: file.name, gradeLevel }, reviewUploadedLesson)
+      const document = buildUploadedLessonDocument(text, result.output, lessonTitleFrom(details, file.name))
+      const keepId = planningTarget.savedLessonId && remoteLessonIdsRef.current.has(planningTarget.savedLessonId) ? planningTarget.savedLessonId : null
+      showLessonDocument(document, keepId)
+      if (keepId) lastSavedLessonRef.current = { lessonId: keepId, snapshot: JSON.stringify(effectiveLessonDocument({ ...document, id: keepId }, {}, {})) }
+      setLessonSource('uploaded')
+      setLessonGenerated(true)
+      setLessonGeneratedWith('upload')
+      setIsGeneratingLesson(false)
+      await persistPlannedLesson(
+        { ...details, topic: details.topic.trim() || result.output.topic },
+        document,
+        'uploaded',
+        file.name,
+        { source: 'openai', model: result.usage.model, usage: result.usage, warnings: result.warnings, generatedAt: new Date().toISOString() },
+        undefined,
+        { fileName: file.name, text },
+      )
+    } catch (error) {
+      setLessonSaveStatus({ kind: 'error', message: `“${file.name}” wasn’t reviewed: ${toApiError(error, 'The AI service couldn’t review it.').message}` })
     } finally {
       setIsGeneratingLesson(false)
     }
@@ -3619,9 +3782,14 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
   const handleUploadLesson = (file: File, details: PlanningLessonDetails) => {
     if (isGeneratingLesson || isSavingLesson) return
     setLessonSaveStatus(null)
-    // Uploaded files aren't read yet. A signed-in teacher's upload is never
-    // shown or saved as the demo lesson; the demo still shows it.
+    // A signed-in teacher's upload is read and reviewed by the AI
+    // (lessonGeneration on), never shown or saved as the demo lesson; the
+    // demo still shows it.
     if (lessonPersistence !== 'mock') {
+      if (usesSupabase('lessonGeneration')) {
+        void uploadWithAi(file, details)
+        return
+      }
       setLessonSaveStatus({
         kind: 'info',
         message: `“${file.name}” wasn’t uploaded: reading uploaded lesson files isn’t supported yet, so nothing was saved. Use Fill in Form or Brainstorm with AI to plan this lesson.`,
@@ -3681,10 +3849,17 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
         })
         lastSavedLessonRef.current = { lessonId, snapshot }
         lessonVersionNumbersRef.current.set(lessonId, saved.versionNumber)
+        lessonVersionIdsRef.current.set(lessonId, saved.lessonVersionId)
         setLibraryLessons((prev) =>
           prev.map((item) => (item.id === lessonId ? { ...item, lessonPlan: { ...item.lessonPlan, document: effective } } : item)),
         )
-        setLessonSaveStatus({ kind: 'saved', message: `Changes saved as version ${saved.versionNumber}.` })
+        // An applied AI revision's version: record its Apply action(s).
+        const actionError = createdBy === 'ai_teacher' ? await recordAppliedRevisions(lessonId, saved.lessonVersionId) : null
+        setLessonSaveStatus(
+          actionError
+            ? { kind: 'error', message: `Changes saved as version ${saved.versionNumber}. The Apply action wasn’t recorded in the revision history: ${actionError}` }
+            : { kind: 'saved', message: `Changes saved as version ${saved.versionNumber}.` },
+        )
       } catch (error) {
         setLessonSaveStatus({
           kind: 'error',
@@ -3704,6 +3879,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
     isSavingVersion,
     onEditsSaved: () => requestLessonVersion('teacher'),
     onRetrySave: requestLessonVersion,
+    onSuggestionDismissed: recordDismissedSuggestion,
     editor: revisionEditor,
     lesson: lessonDocument,
     lessonLinkId,
@@ -3738,12 +3914,83 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
         : []
   ).map((classroom) => ({ id: classroom.id, label: classDisplayName(classroom) }))
 
+  // Science Practice Activity with the real AI and Supabase (practiceActivity
+  // on): only for Lesson Planning opened from a class, so the activity can be
+  // saved to it and get that class's Student Feedback Page.
+  const notLinkedMessage =
+    'To draft an activity with AI, open Lesson Planning from a class (Class Setup → Continue to Lesson Planning, or Library → Add Lesson) so it can be saved.'
+  const activityRemote: ActivityRemote | null =
+    lessonPersistence === 'supabase' && usesSupabase('practiceActivity')
+      ? {
+          generate: async (request) => {
+            if (!planningTarget || !planningTargetClass) throw new Error(notLinkedMessage)
+            const output = await callRemoteAiModel(
+              'practice-activity',
+              {
+                grade: request.context.grade.label,
+                topic: request.context.topic,
+                phenomenon: request.context.phenomenon ?? '',
+                practices: practiceOptions.filter((practice) => request.practiceIds.includes(practice.id)).map((practice) => practice.label),
+                teacherMessages: request.teacherMessages.slice(-20).map((text) => text.slice(0, 2000)),
+              },
+              generateActivityDraft,
+            )
+            return activityDraftFromAi(request, output)
+          },
+          save: async ({ draft, collection, savedLessonId, createdBy, conversation }) => {
+            if (!planningTarget || !planningTargetClass) throw new Error(notLinkedMessage)
+            const content = { format: activityContentFormat, activity: { ...draft, collection } }
+            const fields: LessonFields = {
+              lesson_title: draft.title,
+              grade_level: planningTargetClass.gradeLevel.trim() || draft.gradeLabel,
+              topic: draft.topic,
+              standards: null,
+              science_practices: draft.practiceIds.length > 0 ? [...draft.practiceIds] : null,
+              learning_objectives: draft.goal,
+              duration: null,
+              prior_instruction: null,
+              subsequent_instruction: null,
+              instructional_sequence: draft.sequence.map((step) => `${step.name}: ${step.text}`).join('\n'),
+              materials_equipment: null,
+              lesson_template_path: null,
+              rubric_path: null,
+            }
+            const saved = savedLessonId
+              ? await saveLessonVersion({ lessonId: savedLessonId, content, createdBy, fields })
+              : await saveNewLesson({ classId: planningTarget.classId, lessonSource: 'generated', fields, content })
+            let conversationError: string | null = null
+            if (conversation.length > 0) {
+              try {
+                await saveBrainstormConversation(
+                  saved.lessonId,
+                  saved.lessonVersionId,
+                  conversation.map((message) => ({ sender_type: message.role, message_content: message.text })),
+                )
+              } catch (error) {
+                conversationError = toApiError(error).message
+              }
+            }
+            return { ...saved, conversationError }
+          },
+          pageUrl: async (lessonId, lessonVersionId) => {
+            const token = await studentFeedbackPageFor(lessonId, lessonVersionId)
+            return `${window.location.origin}${window.location.pathname}#student-feedback?page=${token}`
+          },
+        }
+      : null
+
   const planningPanelProps = {
     planningTab,
     setPlanningTab,
     revisionEditor,
     isSavingVersion,
     isGeneratingLesson,
+    // Brainstorm with AI's real replies (Supabase Mode, lessonBrainstorm on;
+    // null: the mock). Messages go through the privacy gateway.
+    brainstormRemote:
+      lessonPersistence === 'supabase' && usesSupabase('lessonBrainstorm')
+        ? (request: BrainstormRequest) => callRemoteAiModel('lesson-brainstorm', request, brainstormReplyFromAi)
+        : null,
     // A teacher's own state framework comes first; NGSS otherwise.
     defaultFramework: (currentAccount.state ?? 'NGSS') as StandardsFrameworkId,
     formSeed: planningFormSeed,
@@ -3990,6 +4237,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
             canvasProps={canvasProps}
             planningPanelProps={planningPanelProps}
             activityClasses={activityLinkClasses}
+            activityRemote={activityRemote}
           />
         )}
         {activePage === 'student-feedback' && (
@@ -4101,7 +4349,10 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
   )
 }
 
-type ChatMessage = { role: 'ai' | 'teacher'; text: string }
+// `fromModel`: a brainstorm reply written by the real AI (not one of the
+// app's own template messages) — these and the teacher's messages are what
+// a brainstorm conversation saves.
+type ChatMessage = { role: 'ai' | 'teacher'; text: string; fromModel?: boolean }
 
 // ---------------------------------------------------------------------------
 // Brainstorm with AI — an open conversation that feeds the lesson form
@@ -5318,6 +5569,50 @@ type ActivityDraftRequest = {
   teacherMessages: string[]
 }
 
+// Science Practice Activity with the real AI and Supabase (see App): the
+// draft from partners-generate-activity; saving the confirmed activity as a
+// lesson + version (partners-save-lesson / update_lesson_version) with its
+// conversation (lesson_generation_conversations); and the Student Feedback
+// Page URL for a saved version (create_student_feedback_page).
+type ActivityRemote = {
+  generate: (request: ActivityDraftRequest) => Promise<ActivityDraft>
+  save: (input: {
+    draft: ActivityDraft
+    collection: CollectionOpportunity[]
+    savedLessonId: string | null
+    createdBy: VersionCreatedBy
+    conversation: ChatMessage[]
+  }) => Promise<{ lessonId: string; lessonVersionId: string; versionNumber: number; conversationError: string | null }>
+  pageUrl: (lessonId: string, lessonVersionId: string) => Promise<string>
+}
+
+// The saved form of an activity version (its lesson_content).
+const activityContentFormat = 'partners-activity/v1'
+
+// A real AI draft in the app's ActivityDraft shape: the teaching context
+// and practices come from the request, the rest from the model.
+function activityDraftFromAi(request: ActivityDraftRequest, output: GeneratedActivity): ActivityDraft {
+  const products: CollectionOpportunity[] = [
+    { id: 'model', name: 'Model', submission: output.modelSubmission },
+    { id: 'explanation', name: 'Explanation', submission: output.explanationSubmission },
+  ]
+  return {
+    title: output.title,
+    gradeLabel: request.context.grade.label,
+    topic: request.context.topic,
+    practiceIds: [...request.practiceIds],
+    description: output.description,
+    template: 'ai',
+    products,
+    goal: output.goal,
+    sequence: output.sequence,
+    supports: output.supports,
+    collection: products.map((product) => ({ ...product })),
+    incorporated: output.incorporated,
+    topicNotesUsed: '',
+  }
+}
+
 // The student work collected for feedback. For the prototype every lesson
 // and activity collects the same two student products within one
 // assignment — a Model and an Explanation. Initial and revised submissions
@@ -5370,9 +5665,10 @@ function isActivityIdea(message: string): boolean {
 
 // The prototype's prewritten activity templates for its two demo lessons,
 // chosen by the teaching topic; any other topic gets the generic template.
-type ActivityTemplateId = 'zombie-fires' | 'covid-virus' | 'generic'
+// 'ai': drafted by the real model (partners-generate-activity).
+type ActivityTemplateId = 'zombie-fires' | 'covid-virus' | 'generic' | 'ai'
 
-const activityTemplateLabels: Record<Exclude<ActivityTemplateId, 'generic'>, string> = {
+const activityTemplateLabels: Record<Exclude<ActivityTemplateId, 'generic' | 'ai'>, string> = {
   'zombie-fires': 'Zombie Fires (Earth Science)',
   'covid-virus': 'COVID Virus (Life Science)',
 }
@@ -6053,6 +6349,7 @@ function LessonPlanningPanel({
   revisionEditor,
   isSavingVersion,
   isGeneratingLesson,
+  brainstormRemote,
   defaultFramework,
   formSeed,
   savedLessonOpen,
@@ -6076,6 +6373,8 @@ function LessonPlanningPanel({
   isSavingVersion: boolean
   // A lesson is being generated: Generate Lesson waits (one request at a time).
   isGeneratingLesson: boolean
+  // Real AI brainstorm replies; null uses the mock.
+  brainstormRemote: ((request: BrainstormRequest) => Promise<string>) | null
   // The teacher's state framework (from their profile), or NGSS.
   defaultFramework: StandardsFrameworkId
   // A saved demo lesson's form to start from (null: a blank form). Read once;
@@ -6085,13 +6384,14 @@ function LessonPlanningPanel({
   savedLessonOpen: boolean
   // The grade level of the class the activity is for, when there is one.
   classGradeLevel: string | null
-  onGenerate?: (details: PlanningLessonDetails) => void
+  // `brainstorm`: the conversation to save with the lesson (real AI only).
+  onGenerate?: (details: PlanningLessonDetails, brainstorm?: ChatMessage[]) => void
   // What the teacher chose to plan in Brainstorm with AI — lifted to the
   // page, which shows the Activity workspace for a practice activity.
   brainstormFocus: BrainstormFocus | null
   setBrainstormFocus: (focus: BrainstormFocus) => void
   // The Activity Draft on the right (Science Practice Activity mode).
-  practiceActivity: { hasDraft: boolean; isGenerating: boolean; onGenerate: (request: ActivityDraftRequest) => void }
+  practiceActivity: { hasDraft: boolean; isGenerating: boolean; onGenerate: (request: ActivityDraftRequest, conversation: ChatMessage[]) => void }
   // Only provided when the page was opened from a class's Add Lesson; without
   // it, Upload file stays the same placeholder button as before.
   onUploadLesson?: (file: File, details: PlanningLessonDetails) => void
@@ -6310,7 +6610,9 @@ function LessonPlanningPanel({
       return
     }
     setShowValidation(false)
-    onGenerate?.(lessonDetails)
+    // With the real AI, the brainstorm (teacher messages and model replies)
+    // is saved with the lesson.
+    onGenerate?.(lessonDetails, brainstormRemote ? brainstormMessages.filter((message) => message.role === 'teacher' || message.fromModel) : undefined)
   }
 
   // Brainstorm with AI: what the teacher chose to plan, the conversation,
@@ -6352,6 +6654,8 @@ function LessonPlanningPanel({
   const [practiceSelection, setPracticeSelection] = useState<string[]>([])
   const [focusPracticeIds, setFocusPracticeIds] = useState<string[]>([])
   const [isBrainstormThinking, setIsBrainstormThinking] = useState(false)
+  // Real AI: why the last message got no reply (shown under the chat).
+  const [brainstormError, setBrainstormError] = useState<string | null>(null)
   const brainstormInputRef = useRef<HTMLInputElement>(null)
   const brainstormTimeoutRef = useRef<number | null>(null)
   // Keeps the newest message in view as the conversation grows.
@@ -6575,6 +6879,46 @@ function LessonPlanningPanel({
     const teaching = isPracticeFocus ? activityTeaching(nextContext) : null
     const offerPractices = Boolean(teaching) && practiceFocus.length === 0 && ![...practiceMentionMessages, message].some(namesPractice)
     setIsBrainstormThinking(true)
+    setBrainstormError(null)
+    if (brainstormRemote && request.kind === 'reply') {
+      // Real AI: one request; the form suggestions above were picked up locally.
+      const practiceLabel = (id: string) => practiceOptions.find((practice) => practice.id === id)?.label ?? id
+      brainstormRemote({
+        focus: request.focus,
+        message,
+        history: brainstormMessages.slice(-16).map((item) => ({ role: item.role, text: item.text.slice(0, 2000) })),
+        lesson: {
+          topic: request.lesson.topic.slice(0, 200),
+          objectives: request.lesson.objectives.slice(0, 2000),
+          sequence: request.lesson.sequence.slice(0, 3000),
+          practices: request.lesson.practices.slice(0, 300),
+        },
+        noticed: request.noticedLabels,
+        stillOpen: request.stillOpen.map((item) => item.question),
+        ...(isPracticeFocus
+          ? {
+              activity: {
+                grade: nextContext.grade?.label ?? '',
+                topic: nextContext.topic ?? '',
+                phenomenon: nextContext.phenomenon ?? '',
+                practices: practiceFocus.map(practiceLabel),
+                hasDraft: practiceActivity.hasDraft,
+              },
+            }
+          : {}),
+      })
+        .then((reply) => {
+          setBrainstormMessages((prev) => [...prev, { role: 'ai', text: reply, fromModel: true }])
+          if (offerPractices && teaching) {
+            setSuggestedPracticeIds(suggestedPracticesFor(teaching))
+            setPracticeSelection([])
+            setShowPracticeBubbles(true)
+          }
+        })
+        .catch((error) => setBrainstormError(`No AI reply: ${toApiError(error, 'The AI service couldn’t respond.').message}`))
+        .finally(() => setIsBrainstormThinking(false))
+      return
+    }
     brainstormTimeoutRef.current = window.setTimeout(() => {
       setBrainstormMessages((prev) => [...prev, { role: 'ai', text: brainstormReply(request) }])
       setIsBrainstormThinking(false)
@@ -6641,11 +6985,16 @@ function LessonPlanningPanel({
       brainstormInputRef.current?.focus()
       return
     }
-    practiceActivity.onGenerate({
-      practiceIds: activityPracticeIds,
-      context: { grade: activityContext.grade, topic: activityContext.topic, phenomenon: activityContext.phenomenon },
-      teacherMessages,
-    })
+    practiceActivity.onGenerate(
+      {
+        practiceIds: activityPracticeIds,
+        context: { grade: activityContext.grade, topic: activityContext.topic, phenomenon: activityContext.phenomenon },
+        teacherMessages,
+      },
+      // The activity's brainstorm (teacher messages and real AI replies),
+      // saved with the activity when it's confirmed.
+      brainstormMessages.slice(practiceStartIndex).filter((message) => message.role === 'teacher' || message.fromModel),
+    )
   }
 
   // Conversation starters for the whole-lesson focus, until the teacher has
@@ -6748,7 +7097,7 @@ function LessonPlanningPanel({
                   Upload file
                   <input
                     type="file"
-                    accept=".pdf,.doc,.docx,.txt,.md,.ppt,.pptx"
+                    accept={lessonFileAccept}
                     onChange={(event) => {
                       const file = event.target.files?.[0]
                       if (file) onUploadLesson(file, lessonDetails)
@@ -7236,6 +7585,11 @@ function LessonPlanningPanel({
                   ))}
                 </div>
                 {isBrainstormThinking && <p className="empty-state-support">AI is thinking…</p>}
+                {brainstormError && !isBrainstormThinking && (
+                  <p className="lesson-save-status error" role="alert">
+                    {brainstormError}
+                  </p>
+                )}
                 {!isBrainstormThinking && brainstormFocus === 'practice' && showPracticeBubbles && (
                   <div className="brainstorm-practice-picker">
                     <div className="brainstorm-quick-replies" role="group" aria-label="Science practices to focus on">
@@ -8119,6 +8473,8 @@ type SavedLessonContent = {
   studentProducts: FeedbackActivity[]
   // Present on a version the real AI generated (model, token usage, warnings).
   generation?: LessonGenerationRecord
+  // An uploaded lesson: its file name and the text read from it, as uploaded.
+  upload?: { fileName: string; text: string }
 }
 
 // The lesson as displayed: edited or AI-revised sections carry their current
@@ -8176,8 +8532,9 @@ function lessonContentFrom(
   form: PlanningLessonDetails,
   studentProducts: readonly FeedbackActivity[],
   generation?: LessonGenerationRecord,
+  upload?: { fileName: string; text: string },
 ): SavedLessonContent {
-  return { format: lessonContentFormat, document, form, studentProducts: [...studentProducts], ...(generation ? { generation } : {}) }
+  return { format: lessonContentFormat, document, form, studentProducts: [...studentProducts], ...(generation ? { generation } : {}), ...(upload ? { upload } : {}) }
 }
 
 // The planning form to reopen a saved lesson with.
@@ -9041,6 +9398,7 @@ type AiPurpose =
   | 'lesson-revision'
   | 'lesson-brainstorm'
   | 'practice-activity'
+  | 'lesson-review'
   | 'student-feedback'
   | 'class-feedback-analysis'
   | 'class-feedback-summary'
@@ -9827,6 +10185,66 @@ function generateLessonDocument(details: PlanningLessonDetails): LessonDocument 
     (request) => mockLessonGenerationReply(request.lesson),
   )
   return buildGeneratedLessonDocument(details, readLessonGenerationOutput(raw))
+}
+
+// Where `phrase` appears in `text` (from `from` on), ignoring differences in
+// whitespace and quote style — the AI quotes a heading and its first line
+// with a space where the file has line breaks. Returns the span in the
+// original text, so the text is cut exactly as written.
+function findLoosely(text: string, phrase: string, from = 0): { index: number; length: number } | null {
+  const words = phrase.trim().split(/\s+/).filter(Boolean)
+  if (words.length === 0) return null
+  const pattern = words.map((word) => escapeRegExp(word).replace(/['‘’]/g, "['‘’]").replace(/["“”]/g, '["“”]')).join('\\s+')
+  const search = new RegExp(pattern, 'g')
+  search.lastIndex = from
+  const match = search.exec(text)
+  return match ? { index: match.index, length: match[0].length } : null
+}
+
+// An uploaded lesson as the workspace shows it: the teacher's own text, cut
+// into sections where the AI review says each starts (its exact starting
+// words), never reworded — with the review's suggestions attached the same
+// way as a generated lesson's. Text before the first section start, or a
+// review with no usable sections, keeps the lesson whole.
+function buildUploadedLessonDocument(text: string, review: LessonReview, fallbackTitle: string): LessonDocument {
+  const starts: { label: string; index: number }[] = []
+  let from = 0
+  for (const section of review.sections) {
+    const found = findLoosely(text, section.startsWith, from)
+    if (!found || starts.some((item) => item.label === section.label)) continue
+    starts.push({ label: section.label, index: found.index })
+    from = found.index + found.length
+  }
+  if (starts.length === 0 || starts[0].index > 0) starts.unshift({ label: starts.some((item) => item.label === 'Lesson') ? 'Lesson Overview' : 'Lesson', index: 0 })
+  const steps: LessonStep[] = starts
+    .map((start, position) => ({ label: start.label, text: text.slice(start.index, starts[position + 1]?.index ?? text.length).trim() }))
+    .filter((section) => section.text)
+    .map((section) => ({ label: section.label, sectionHeading: section.label, displayPrefix: '', preformatted: true, segments: [{ text: section.text }] }))
+
+  const suggestions: Record<string, string> = {}
+  const suggestionSummaries: Record<string, string> = {}
+  const revisionSegments: Record<string, readonly LessonSegment[]> = {}
+  for (const item of review.suggestions) {
+    const index = steps.findIndex((step) => step.label === item.section)
+    if (index < 0 || suggestions[item.section]) continue
+    const sectionText = segmentsToText(steps[index].segments)
+    const phrase = item.flaggedText ? findLoosely(sectionText, item.flaggedText) : null
+    const flagged = phrase ? sectionText.slice(phrase.index, phrase.index + phrase.length) : sectionText
+    steps[index] = { ...steps[index], segments: buildSegments(sectionText, [], flagged) }
+    suggestions[item.section] = item.suggestion
+    suggestionSummaries[item.section] = item.summary || item.suggestion
+    revisionSegments[item.section] = [{ text: sectionText }, { text: ` ${ensurePeriod(item.addedText)}`, added: true }]
+  }
+  return {
+    id: `lesson-${Date.now().toString(36)}`,
+    title: review.title || fallbackTitle,
+    steps,
+    practices: [],
+    suggestions,
+    suggestionSummaries,
+    revisionSegments,
+    workflows: {},
+  }
 }
 
 // How a saved lesson version was generated (kept in its lesson_content).
@@ -11477,6 +11895,7 @@ type PlanningPanelProps = {
   revisionEditor: RevisionWorkflow
   isSavingVersion: boolean
   isGeneratingLesson: boolean
+  brainstormRemote: ((request: BrainstormRequest) => Promise<string>) | null
   defaultFramework: StandardsFrameworkId
   // A saved demo lesson's planning form to start from; null for a blank one.
   formSeed: PlanningFormSeed | null
@@ -11492,6 +11911,7 @@ function LessonPlanningPage({
   canvasProps,
   planningPanelProps,
   activityClasses,
+  activityRemote,
   lessonGeneratedWith,
   onStartNew,
 }: {
@@ -11499,7 +11919,7 @@ function LessonPlanningPage({
   lessonGeneratedWith: PlanningMethod | null
   // Clears everything for a new lesson or activity.
   onStartNew: () => void
-  onGenerateLessonPlan: (details: PlanningLessonDetails) => void
+  onGenerateLessonPlan: (details: PlanningLessonDetails, brainstorm?: ChatMessage[]) => void
   onUploadLesson?: (file: File, details: PlanningLessonDetails) => void
   lessonGenerated: boolean
   isGeneratingLesson: boolean
@@ -11508,6 +11928,9 @@ function LessonPlanningPage({
   // The class(es) an activity planned here belongs to — empty when Lesson
   // Planning wasn't opened in a class's context.
   activityClasses: readonly LinkClass[]
+  // Supabase Mode with practiceActivity on: real AI drafts, saving, and the
+  // Student Feedback Page. null keeps the mock activity workflow.
+  activityRemote: ActivityRemote | null
 }) {
   // Brainstorm with AI's focus decides what the right side shows: a
   // practice activity gets the Activity workspace instead of the lesson.
@@ -11532,18 +11955,46 @@ function LessonPlanningPage({
 
   // A regeneration waiting for the teacher's OK, because it would replace
   // work they confirmed or edited.
-  const [pendingRegeneration, setPendingRegeneration] = useState<ActivityDraftRequest | null>(null)
+  const [pendingRegeneration, setPendingRegeneration] = useState<{ request: ActivityDraftRequest; conversation: ChatMessage[] } | null>(null)
   const collectionEdited =
     activityDraft !== null && JSON.stringify(collection) !== JSON.stringify(activityDraft.collection)
 
-  const generateActivity = (request: ActivityDraftRequest, confirmedOverwrite = false) => {
-    if (isGeneratingActivity) return
+  // Supabase Mode: the conversation the current draft came from, the saved
+  // activity (lesson + version, and the collection saved with it), how many
+  // of the conversation's messages are saved, the Student Feedback Page URL,
+  // and what saving last did.
+  const [activityConversation, setActivityConversation] = useState<ChatMessage[]>([])
+  const [savedActivity, setSavedActivity] = useState<{ lessonId: string; lessonVersionId: string; collectionJson: string } | null>(null)
+  const savedConversationCountRef = useRef(0)
+  const [activityPageUrl, setActivityPageUrl] = useState<string | null>(null)
+  const [activityStatus, setActivityStatus] = useState<LessonWorkspaceCanvasProps['saveStatus']>(null)
+  const [isSavingActivity, setIsSavingActivity] = useState(false)
+
+  const generateActivity = (request: ActivityDraftRequest, conversation: ChatMessage[], confirmedOverwrite = false) => {
+    if (isGeneratingActivity || isSavingActivity) return
     if (!confirmedOverwrite && activityDraft && (activityConfirmed || collectionConfirmed || collectionEdited)) {
-      setPendingRegeneration(request)
+      setPendingRegeneration({ request, conversation })
       return
     }
     setPendingRegeneration(null)
     setIsGeneratingActivity(true)
+    if (activityRemote) {
+      // Real AI: one request. A failure leaves the current draft as it was.
+      setActivityStatus(null)
+      activityRemote
+        .generate(request)
+        .then((draft) => {
+          setActivityDraft(draft)
+          setCollection(draft.collection)
+          setActivityConfirmed(false)
+          setCollectionConfirmed(false)
+          setActivityConversation(conversation)
+          setActivityPageUrl(null)
+        })
+        .catch((error) => setActivityStatus({ kind: 'error', message: `The activity wasn’t drafted: ${toApiError(error, 'The AI service couldn’t draft it.').message}` }))
+        .finally(() => setIsGeneratingActivity(false))
+      return
+    }
     activityTimeoutRef.current = window.setTimeout(() => {
       const draft = callAiModel('practice-activity', request, mockActivityDraft)
       setActivityDraft(draft)
@@ -11552,6 +12003,67 @@ function LessonPlanningPage({
       setCollectionConfirmed(false)
       setIsGeneratingActivity(false)
     }, 900)
+  }
+
+  // Confirm Activity (Supabase Mode): saves the activity — a new lesson the
+  // first time, a new version after regenerating — with the part of its
+  // conversation not saved yet. It's confirmed only once saved.
+  const confirmActivity = async () => {
+    if (!activityRemote || !activityDraft) {
+      setActivityConfirmed(true)
+      return
+    }
+    if (isSavingActivity) return
+    setIsSavingActivity(true)
+    setActivityStatus({ kind: 'saving', message: 'Saving the activity…' })
+    try {
+      const saved = await activityRemote.save({
+        draft: activityDraft,
+        collection,
+        savedLessonId: savedActivity?.lessonId ?? null,
+        createdBy: 'ai',
+        conversation: activityConversation.slice(savedConversationCountRef.current),
+      })
+      if (!saved.conversationError) savedConversationCountRef.current = activityConversation.length
+      setSavedActivity({ lessonId: saved.lessonId, lessonVersionId: saved.lessonVersionId, collectionJson: JSON.stringify(collection) })
+      setActivityConfirmed(true)
+      setActivityStatus({
+        kind: saved.conversationError ? 'error' : 'saved',
+        message: `Activity saved to your Library (version ${saved.versionNumber}).${saved.conversationError ? ` Its conversation wasn’t saved: ${saved.conversationError}` : ''}`,
+      })
+    } catch (error) {
+      setActivityStatus({ kind: 'error', message: `The activity wasn’t saved: ${toApiError(error, 'Couldn’t save the activity.').message}` })
+    } finally {
+      setIsSavingActivity(false)
+    }
+  }
+
+  // Confirming the student work to collect (Supabase Mode): an edited
+  // collection is saved as a new version first, then that version gets its
+  // Student Feedback Page (an existing one is reused) and its URL.
+  const confirmCollection = async () => {
+    if (!activityRemote || !activityDraft || !savedActivity) {
+      setCollectionConfirmed(true)
+      return
+    }
+    if (isSavingActivity) return
+    setIsSavingActivity(true)
+    setActivityStatus({ kind: 'saving', message: 'Creating the Student Feedback Page…' })
+    try {
+      let version = savedActivity
+      if (JSON.stringify(collection) !== savedActivity.collectionJson) {
+        const saved = await activityRemote.save({ draft: activityDraft, collection, savedLessonId: savedActivity.lessonId, createdBy: 'teacher', conversation: [] })
+        version = { lessonId: saved.lessonId, lessonVersionId: saved.lessonVersionId, collectionJson: JSON.stringify(collection) }
+        setSavedActivity(version)
+      }
+      setActivityPageUrl(await activityRemote.pageUrl(version.lessonId, version.lessonVersionId))
+      setCollectionConfirmed(true)
+      setActivityStatus({ kind: 'saved', message: 'Student Feedback Page ready. Share the link below with the class.' })
+    } catch (error) {
+      setActivityStatus({ kind: 'error', message: `The Student Feedback Page wasn’t created: ${toApiError(error, 'Couldn’t create it.').message}` })
+    } finally {
+      setIsSavingActivity(false)
+    }
   }
 
   // Continue Refining: back to the conversation on the left.
@@ -11580,20 +12092,24 @@ function LessonPlanningPage({
           draft={activityDraft}
           isGenerating={isGeneratingActivity}
           confirmed={activityConfirmed}
-          onConfirm={() => setActivityConfirmed(true)}
+          onConfirm={() => void confirmActivity()}
           onContinueRefining={continueRefining}
           collection={collection}
           onCollectionChange={(next) => {
             setCollection(next)
             setCollectionConfirmed(false)
+            setActivityPageUrl(null)
           }}
           collectionConfirmed={collectionConfirmed}
-          onConfirmCollection={() => setCollectionConfirmed(true)}
+          onConfirmCollection={() => void confirmCollection()}
           classes={activityClasses}
           linkId={activityLinkId}
+          saveStatus={activityStatus}
+          isSaving={isSavingActivity}
+          pageUrl={activityRemote ? activityPageUrl : undefined}
           regenerationWarning={
             pendingRegeneration && {
-              onRegenerate: () => generateActivity(pendingRegeneration, true),
+              onRegenerate: () => generateActivity(pendingRegeneration.request, pendingRegeneration.conversation, true),
               onKeep: () => setPendingRegeneration(null),
             }
           }
@@ -11623,8 +12139,17 @@ function PracticeActivityWorkspace({
   onConfirmCollection,
   classes,
   linkId,
+  saveStatus = null,
+  isSaving = false,
+  pageUrl,
   regenerationWarning,
 }: {
+  // Supabase Mode: what saving last did, and whether it's in progress.
+  saveStatus?: LessonWorkspaceCanvasProps['saveStatus']
+  isSaving?: boolean
+  // Supabase Mode: the saved activity's Student Feedback Page URL (null
+  // until created). Undefined: the mock link.
+  pageUrl?: string | null
   // Shown when Regenerate would replace confirmed or edited work.
   regenerationWarning: { onRegenerate: () => void; onKeep: () => void } | null
   draft: ActivityDraft | null
@@ -11649,6 +12174,11 @@ function PracticeActivityWorkspace({
             <h3>Science practice activity</h3>
           </div>
         </div>
+        {saveStatus && !isGenerating && (
+          <p className={`lesson-save-status ${saveStatus.kind}`} role={saveStatus.kind === 'error' ? 'alert' : 'status'}>
+            {saveStatus.message}
+          </p>
+        )}
         {isGenerating ? (
           <div className="empty-state">
             <p className="card-label">Drafting activity</p>
@@ -11684,6 +12214,11 @@ function PracticeActivityWorkspace({
           Updating the draft with your conversation…
         </p>
       )}
+      {saveStatus && !isGenerating && (
+        <p className={`lesson-save-status ${saveStatus.kind}`} role={saveStatus.kind === 'error' ? 'alert' : 'status'}>
+          {saveStatus.message}
+        </p>
+      )}
       {regenerationWarning && (
         <div className="activity-regenerate-warning" role="alertdialog" aria-labelledby="activity-regenerate-warning-text">
           <p id="activity-regenerate-warning-text">
@@ -11712,7 +12247,9 @@ function PracticeActivityWorkspace({
           <p className="card-label lesson-section-heading">Teaching Topic</p>
           <p>{draft.topic}</p>
           <p className="activity-topic-note">
-            {draft.template !== 'generic'
+            {draft.template === 'ai'
+              ? 'Drafted by AI from your conversation. Review it before confirming.'
+              : draft.template !== 'generic'
               ? `Prewritten mock activity for the ${activityTemplateLabels[draft.template]} demo lesson, with your grade level and selected practices. Prototype content — not AI-generated for your class.`
               : `Generic mock activity template, filled in with your topic and selected practices — the prototype’s mock AI doesn’t evaluate the topic itself.${
                   draft.topicNotesUsed ? ` Some wording comes from built-in notes on ${draft.topicNotesUsed}, matched by keyword.` : ''
@@ -11777,7 +12314,7 @@ function PracticeActivityWorkspace({
             ✓ Activity confirmed. To change it, keep refining and regenerate — the new draft will need your confirmation again.
           </p>
         ) : (
-          <button type="button" className="primary-button" disabled={isGenerating} onClick={onConfirm}>
+          <button type="button" className="primary-button" disabled={isGenerating || isSaving} onClick={onConfirm}>
             Confirm Activity
           </button>
         )}
@@ -11792,12 +12329,16 @@ function PracticeActivityWorkspace({
           onChange={onCollectionChange}
           onConfirm={onConfirmCollection}
         >
-          <ClassFeedbackLinks
-            link={{ lessonId: linkId, lessonTitle: draft.title, activities: collection.map(({ name, submission }) => ({ name, submission })) }}
-            classes={classes}
-            kind="activity"
-            contents={`the ${joinLabels(collection.map((item) => item.name))}`}
-          />
+          {pageUrl === undefined ? (
+            <ClassFeedbackLinks
+              link={{ lessonId: linkId, lessonTitle: draft.title, activities: collection.map(({ name, submission }) => ({ name, submission })) }}
+              classes={classes}
+              kind="activity"
+              contents={`the ${joinLabels(collection.map((item) => item.name))}`}
+            />
+          ) : (
+            pageUrl && <SavedFeedbackPageLink url={pageUrl} classLabel={classes[0]?.label ?? ''} contents={`the ${joinLabels(collection.map((item) => item.name))}`} />
+          )}
         </StudentProductCollection>
       )}
     </section>
@@ -12056,6 +12597,39 @@ function ClassFeedbackLinks({
   )
 }
 
+// A saved activity's Student Feedback Page link (Supabase Mode): the page
+// created for its class, laid out like ClassFeedbackLinks.
+function SavedFeedbackPageLink({ url, classLabel, contents }: { url: string; classLabel: string; contents: string }) {
+  const [copied, setCopied] = useState(false)
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+    } catch {
+      setCopied(false)
+    }
+  }
+  return (
+    <>
+      <div className="feedback-link-class">
+        {classLabel && <p className="feedback-link-class-name">Class: {classLabel}</p>}
+        <div className="feedback-link-row">
+          <input type="text" readOnly value={url} aria-label={`Student Feedback link for ${classLabel}`} onFocus={(event) => event.target.select()} />
+          <button type="button" className="secondary-button" onClick={() => void copyLink()}>
+            {copied ? 'Copied' : 'Copy Link'}
+          </button>
+          <a className="primary-button feedback-open-link" href={url} target="_blank" rel="noopener noreferrer">
+            Open Student Page
+          </a>
+        </div>
+      </div>
+      <p className="feedback-link-note">
+        This activity’s Student Feedback Page — one assignment where students submit {contents}. Students sign in with their class Student ID.
+      </p>
+    </>
+  )
+}
+
 // The student work one assignment collects — for the prototype, a Model and
 // an Explanation (see studentProducts). Teachers review each, can edit its
 // description or remove it (and add it back), and confirm them together;
@@ -12229,6 +12803,8 @@ type LessonWorkspaceCanvasProps = {
   onEditsSaved?: () => void
   // Saves the lesson's current changes again after a failed save.
   onRetrySave?: (createdBy: VersionCreatedBy) => void
+  // The teacher dismissed the AI suggestion on this section.
+  onSuggestionDismissed?: (label: string) => void
   editor: RevisionWorkflow
   lesson: LessonDocument
   // The id used in the lesson's Student Feedback link.
@@ -12261,6 +12837,7 @@ function LessonWorkspaceCanvas({
   isSavingVersion = false,
   onEditsSaved,
   onRetrySave,
+  onSuggestionDismissed,
   editor,
   lesson,
   lessonLinkId,
@@ -12378,7 +12955,7 @@ function LessonWorkspaceCanvas({
     const suggestion = !isApplied && !dismissedSuggestions.includes(key) ? lesson.suggestions[key] : undefined
     const showSuggestionHighlight = Boolean(suggestion)
     const sectionClassName =
-      [isFocused && 'section-focused', editor.justAppliedLabel === key && 'section-just-applied']
+      [isFocused && 'section-focused', editor.justAppliedLabel === key && 'section-just-applied', step.preformatted && 'section-preformatted']
         .filter(Boolean)
         .join(' ') || undefined
 
@@ -12398,6 +12975,7 @@ function LessonWorkspaceCanvas({
     // Dismissing keeps the original text; it also closes the suggestion's
     // conversation if that's the one open on the left.
     const dismissSuggestion = () => {
+      if (!dismissedSuggestions.includes(key)) onSuggestionDismissed?.(key)
       setDismissedSuggestions((prev) => (prev.includes(key) ? prev : [...prev, key]))
       if (editor.activeLabel === key) editor.closeChat()
     }

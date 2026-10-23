@@ -13,9 +13,9 @@
 
 export type AppMode = 'demo' | 'supabase'
 
-export type Integration = 'auth' | 'classes' | 'lessonPlanning' | 'lessonGeneration' | 'lessonRevision' | 'studentFeedback' | 'classFeedback'
+export type Integration = 'auth' | 'classes' | 'lessonPlanning' | 'lessonGeneration' | 'lessonRevision' | 'lessonBrainstorm' | 'practiceActivity' | 'studentFeedback' | 'classFeedback'
 
-const knownIntegrations: readonly Integration[] = ['auth', 'classes', 'lessonPlanning', 'lessonGeneration', 'lessonRevision', 'studentFeedback', 'classFeedback']
+const knownIntegrations: readonly Integration[] = ['auth', 'classes', 'lessonPlanning', 'lessonGeneration', 'lessonRevision', 'lessonBrainstorm', 'practiceActivity', 'studentFeedback', 'classFeedback']
 
 const listed = new Set(
   (import.meta.env.VITE_SUPABASE_INTEGRATIONS ?? '')

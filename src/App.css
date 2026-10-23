@@ -1836,6 +1836,11 @@ textarea {
   color: #8a1c1c;
 }
 
+/* An uploaded lesson's section keeps the teacher's own line breaks. */
+.section-preformatted > p {
+  white-space: pre-line;
+}
+
 .objective-practice-note {
   display: flex;
   flex-wrap: wrap;
