@@ -3370,6 +3370,24 @@ textarea {
   margin: 6px 0 0;
 }
 
+/* A real submission's Model section, and its Written explanation set apart
+   below it. */
+.artifact-model {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.artifact-model .card-label,
+.artifact-model .finding-practices {
+  margin: 0;
+}
+
+.artifact-model + .artifact-explanation {
+  border-top: 1px solid #e8eef4;
+  padding-top: 12px;
+}
+
 .artifact-lightbox {
   position: fixed;
   inset: 0;

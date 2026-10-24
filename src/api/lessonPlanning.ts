@@ -26,6 +26,7 @@ export type LessonFields = {
   materials_equipment: string | null
   lesson_template_path: string | null
   rubric_path: string | null
+  differentiation: string | null
 }
 
 export type VersionCreatedBy = 'ai' | 'teacher' | 'ai_teacher'
@@ -110,7 +111,7 @@ type LessonRow = {
 
 const lessonColumns =
   'lesson_id, class_id, lesson_source, lesson_title, grade_level, topic, standards, science_practices, learning_objectives, duration, ' +
-  'prior_instruction, subsequent_instruction, instructional_sequence, materials_equipment, lesson_template_path, rubric_path, created_at, updated_at'
+  'prior_instruction, subsequent_instruction, instructional_sequence, materials_equipment, lesson_template_path, rubric_path, differentiation, created_at, updated_at'
 
 // The signed-in teacher's lessons for the given classes, oldest first, each
 // with its current version.
@@ -157,6 +158,7 @@ export async function listLessonsForClasses(classIds: readonly string[]): Promis
         materials_equipment: row.materials_equipment,
         lesson_template_path: row.lesson_template_path,
         rubric_path: row.rubric_path,
+        differentiation: row.differentiation,
       },
       currentVersion: version
         ? {

@@ -26,9 +26,21 @@ import { listLessonsForClasses, saveLessonVersion, saveNewLesson, type LessonFie
 import { generateLesson, type GenerationUsage } from './api/lessonGeneration'
 import { reviseLessonSection, revisionSuggestionForConversation, saveRevisionAction, saveRevisionSuggestion } from './api/lessonRevision'
 import { brainstormReplyFromAi, saveBrainstormConversation, type BrainstormRequest } from './api/brainstorm'
-import { generateActivityDraft, studentFeedbackPageFor, type GeneratedActivity } from './api/practiceActivity'
+import { generateActivityDraft, latestStudentFeedbackPage, studentFeedbackPageFor, type GeneratedActivity } from './api/practiceActivity'
 import { reviewUploadedLesson, type LessonReview } from './api/lessonReview'
 import { LessonFileError, lessonFileAccept, readLessonFile } from './lib/lessonFile'
+import {
+  discussFinding,
+  generateClassSummary,
+  generateStudentReport,
+  latestFeedbackPageId,
+  loadClassFeedback,
+  loadStudentReport,
+  regenerateFacilitationQuestions,
+  type ClassFeedbackData,
+  type StudentReportPage,
+} from './api/classFeedback'
+import { loadMyWork, loadStudentPage, requestAiFeedback, submitWork, uploadModelImage, verifyStudentId, type StudentFeedbackMessage, type StudentPageLesson, type StudentWork } from './api/studentFeedback'
 import { authDebug, shortId } from './lib/authDebug'
 import { appMode, readStoredDemoSession, setSessionDataMode, storeDemoSession, usesSupabase } from './lib/dataSource'
 import './App.css'
@@ -2821,6 +2833,9 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
   // Bumped by Start New to give Lesson Planning a fresh form, conversation,
   // and activity (and when a saved lesson is opened, to load its form).
   const [planningSessionKey, setPlanningSessionKey] = useState(0)
+  // A saved activity opened from the Library, for the planning session it
+  // was opened in (any later session starts without it).
+  const [activityToOpen, setActivityToOpen] = useState<{ sessionKey: number; activity: SavedActivityOpen } | null>(null)
   // A demo lesson's saved planning form, loaded with its lesson; null for a
   // blank form.
   const [planningFormSeed, setPlanningFormSeed] = useState<PlanningFormSeed | null>(null)
@@ -2846,6 +2861,9 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
   )
   // Who is signed in to Student Feedback, by class: their class Student ID.
   const [studentSignIns, setStudentSignIns] = useState<Record<string, string>>({})
+  // Supabase Mode (studentFeedback on): the saved Student Feedback Page the
+  // URL opens, by its access token.
+  const [studentPageToken, setStudentPageToken] = useState(() => (usesSupabase('studentFeedback') ? readStudentPageToken() : null))
   // Individual Student Reports: the lesson, class, student, and model type
   // it shows (kept in the URL), and the page its Back button returns to.
   const [studentReportsRoute, setStudentReportsRoute] = useState<StudentReportsRoute | null>(readStudentReportsRoute)
@@ -2900,6 +2918,9 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
   // The lesson Class Feedback is showing — set from the Library; the main
   // nav shows the Library's demo lesson, whose class data the page has.
   const [classFeedbackLessonId, setClassFeedbackLessonId] = useState<string | null>(null)
+  // A saved lesson opened from the Library (Supabase Mode) gets the real
+  // Class Feedback; otherwise the demo's.
+  const savedClassFeedbackLesson = usesSupabase('classFeedback') ? (libraryLessons.find((lesson) => lesson.id === classFeedbackLessonId) ?? null) : null
   const classFeedbackLesson =
     libraryLessons.find((lesson) => lesson.id === classFeedbackLessonId) ??
     libraryLessons.find((lesson) => lesson.id === classFeedbackAssignments[0].lessonId) ??
@@ -2973,11 +2994,21 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
           const stored = await listLessonsForClasses(classRecords.map((record) => record.classId))
           if (!active) return
           const framework = (currentAccount.state ?? 'NGSS') as StandardsFrameworkId
-          const lessons = stored.map((item, index) => libraryLessonFromStored(item, index, email, framework))
+          // Each lesson's newest Student Feedback Page (a failed lookup just
+          // leaves that lesson without one).
+          const pageTokens = usesSupabase('studentFeedback')
+            ? await Promise.all(stored.map((item) => latestStudentFeedbackPage(item.lessonId).catch(() => null)))
+            : stored.map(() => null)
+          if (!active) return
+          const lessons = stored.map((item, index) => ({
+            ...libraryLessonFromStored(item, index, email, framework),
+            studentFeedback: savedPageAssignments(item.lessonId, pageTokens[index]),
+          }))
           remoteLessonIdsRef.current = new Set(stored.map((item) => item.lessonId))
           for (const item of stored) {
             const content = readSavedLessonContent(item.currentVersion?.content)
             if (content) lessonFormsRef.current.set(item.lessonId, content.form)
+            if (content) savedProductsRef.current.set(item.lessonId, studentProductsKey(content.studentProducts ?? []))
             if (item.currentVersion) {
               lessonVersionNumbersRef.current.set(item.lessonId, item.currentVersion.versionNumber)
               lessonVersionIdsRef.current.set(item.lessonId, item.currentVersion.lessonVersionId)
@@ -3030,6 +3061,64 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
   // Each saved lesson's current version number and version id.
   const lessonVersionNumbersRef = useRef(new Map<string, number>())
   const lessonVersionIdsRef = useRef(new Map<string, string>())
+  // The student products each saved lesson's current version holds.
+  const savedProductsRef = useRef(new Map<string, string>())
+
+  // Whole Lesson, Supabase Mode: confirming the lesson's student work gives
+  // it a real Student Feedback Page, as Science Practice Activities have —
+  // the same create_student_feedback_page, page, student login, and
+  // submissions. Products changed since the saved version are saved as a
+  // new version first (in the version queue), so the page shows exactly
+  // what was confirmed. A lesson opened with its work already confirmed
+  // shows its newest page (made now if it has none).
+  const [lessonPage, setLessonPage] = useState<{
+    lessonId: string
+    productsKey: string
+    status: 'saving' | 'ready' | 'error'
+    url?: string
+    message?: string
+  } | null>(null)
+  const buildLessonFeedbackPage = (lessonId: string, products: readonly FeedbackActivity[], reuseLatest: boolean) => {
+    const key = studentProductsKey(products)
+    setLessonPage({ lessonId, productsKey: key, status: 'saving' })
+    const effective = effectiveLessonDocument({ ...lessonDocument, id: lessonId }, manualEdits, revisionEditor.revisedLesson)
+    const form = lessonFormsRef.current.get(lessonId)
+    const lesson = libraryLessons.find((item) => item.id === lessonId)
+    const classroom = libraryClasses.find((item) => item.lessonIds.includes(lessonId))
+    const finish = (next: NonNullable<typeof lessonPage>) =>
+      setLessonPage((prev) => (prev?.lessonId === lessonId && prev.productsKey === key ? next : prev))
+    versionSaveQueueRef.current = versionSaveQueueRef.current.then(async () => {
+      try {
+        const latest = reuseLatest ? await latestStudentFeedbackPage(lessonId) : null
+        if (latest) {
+          rememberStudentFeedbackPage(lessonId, latest)
+          finish({ lessonId, productsKey: key, status: 'ready', url: savedStudentPageUrl(latest) })
+          return
+        }
+        let versionId = lessonVersionIdsRef.current.get(lessonId)
+        if (!versionId || savedProductsRef.current.get(lessonId) !== key) {
+          if (!form || !lesson) throw new Error('This lesson’s saved form couldn’t be found. Reload the page and try again.')
+          const saved = await saveLessonVersion({
+            lessonId,
+            content: lessonContentFrom(effective, form, products),
+            createdBy: 'teacher',
+            fields: lessonFieldsFrom(form, lesson.title, classroom?.gradeLevel ?? ''),
+          })
+          versionId = saved.lessonVersionId
+          lastSavedLessonRef.current = { lessonId, snapshot: JSON.stringify(effective) }
+          lessonVersionNumbersRef.current.set(lessonId, saved.versionNumber)
+          lessonVersionIdsRef.current.set(lessonId, saved.lessonVersionId)
+          savedProductsRef.current.set(lessonId, key)
+          setLessonSaveStatus({ kind: 'saved', message: `Student work saved as version ${saved.versionNumber}.` })
+        }
+        const pageToken = await studentFeedbackPageFor(lessonId, versionId)
+        rememberStudentFeedbackPage(lessonId, pageToken)
+        finish({ lessonId, productsKey: key, status: 'ready', url: savedStudentPageUrl(pageToken) })
+      } catch (error) {
+        finish({ lessonId, productsKey: key, status: 'error', message: toApiError(error, 'Couldn’t create it.').message })
+      }
+    })
+  }
 
   // Apply / Dismiss on AI suggestions, recorded in lesson_revision_actions
   // (Supabase Mode, lessonRevision on, saved lessons only). An Apply is
@@ -3164,19 +3253,18 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
           const index = libraryClasses.filter((classroom) => classroom.ownerEmail === currentTeacherEmail).length
           return libraryClassFromRecord(record, [], { name: values.teacherName.trim() || remoteTeacherName, email: currentTeacherEmail }, index)
         },
-        // Adds students with app-generated Student IDs through
-        // register_student_roster, then reads the roster back.
+        // Adds students through register_student_roster, which creates each
+        // one's Student ID (8 random characters), then reads the roster back.
         registerStudents: async (classroom: LibraryClass, names: readonly string[]): Promise<RegisteredStudents> => {
-          const before = (await listRosters([classroom.id]))[classroom.id] ?? []
-          const ids = planStudentIds(before, studentIdPrefixFor(classroom.teacherName || remoteTeacherName, classroom.name), names.length)
-          await registerStudentRoster(
+          const saved = await registerStudentRoster(
             classroom.id,
-            names.map((name, index) => ({ studentName: name, studentPseudonym: ids[index] })),
+            names.map((name) => ({ studentName: name })),
           )
+          const ids = names.map((_, index) => saved[index]?.studentPseudonym ?? '')
           const after = (await listRosters([classroom.id]))[classroom.id] ?? []
           // Success only when every new student is in the roster read back
           // from Supabase — never on the RPC's word alone.
-          const missing = names.filter((_, index) => !after.some((student) => student.studentPseudonym === ids[index]))
+          const missing = names.filter((_, index) => !ids[index] || !after.some((student) => student.studentPseudonym === ids[index]))
           if (missing.length > 0) {
             throw new ApiError(
               `${joinLabels(missing)} ${missing.length === 1 ? 'wasn’t' : 'weren’t'} found in the saved roster, so ${missing.length === 1 ? 'it' : 'they'} may not have been saved. Please refresh and check before adding again.`,
@@ -3405,6 +3493,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
       lessonFormsRef.current.set(lessonId, details)
       lessonVersionNumbersRef.current.set(lessonId, saved.versionNumber)
       lessonVersionIdsRef.current.set(lessonId, saved.lessonVersionId)
+      savedProductsRef.current.set(lessonId, studentProductsKey(studentProducts))
       const savedDocument = { ...content.document, id: lessonId }
       lastSavedLessonRef.current = { lessonId, snapshot: JSON.stringify(savedDocument) }
       const record = (bannerColor: string): LibraryLesson => ({
@@ -3413,7 +3502,10 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
         lessonPlan: { hasDemoContent: true, document: savedDocument, feedbackActivities: studentProducts, formSeed: formSeedFromDetails(details, framework) },
       })
       if (existingId) {
-        setLibraryLessons((prev) => prev.map((lesson) => (lesson.id === lessonId ? record(lesson.bannerColor) : lesson)))
+        // A new version keeps the lesson's Student Feedback Page.
+        setLibraryLessons((prev) =>
+          prev.map((lesson) => (lesson.id === lessonId ? { ...record(lesson.bannerColor), studentFeedback: lesson.studentFeedback } : lesson)),
+        )
       } else {
         setLibraryLessons((prev) => [...prev, record(lessonBannerColors[prev.filter((lesson) => lesson.ownerEmail === currentTeacherEmail).length % lessonBannerColors.length])])
         setLibraryClasses((prev) =>
@@ -3512,7 +3604,28 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
         }
       }),
     )
+    // A saved lesson's confirmed student work gets its Student Feedback Page
+    // (again when the confirmed products change); unconfirming hides it.
+    if (lessonPersistence === 'supabase' && remoteLessonIdsRef.current.has(workspaceLessonId)) {
+      const confirmed = next.length > 0 && next.every((activity) => activity.confirmed)
+      if (!confirmed) {
+        setLessonPage((prev) => (prev?.lessonId === workspaceLessonId ? null : prev))
+      } else if (lessonPage?.lessonId !== workspaceLessonId || lessonPage.productsKey !== studentProductsKey(next) || lessonPage.status === 'error') {
+        buildLessonFeedbackPage(workspaceLessonId, next, false)
+      }
+    }
   }
+
+  // A saved lesson opened with its student work already confirmed shows its
+  // Student Feedback Page.
+  useEffect(() => {
+    if (lessonPersistence !== 'supabase' || !workspaceLessonId || !lessonGenerated || !remoteLessonIdsRef.current.has(workspaceLessonId)) return
+    if (feedbackActivities.length === 0 || !feedbackActivities.every((activity) => activity.confirmed)) return
+    if (lessonPage?.lessonId === workspaceLessonId) return
+    buildLessonFeedbackPage(workspaceLessonId, feedbackActivities, true)
+    // Runs when a lesson (and its products) opens; the rest is read then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceLessonId, lessonGenerated, feedbackActivities])
 
   // Returns an error message for the login form, or null on success. A
   // first login with an unknown email creates the account, like Create
@@ -3599,9 +3712,17 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
     // A lesson saved in Supabase stays linked to its class, so re-generating
     // saves a new version of it.
     const isRemote = remoteLessonIdsRef.current.has(lesson.id)
-    setPlanningTarget(isRemote && classroom ? { classId: classroom.id, savedLessonId: lesson.id } : null)
+    // A saved Science Practice Activity reopens in Brainstorm with AI's
+    // Activity workspace (it saves its own versions; a whole lesson planned
+    // from here would be a new lesson).
+    const activity = isRemote ? lesson.lessonPlan.activity : undefined
+    setActivityToOpen(activity ? { sessionKey: planningSessionKey + 1, activity } : null)
+    if (activity) setPlanningTab('brainstorm')
+    setPlanningTarget(isRemote && classroom ? { classId: classroom.id, savedLessonId: activity ? null : lesson.id } : null)
     setLessonSaveStatus(
-      isRemote && !lesson.lessonPlan.document ? { kind: 'error', message: 'This lesson’s saved content couldn’t be read, so it can’t be shown.' } : null,
+      isRemote && !lesson.lessonPlan.document && !activity
+        ? { kind: 'error', message: 'This lesson’s saved content couldn’t be read, so it can’t be shown.' }
+        : null,
     )
     setLibraryContext({ lesson, className: classroom ? classDisplayName(classroom) : undefined, page: 'lesson-generator', source })
     setActivePage('lesson-generator')
@@ -3625,11 +3746,20 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
     setActivePage('lesson-generator')
   }
 
+  // A lesson's (or activity's) Student Feedback Page was found or created:
+  // the Library's Student Feedback opens it.
+  const rememberStudentFeedbackPage = (lessonId: string, pageToken: string) =>
+    setLibraryLessons((prev) =>
+      prev.map((lesson) => (lesson.id === lessonId ? { ...lesson, studentFeedback: savedPageAssignments(lessonId, pageToken) } : lesson)),
+    )
+
   const handleOpenStudentFeedback = (
     lesson: LibraryLesson,
     assignment: StudentFeedbackAssignment,
     classroom: LibraryClass | null,
   ) => {
+    // A saved lesson's real Student Feedback Page: the page students open.
+    setStudentPageToken(assignment.pageToken ?? null)
     setStudentFeedbackTab(assignment.modelTab)
     setStudentAssignment(assignment.link ?? null)
     setStudentFeedbackClassId(classroom?.id ?? null)
@@ -3850,6 +3980,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
         lastSavedLessonRef.current = { lessonId, snapshot }
         lessonVersionNumbersRef.current.set(lessonId, saved.versionNumber)
         lessonVersionIdsRef.current.set(lessonId, saved.lessonVersionId)
+        savedProductsRef.current.set(lessonId, studentProductsKey(activities))
         setLibraryLessons((prev) =>
           prev.map((item) => (item.id === lessonId ? { ...item, lessonPlan: { ...item.lessonPlan, document: effective } } : item)),
         )
@@ -3880,6 +4011,12 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
     onEditsSaved: () => requestLessonVersion('teacher'),
     onRetrySave: requestLessonVersion,
     onSuggestionDismissed: recordDismissedSuggestion,
+    savedPage:
+      lessonPersistence === 'supabase' && workspaceLessonId && remoteLessonIdsRef.current.has(workspaceLessonId)
+        ? lessonPage?.lessonId === workspaceLessonId
+          ? lessonPage
+          : null
+        : undefined,
     editor: revisionEditor,
     lesson: lessonDocument,
     lessonLinkId,
@@ -3954,10 +4091,39 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
               materials_equipment: null,
               lesson_template_path: null,
               rubric_path: null,
+              differentiation: null,
             }
             const saved = savedLessonId
               ? await saveLessonVersion({ lessonId: savedLessonId, content, createdBy, fields })
               : await saveNewLesson({ classId: planningTarget.classId, lessonSource: 'generated', fields, content })
+            // Keep the Library in step, so reopening the activity shows this version.
+            const classId = planningTarget.classId
+            const now = new Date().toISOString()
+            const stored: StoredLesson = {
+              lessonId: saved.lessonId,
+              classId,
+              lessonSource: 'generated',
+              createdAt: now,
+              updatedAt: now,
+              fields,
+              currentVersion: { lessonVersionId: saved.lessonVersionId, versionNumber: saved.versionNumber, content, createdBy, createdAt: now },
+            }
+            const framework = (currentAccount.state ?? 'NGSS') as StandardsFrameworkId
+            remoteLessonIdsRef.current.add(saved.lessonId)
+            setLibraryLessons((prev) => {
+              const existing = prev.find((lesson) => lesson.id === saved.lessonId)
+              const record = libraryLessonFromStored(stored, prev.filter((lesson) => lesson.ownerEmail === currentTeacherEmail).length, currentTeacherEmail, framework)
+              return existing
+                ? prev.map((lesson) =>
+                    lesson.id === saved.lessonId ? { ...record, bannerColor: existing.bannerColor, studentFeedback: existing.studentFeedback } : lesson,
+                  )
+                : [...prev, record]
+            })
+            if (!savedLessonId) {
+              setLibraryClasses((prev) =>
+                prev.map((classroom) => (classroom.id === classId ? { ...classroom, lessonIds: [...classroom.lessonIds, saved.lessonId] } : classroom)),
+              )
+            }
             let conversationError: string | null = null
             if (conversation.length > 0) {
               try {
@@ -3973,8 +4139,9 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
             return { ...saved, conversationError }
           },
           pageUrl: async (lessonId, lessonVersionId) => {
-            const token = await studentFeedbackPageFor(lessonId, lessonVersionId)
-            return `${window.location.origin}${window.location.pathname}#student-feedback?page=${token}`
+            const pageToken = await studentFeedbackPageFor(lessonId, lessonVersionId)
+            rememberStudentFeedbackPage(lessonId, pageToken)
+            return savedStudentPageUrl(pageToken)
           },
         }
       : null
@@ -4012,6 +4179,8 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
       }
     }
     if (activePage === 'student-reports' && studentReportsRoute) hash = studentReportsHash(studentReportsRoute)
+    // A saved Student Feedback Page keeps its token in the URL (reload, share).
+    if (activePage === 'student-feedback' && studentPageToken) hash = `student-feedback?page=${encodeURIComponent(studentPageToken)}`
     if (activePage === 'lesson-generator') {
       const pendingRestore = lessonRestoreRef.current
       if (pendingRestore) {
@@ -4025,7 +4194,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
       }
     }
     window.location.hash = hash
-  }, [activePage, studentAssignment, studentFeedbackClassId, studentFeedbackTask, studentReportsRoute, workspaceLessonId, planningTarget])
+  }, [activePage, studentAssignment, studentFeedbackClassId, studentFeedbackTask, studentReportsRoute, workspaceLessonId, planningTarget, studentPageToken])
 
   // A reload of Lesson Planning reopens the saved lesson its URL names —
   // its current version, read from Supabase (nothing is saved). Changes
@@ -4082,6 +4251,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
       if (demoAssignment) setStudentFeedbackTab(demoAssignment.modelTab)
       const reportsRoute = readStudentReportsRoute()
       if (reportsRoute) setStudentReportsRoute(reportsRoute)
+      if (usesSupabase('studentFeedback')) setStudentPageToken(readStudentPageToken())
       setActivePage(getInitialPage(enteredPrototypeRef.current))
     }
     window.addEventListener('hashchange', handleHashChange)
@@ -4238,9 +4408,13 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
             planningPanelProps={planningPanelProps}
             activityClasses={activityLinkClasses}
             activityRemote={activityRemote}
+            openedActivity={activityToOpen?.sessionKey === planningSessionKey ? activityToOpen.activity : null}
           />
         )}
-        {activePage === 'student-feedback' && (
+        {activePage === 'student-feedback' && studentPageToken && (
+          <SavedStudentFeedbackPage key={studentPageToken} accessToken={studentPageToken} />
+        )}
+        {activePage === 'student-feedback' && !studentPageToken && (
           <StudentLoginGate
             key={studentLoginClassId ?? 'no-class'}
             classId={studentLoginClassId}
@@ -4275,7 +4449,23 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
             />
           </StudentLoginGate>
         )}
-        {activePage === 'class-feedback-dashboard' && (
+        {activePage === 'class-feedback-dashboard' && savedClassFeedbackLesson && (
+          <SavedClassFeedbackPage
+            key={savedClassFeedbackLesson.id}
+            lesson={savedClassFeedbackLesson}
+            onOpenStudentReport={(studentCode) =>
+              openStudentReports({
+                lessonId: savedClassFeedbackLesson.id,
+                classId: libraryClasses.find((item) => item.lessonIds.includes(savedClassFeedbackLesson.id))?.id ?? null,
+                assignmentId: null,
+                studentId: studentCode,
+                modelTab: 'descriptive',
+                work: 'model',
+              })
+            }
+          />
+        )}
+        {activePage === 'class-feedback-dashboard' && !savedClassFeedbackLesson && (
           <FeedbackDashboardPage
             key={classFeedbackLesson.id}
             lesson={classFeedbackLesson}
@@ -8239,7 +8429,20 @@ function LoginPage({
 // ---------------------------------------------------------------------------
 
 // `link` is set for a lesson's confirmed Student Feedback Activities.
-type StudentFeedbackAssignment = { id: string; title: string; modelTab: ModelTab; link?: StudentAssignmentLink }
+type StudentFeedbackAssignment = {
+  id: string
+  title: string
+  modelTab: ModelTab
+  link?: StudentAssignmentLink
+  // A saved lesson's (or activity's) real Student Feedback Page: its access
+  // token (student_feedback_pages.access_url).
+  pageToken?: string
+}
+
+// A saved lesson's Student Feedback, from its newest Student Feedback Page.
+function savedPageAssignments(lessonId: string, pageToken: string | null): StudentFeedbackAssignment[] {
+  return pageToken ? [{ id: `page-${lessonId}`, title: 'Student Feedback Page', modelTab: 'descriptive', pageToken }] : []
+}
 
 type LibraryLesson = {
   id: string
@@ -8252,7 +8455,15 @@ type LibraryLesson = {
   // `document` is the lesson generated for it on Lesson Planning; lessons
   // without one show the demo lesson when hasDemoContent is set.
   // `formSeed`: the planning form a lesson saved in Supabase was made from.
-  lessonPlan: { hasDemoContent: boolean; document?: LessonDocument; feedbackActivities?: FeedbackActivity[]; formSeed?: PlanningFormSeed }
+  lessonPlan: {
+    hasDemoContent: boolean
+    document?: LessonDocument
+    feedbackActivities?: FeedbackActivity[]
+    formSeed?: PlanningFormSeed
+    // A saved Science Practice Activity (Brainstorm with AI): reopened in the
+    // Activity workspace instead of the lesson workspace.
+    activity?: SavedActivityOpen
+  }
   studentFeedback: StudentFeedbackAssignment[]
   classFeedback: { available: boolean }
   // The teacher whose Library this lesson is in.
@@ -8521,6 +8732,7 @@ function lessonFieldsFrom(details: PlanningLessonDetails, title: string, classGr
     subsequent_instruction: text(details.optionalContext.subsequentInstruction),
     instructional_sequence: text(details.instructionalSequence),
     materials_equipment: text(details.optionalContext.materialsAndEquipment),
+    differentiation: text(details.optionalContext.differentiation),
     // Uploaded files aren't stored yet.
     lesson_template_path: null,
     rubric_path: null,
@@ -8565,6 +8777,19 @@ function readSavedLessonContent(content: Record<string, unknown> | undefined): S
   return candidate?.format === lessonContentFormat && Array.isArray(candidate.document?.steps) && candidate.form ? (candidate as SavedLessonContent) : null
 }
 
+// A saved activity to reopen: its current version's draft and the student
+// work it collects (lesson_content in the activity format).
+type SavedActivityOpen = { lessonId: string; lessonVersionId: string; versionNumber: number; draft: ActivityDraft; collection: CollectionOpportunity[] }
+
+function readSavedActivity(stored: StoredLesson): SavedActivityOpen | undefined {
+  const version = stored.currentVersion
+  if (!version) return undefined
+  const content = version.content as { format?: unknown; activity?: Partial<ActivityDraft> }
+  const activity = content.format === activityContentFormat ? content.activity : undefined
+  if (!activity || typeof activity.title !== 'string' || !Array.isArray(activity.collection) || !Array.isArray(activity.sequence)) return undefined
+  return { lessonId: stored.lessonId, lessonVersionId: version.lessonVersionId, versionNumber: version.versionNumber, draft: activity as ActivityDraft, collection: activity.collection }
+}
+
 // A lesson from Supabase as a Library lesson (its current version).
 function libraryLessonFromStored(stored: StoredLesson, index: number, ownerEmail: string, defaultFramework: StandardsFrameworkId): LibraryLesson {
   const content = readSavedLessonContent(stored.currentVersion?.content)
@@ -8581,9 +8806,11 @@ function libraryLessonFromStored(stored: StoredLesson, index: number, ownerEmail
       document: content ? { ...content.document, id: stored.lessonId } : undefined,
       feedbackActivities: content?.studentProducts,
       formSeed: content ? formSeedFromDetails(content.form, defaultFramework) : undefined,
+      activity: readSavedActivity(stored),
     },
     studentFeedback: [],
-    classFeedback: { available: false },
+    // Opens the real Class Feedback (SavedClassFeedbackPage).
+    classFeedback: { available: usesSupabase('classFeedback') },
     ownerEmail,
     standards: content?.form.standards ?? (fields.standards ?? []).map((code) => ({ code, framework: defaultFramework, custom: false })),
     sciencePractices: fields.science_practices ?? [],
@@ -8664,7 +8891,11 @@ function formatClassStudentId(prefix: string, studentNumber: number): string {
 // all mean SB-001), or null if it isn't one.
 function normalizeClassStudentId(raw: string): string | null {
   const match = /^(\p{L}{2})\s*-?\s*(\d+)$/u.exec(raw.trim())
-  return match ? formatClassStudentId(match[1].toUpperCase(), Number(match[2])) : null
+  if (match) return formatClassStudentId(match[1].toUpperCase(), Number(match[2]))
+  // A saved class's 8-character Student ID (e.g. K7M9Q4PX), in any case,
+  // with or without spaces or dashes.
+  const compact = raw.replace(/[\s-]/g, '').toUpperCase()
+  return /^[ABCDEFGHJKMNPQRSTUVWXYZ2-9]{8}$/.test(compact) ? compact : null
 }
 
 // Enrolls students in the class (skipping ones already in it). Each gets the
@@ -8715,26 +8946,6 @@ function rosterFieldsFor(roster: readonly RosterStudent[]): Pick<LibraryClass, '
     nextStudentNumber: parsed.reduce((highest, item) => Math.max(highest, item.number), 0) + 1,
     studentIdPrefix: parsed[0]?.prefix ?? null,
   }
-}
-
-// New Student IDs for a class, generated by the app (sequential, e.g.
-// SB-001): the class's existing prefix — or, for its first students, the
-// teacher's and class's initials — then numbers after the highest one used
-// with that prefix, skipping any ID already in the class. `roster` is read
-// from the database just before, so students added elsewhere are counted.
-function planStudentIds(roster: readonly RosterStudent[], fallbackPrefix: string, count: number): string[] {
-  const taken = new Set(roster.map((student) => student.studentPseudonym.trim().toUpperCase()))
-  const parsed = roster.flatMap((student) => parseClassStudentId(student.studentPseudonym) ?? [])
-  const prefix = parsed[0]?.prefix ?? fallbackPrefix
-  let next = parsed.filter((item) => item.prefix === prefix).reduce((highest, item) => Math.max(highest, item.number), 0) + 1
-  const ids: string[] = []
-  while (ids.length < count) {
-    const id = formatClassStudentId(prefix, next++)
-    if (taken.has(id)) continue
-    taken.add(id)
-    ids.push(id)
-  }
-  return ids
 }
 
 // Student IDs used by more than one student in the class (e.g. two people
@@ -8901,13 +9112,20 @@ function LibraryContextBanner({ context, onDismiss }: { context: LibraryContext;
   if (page === 'lesson-generator' && context.source === 'class-setup') {
     note = 'Choose Create a new lesson to see the form filled in with this demo class’s saved lesson, then click Generate Lesson Plan (prototype demo content). Use Add Lesson in the Library to start a new, blank lesson.'
   } else if (page === 'lesson-generator') {
-    note = lesson.lessonPlan.hasDemoContent
-      ? 'Showing the saved lesson plan (prototype demo content).'
-      : 'Saved content for this lesson isn’t connected in the prototype yet — the planning form is shown so you can draft it.'
+    note = lesson.lessonPlan.activity
+      ? 'Showing your saved Science Practice Activity.'
+      : lesson.lessonPlan.hasDemoContent
+        ? 'Showing the saved lesson plan (prototype demo content).'
+        : 'Saved content for this lesson isn’t connected in the prototype yet — the planning form is shown so you can draft it.'
   } else if (page === 'student-feedback') {
-    note = `${assignmentTitle ?? 'Assignment'} — the prototype shows its demo student assignment.`
+    note = lesson.studentFeedback.some((assignment) => assignment.pageToken)
+      ? 'This lesson’s Student Feedback Page — what students see when they open its link.'
+      : `${assignmentTitle ?? 'Assignment'} — the prototype shows its demo student assignment.`
   } else {
-    note = 'The prototype shows its demo class feedback analysis.'
+    // A saved lesson's Class Feedback is its students' real work (SavedClassFeedbackPage).
+    note = usesSupabase('classFeedback')
+      ?'Class Feedback from your students’ submitted work.'
+      : 'The prototype shows its demo class feedback analysis.'
   }
 
   return (
@@ -9410,7 +9628,11 @@ type AiPurpose =
 let aiRosterIdentifiers: string[] = []
 
 // Any class Student ID: two letters, a hyphen, three or more digits.
-const studentIdPattern = /(?<![\p{L}\p{N}])\p{L}{2}-\d{3,}(?![\p{L}\p{N}])/giu
+// Class Student IDs: the demo's "SB-001" style, and the 8 random characters
+// of saved classes ("K7M9Q4PX": the ID alphabet only, with at least one digit
+// and one letter, so ordinary words don't match).
+const studentIdPattern =
+  /(?<![\p{L}\p{N}])(?:\p{L}{2}-\d{3,}|(?=[A-HJKMNP-Z2-9]*[2-9])(?=[A-HJKMNP-Z2-9]*[A-HJKMNP-Z])[A-HJKMNP-Z2-9]{8})(?![\p{L}\p{N}])/giu
 
 function syncAiRosterGuard(students: readonly Student[]) {
   const identifiers = new Set<string>()
@@ -11446,7 +11668,7 @@ function RosterUpload(props: RosterSectionProps) {
       </div>
       <p className="library-class-note">
         Each student receives a unique Student ID (e.g., <span className="roster-id">{formatClassStudentId(idPrefix, 1)}</span>).
-        Students sign in to Student Feedback assignments with their first name and this ID. Existing IDs remain unchanged when the roster is updated.
+        Students sign in to Student Feedback assignments using only this Student ID. Existing IDs remain unchanged when the roster is updated.
       </p>
       {uploadError && (
         <p className="roster-error" role="alert">
@@ -11601,7 +11823,7 @@ function RosterUpload(props: RosterSectionProps) {
               >
                 Download Roster with Student IDs
               </button>
-              <p className="roster-download-note">Share each Student ID privately with the corresponding student. Students sign in with their first name and Student ID.</p>
+              <p className="roster-download-note">Share each Student ID privately with the corresponding student. Students sign in using only their Student ID.</p>
             </div>
           </div>
           <div className="class-mgmt-table-wrap">
@@ -11854,7 +12076,7 @@ function RosterEditor(props: RosterSectionProps) {
           >
             Download Roster with Student IDs
           </button>
-          <p className="roster-download-note">Share each Student ID privately with the corresponding student. Students sign in with their first name and Student ID.</p>
+          <p className="roster-download-note">Share each Student ID privately with the corresponding student. Students sign in using only their Student ID.</p>
         </div>
       )}
     </div>
@@ -11914,7 +12136,11 @@ function LessonPlanningPage({
   activityRemote,
   lessonGeneratedWith,
   onStartNew,
+  openedActivity,
 }: {
+  // A saved activity opened from the Library: the Activity workspace starts
+  // from it (confirmed and saved; new changes save new versions of it).
+  openedActivity: SavedActivityOpen | null
   // The planning option that generated the workspace lesson, if any.
   lessonGeneratedWith: PlanningMethod | null
   // Clears everything for a new lesson or activity.
@@ -11934,15 +12160,15 @@ function LessonPlanningPage({
 }) {
   // Brainstorm with AI's focus decides what the right side shows: a
   // practice activity gets the Activity workspace instead of the lesson.
-  const [brainstormFocus, setBrainstormFocus] = useState<BrainstormFocus | null>(null)
+  const [brainstormFocus, setBrainstormFocus] = useState<BrainstormFocus | null>(openedActivity ? 'practice' : null)
   const isPracticeMode = planningPanelProps.planningTab === 'brainstorm' && brainstormFocus === 'practice'
 
   // The Activity Draft and the teacher's review of it. Nothing is confirmed
   // until the teacher says so; regenerating starts the review over.
-  const [activityDraft, setActivityDraft] = useState<ActivityDraft | null>(null)
+  const [activityDraft, setActivityDraft] = useState<ActivityDraft | null>(openedActivity?.draft ?? null)
   const [isGeneratingActivity, setIsGeneratingActivity] = useState(false)
-  const [activityConfirmed, setActivityConfirmed] = useState(false)
-  const [collection, setCollection] = useState<CollectionOpportunity[]>([])
+  const [activityConfirmed, setActivityConfirmed] = useState(Boolean(openedActivity))
+  const [collection, setCollection] = useState<CollectionOpportunity[]>(openedActivity?.collection ?? [])
   const [collectionConfirmed, setCollectionConfirmed] = useState(false)
   // Identifies this activity in its Student Feedback link.
   const [activityLinkId] = useState(() => `activity-${Date.now()}`)
@@ -11964,10 +12190,14 @@ function LessonPlanningPage({
   // of the conversation's messages are saved, the Student Feedback Page URL,
   // and what saving last did.
   const [activityConversation, setActivityConversation] = useState<ChatMessage[]>([])
-  const [savedActivity, setSavedActivity] = useState<{ lessonId: string; lessonVersionId: string; collectionJson: string } | null>(null)
+  const [savedActivity, setSavedActivity] = useState<{ lessonId: string; lessonVersionId: string; collectionJson: string } | null>(
+    openedActivity ? { lessonId: openedActivity.lessonId, lessonVersionId: openedActivity.lessonVersionId, collectionJson: JSON.stringify(openedActivity.collection) } : null,
+  )
   const savedConversationCountRef = useRef(0)
   const [activityPageUrl, setActivityPageUrl] = useState<string | null>(null)
-  const [activityStatus, setActivityStatus] = useState<LessonWorkspaceCanvasProps['saveStatus']>(null)
+  const [activityStatus, setActivityStatus] = useState<LessonWorkspaceCanvasProps['saveStatus']>(
+    openedActivity ? { kind: 'saved', message: `Opened your saved activity (version ${openedActivity.versionNumber}).` } : null,
+  )
   const [isSavingActivity, setIsSavingActivity] = useState(false)
 
   const generateActivity = (request: ActivityDraftRequest, conversation: ChatMessage[], confirmedOverwrite = false) => {
@@ -12372,8 +12602,19 @@ type FeedbackActivity = {
 type StudentAssignmentLink = {
   lessonId: string
   lessonTitle: string
-  activities: { name: string; submission: string }[]
+  // `id` (model / explanation) is the teacher-confirmed work product.
+  activities: { id?: string; name: string; submission: string }[]
   classId?: string
+}
+
+// The work products a saved Student Feedback Page asks for: by their ids,
+// else by name; neither found means both. The partners-student-page
+// function checks submissions with the same rule (requiredProducts).
+function assignedProducts(activities: StudentAssignmentLink['activities']): { model: boolean; explanation: boolean } {
+  const has = (id: string, name: RegExp) => activities.some((item) => item.id === id) || activities.some((item) => !item.id && name.test(item.name))
+  const model = has('model', /model/i)
+  const explanation = has('explanation', /explanation/i)
+  return model || explanation ? { model, explanation } : { model: true, explanation: true }
 }
 
 // For the prototype, a lesson collects its two student products (see
@@ -12449,6 +12690,25 @@ function studentAssignmentUrl(link: StudentAssignmentLink): string {
 }
 
 // The Student Feedback route in the current URL, if there is one.
+// A lesson's student products as a saved version holds them (whether they
+// were confirmed aside), to tell whether confirmed ones still need saving.
+function studentProductsKey(items: readonly FeedbackActivity[]): string {
+  return JSON.stringify(items.map(({ id, name, submission }) => ({ id, name, submission })))
+}
+
+// The link students open for a Student Feedback Page saved in Supabase.
+function savedStudentPageUrl(accessToken: string): string {
+  return `${window.location.origin}${window.location.pathname}#student-feedback?page=${accessToken}`
+}
+
+// A Student Feedback Page saved in Supabase: #student-feedback?page=sf-…
+// (the page's access token, from create_student_feedback_page).
+function readStudentPageToken(): string | null {
+  const [page, query] = window.location.hash.replace('#', '').split('?')
+  if (page !== 'student-feedback' || !query) return null
+  return new URLSearchParams(query).get('page')
+}
+
 function readStudentFeedbackRoute(): StudentFeedbackRoute | null {
   const [page, query] = window.location.hash.replace('#', '').split('?')
   if (page !== 'student-feedback' || !query) return null
@@ -12769,14 +13029,18 @@ function StudentFeedbackActivities({
   activities,
   linkClasses,
   onChange,
+  savedPage,
 }: {
   lessonId: string
   lessonTitle: string
   activities: readonly FeedbackActivity[]
   linkClasses: readonly LinkClass[]
   onChange: (next: FeedbackActivity[]) => void
+  // A saved lesson's Student Feedback Page; undefined: the prototype's link.
+  savedPage?: LessonWorkspaceCanvasProps['savedPage']
 }) {
   const link = assignmentLinkFor(lessonId, lessonTitle, activities)
+  const contents = `the ${joinLabels(activities.map((activity) => activity.name))}`
   return (
     <StudentProductCollection
       headingId="feedback-activities-heading"
@@ -12789,7 +13053,18 @@ function StudentFeedbackActivities({
       }
       onConfirm={() => onChange(activities.map((activity) => ({ ...activity, confirmed: true })))}
     >
-      {link && <ClassFeedbackLinks link={link} classes={linkClasses} kind="lesson" contents={`the ${joinLabels(activities.map((activity) => activity.name))}`} />}
+      {link && savedPage === undefined && <ClassFeedbackLinks link={link} classes={linkClasses} kind="lesson" contents={contents} />}
+      {link && savedPage?.status === 'ready' && savedPage.url && <SavedFeedbackPageLink url={savedPage.url} classLabel={linkClasses[0]?.label ?? ''} contents={contents} />}
+      {link && (savedPage === null || savedPage?.status === 'saving') && (
+        <p className="lesson-save-status saving" role="status">
+          Creating the Student Feedback Page…
+        </p>
+      )}
+      {link && savedPage?.status === 'error' && (
+        <p className="lesson-save-status error" role="alert">
+          The Student Feedback Page wasn’t created: {savedPage.message} Confirm the student work again to retry.
+        </p>
+      )}
     </StudentProductCollection>
   )
 }
@@ -12805,6 +13080,9 @@ type LessonWorkspaceCanvasProps = {
   onRetrySave?: (createdBy: VersionCreatedBy) => void
   // The teacher dismissed the AI suggestion on this section.
   onSuggestionDismissed?: (label: string) => void
+  // A saved lesson's Student Feedback Page (null until its student work is
+  // confirmed); undefined: the prototype's link.
+  savedPage?: { status: 'saving' | 'ready' | 'error'; url?: string; message?: string } | null
   editor: RevisionWorkflow
   lesson: LessonDocument
   // The id used in the lesson's Student Feedback link.
@@ -12838,6 +13116,7 @@ function LessonWorkspaceCanvas({
   onEditsSaved,
   onRetrySave,
   onSuggestionDismissed,
+  savedPage,
   editor,
   lesson,
   lessonLinkId,
@@ -13299,6 +13578,7 @@ function LessonWorkspaceCanvas({
           activities={feedbackActivities}
           linkClasses={linkClasses}
           onChange={onFeedbackActivitiesChange}
+          savedPage={savedPage}
         />
       </section>
 
@@ -13778,6 +14058,7 @@ function StudentLoginGate({
   signIns,
   onSignIn,
   onSignOut,
+  verifyStudent,
   children,
 }: {
   // null when the assignment isn't tied to a class (e.g. an unassigned lesson).
@@ -13788,9 +14069,13 @@ function StudentLoginGate({
   signIns: Record<string, string>
   onSignIn: (classId: string, studentId: string) => void
   onSignOut: (classId: string) => void
+  // A saved Student Feedback Page (Supabase): checks the Student ID against
+  // the page's class roster on the server instead of the local roster.
+  verifyStudent?: (studentId: string) => Promise<boolean>
   children: ReactNode
 }) {
   const [draft, setDraft] = useState('')
+  const [isChecking, setIsChecking] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Teacher Preview (prototype demonstrations only): opens the assignment
   // without a Student ID. It's local to this page — no session is stored,
@@ -13845,7 +14130,27 @@ function StudentLoginGate({
     )
   }
 
-  const submit = () => {
+  const submit = async () => {
+    if (verifyStudent) {
+      // Saved page: an 8-character Student ID, typed in any case, with or
+      // without spaces or dashes.
+      const code = draft.replace(/[\s-]/g, '').toUpperCase()
+      if (!classId || !code || isChecking) return
+      setIsChecking(true)
+      try {
+        if (await verifyStudent(code)) {
+          setError(null)
+          onSignIn(classId, code)
+        } else {
+          setError('Student ID not found. Please check your ID or contact your teacher.')
+        }
+      } catch (error) {
+        setError(error instanceof ApiError && error.status === 429 ? error.message : 'Your Student ID couldn’t be checked. Please try again.')
+      } finally {
+        setIsChecking(false)
+      }
+      return
+    }
     const studentId = normalizeClassStudentId(draft)
     if (!classId || !studentId || !roster?.studentIds.includes(studentId)) {
       setError('Student ID not found. Please check your ID or contact your teacher.')
@@ -13862,7 +14167,7 @@ function StudentLoginGate({
         aria-labelledby="student-login-heading"
         onSubmit={(event) => {
           event.preventDefault()
-          submit()
+          void submit()
         }}
       >
         <div className="login-heading">
@@ -13882,7 +14187,7 @@ function StudentLoginGate({
                 <span>Student ID</span>
                 <input
                   type="text"
-                  placeholder="SB-001"
+                  placeholder={verifyStudent ? 'K7M9Q4PX' : 'SB-001'}
                   autoComplete="off"
                   autoCapitalize="characters"
                   spellCheck={false}
@@ -13900,7 +14205,7 @@ function StudentLoginGate({
                 {error}
               </p>
             )}
-            <button type="submit" className="primary-button login-submit" disabled={!draft.trim()}>
+            <button type="submit" className="primary-button login-submit" disabled={!draft.trim() || isChecking}>
               Continue
             </button>
             <div className="teacher-preview-entry">
@@ -13933,11 +14238,138 @@ function StudentLoginGate({
   )
 }
 
+// A saved page's assignment: the title and student products of the
+// teacher-confirmed version it was created for (an activity's collection, or
+// a lesson's student products), else the default Model and Explanation.
+function assignmentFromStudentPage(accessToken: string, lesson: StudentPageLesson): StudentAssignmentLink {
+  const content = (lesson.content && typeof lesson.content === 'object' ? lesson.content : {}) as {
+    format?: string
+    activity?: { title?: string; collection?: { id?: string; name?: string; submission?: string }[] }
+    studentProducts?: { id?: string; name?: string; submission?: string }[]
+  }
+  const items = content.format === activityContentFormat ? content.activity?.collection : content.studentProducts
+  const activities = (Array.isArray(items) ? items : [])
+    .filter((item) => item?.name && item.submission)
+    .map((item) => ({ ...(item.id ? { id: item.id } : {}), name: item.name as string, submission: item.submission as string }))
+  return {
+    lessonId: accessToken,
+    lessonTitle: content.activity?.title || lesson.title,
+    activities: activities.length > 0 ? activities : studentProducts.map(({ name, submission }) => ({ name, submission })),
+  }
+}
+
+// A student's sign-in on a saved page, kept for this browser tab only so a
+// refresh doesn't sign them out; it ends when its 2-hour session does.
+type SavedPageSignIn = { studentId: string; session: string | null; expiresAt: string }
+
+const studentSignInKey = (accessToken: string) => `partners.studentSignIn.${accessToken}`
+
+function readStudentSignIn(accessToken: string): SavedPageSignIn | null {
+  try {
+    const stored = JSON.parse(window.sessionStorage.getItem(studentSignInKey(accessToken)) ?? 'null') as SavedPageSignIn | null
+    return stored && Date.parse(stored.expiresAt) > Date.now() ? stored : null
+  } catch {
+    return null
+  }
+}
+
+function storeStudentSignIn(accessToken: string, signIn: SavedPageSignIn | null) {
+  try {
+    if (signIn) window.sessionStorage.setItem(studentSignInKey(accessToken), JSON.stringify(signIn))
+    else window.sessionStorage.removeItem(studentSignInKey(accessToken))
+  } catch {
+    // Storage unavailable: the sign-in just won't survive a refresh.
+  }
+}
+
+// The Student Feedback Page a saved page's URL opens (Supabase Mode): loads
+// the teacher-confirmed assignment, signs the student in with their Student
+// ID (checked on the server, rate-limited) for a 2-hour session, and saves
+// their model image with that session. Students have no account.
+function SavedStudentFeedbackPage({ accessToken }: { accessToken: string }) {
+  const [signIn, setSignIn] = useState<SavedPageSignIn | null>(() => readStudentSignIn(accessToken))
+  // The session from the sign-in being checked, used once the gate accepts it.
+  const pendingSignInRef = useRef<SavedPageSignIn | null>(null)
+  const [page, setPage] = useState<{ status: 'loading' } | { status: 'error' } | { status: 'ready'; assignment: StudentAssignmentLink }>({ status: 'loading' })
+  useEffect(() => {
+    let active = true
+    loadStudentPage(accessToken)
+      .then((lesson) => active && setPage({ status: 'ready', assignment: assignmentFromStudentPage(accessToken, lesson) }))
+      .catch(() => active && setPage({ status: 'error' }))
+    return () => {
+      active = false
+    }
+  }, [accessToken])
+
+  if (page.status !== 'ready') {
+    return (
+      <div className="student-login">
+        <div className="login-card student-login-card">
+          <div className="login-heading">
+            <h2>Student Feedback</h2>
+            {page.status === 'loading' ? (
+              <p role="status">Loading your assignment…</p>
+            ) : (
+              <p className="roster-error" role="alert">
+                This Student Feedback link isn’t valid. Ask your teacher for your class’s link.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+  const session = signIn?.session ?? null
+  return (
+    <StudentLoginGate
+      classId={accessToken}
+      lessonTitle={page.assignment.lessonTitle}
+      classes={[]}
+      signIns={signIn ? { [accessToken]: signIn.studentId } : {}}
+      onSignIn={(_, studentId) => {
+        const next = pendingSignInRef.current && pendingSignInRef.current.studentId === studentId ? pendingSignInRef.current : null
+        pendingSignInRef.current = null
+        if (!next) return
+        storeStudentSignIn(accessToken, next)
+        setSignIn(next)
+      }}
+      onSignOut={() => {
+        storeStudentSignIn(accessToken, null)
+        setSignIn(null)
+      }}
+      verifyStudent={async (studentId) => {
+        const result = await verifyStudentId(accessToken, studentId)
+        pendingSignInRef.current = result ? { studentId, session: result.session, expiresAt: result.expiresAt } : null
+        return result !== null
+      }}
+    >
+      <StudentFeedbackPage
+        key={`${accessToken}:${signIn?.studentId ?? 'preview'}`}
+        assignment={page.assignment}
+        saved
+        modelUpload={session ? (file) => uploadModelImage(accessToken, session, file) : undefined}
+        work={
+          session
+            ? {
+                submit: (input) => submitWork(accessToken, session, input),
+                load: () => loadMyWork(accessToken, session),
+                feedback: (message) => requestAiFeedback(accessToken, session, message),
+              }
+            : undefined
+        }
+      />
+    </StudentLoginGate>
+  )
+}
+
 function StudentFeedbackPage({
   lessonId = null,
   lessonTitle = null,
   initialModelTab = 'descriptive',
   assignment = null,
+  saved = false,
+  modelUpload,
+  work,
 }: {
   // The lesson this page is for (from the link or demo task): it picks the
   // mock content (see studentFeedbackScenarioFor).
@@ -13946,14 +14378,45 @@ function StudentFeedbackPage({
   initialModelTab?: ModelTab
   // A lesson's confirmed student products, from its link.
   assignment?: StudentAssignmentLink | null
+  // A Student Feedback Page saved in Supabase: the workspace starts empty and
+  // its prompts are the teacher's confirmed ones (never mock content).
+  saved?: boolean
+  // Saves the student's model image (signed-in student on a saved page);
+  // returns its storage path.
+  modelUpload?: (file: File) => Promise<string>
+  // A signed-in student on a saved page: submits their model, its name, and
+  // their explanation together as a version (initial → revised… → final),
+  // loads what they've already submitted, and gets AI feedback on their
+  // newest version (the server saves the conversation).
+  work?: {
+    submit: (input: { event: StudentWork['submissionEvent']; imagePath?: string; modelName?: string; explanation?: string }) => Promise<{ versionNumber: number }>
+    load: () => Promise<StudentWork | null>
+    feedback: (message: string | null) => Promise<{ reply: string; versionNumber: number }>
+  }
 }) {
-  const [scenario] = useState(() =>
-    studentFeedbackScenarioFor(
+  // The work products students submit: on a saved page, only the ones the
+  // teacher confirmed (each shown and required); the demo always has both.
+  const [products] = useState(() => (saved && assignment ? assignedProducts(assignment.activities) : { model: true, explanation: true }))
+  const productLabel = products.model && products.explanation ? 'Model and Explanation' : products.model ? 'Model' : 'Explanation'
+  const [scenario] = useState(() => {
+    if (saved && assignment) {
+      const generic = genericFeedbackScenario(assignment.lessonTitle)
+      const promptFor = (id: string, label: string) =>
+        (assignment.activities.find((activity) => activity.id === id) ?? assignment.activities.find((activity) => activity.name.toLowerCase() === label.toLowerCase()))
+          ?.submission
+      return {
+        ...generic,
+        tabs: generic.tabs
+          .filter((tab) => (tab.kind === 'model' ? products.model : products.explanation))
+          .map((tab) => ({ ...tab, prompt: promptFor(tab.id, tab.label) ?? tab.prompt })),
+      }
+    }
+    return studentFeedbackScenarioFor(
       assignment?.lessonId ?? lessonId,
       assignment?.lessonTitle ?? lessonTitle,
       assignment?.activities.map((activity) => activity.name),
-    ),
-  )
+    )
+  })
   const { tabs } = scenario
   const [tabId, setTabId] = useState(() => (tabs.some((tab) => tab.id === initialModelTab) ? initialModelTab : tabs[0].id))
   const tab = tabs.find((item) => item.id === tabId) ?? tabs[0]
@@ -13971,16 +14434,40 @@ function StudentFeedbackPage({
   const [artifactUrls, setArtifactUrls] = useState<Record<string, string>>({})
   const artifactFileInputRef = useRef<HTMLInputElement>(null)
 
+  // Saved page: each product's uploaded model image (its storage path, for
+  // the first submission in Stage 2) and what the last upload did.
+  const modelPathsRef = useRef<Record<string, string>>({})
+  const [modelUploadStatus, setModelUploadStatus] = useState<Record<string, { kind: 'saving' | 'saved' | 'error'; message: string }>>({})
+
   const handleArtifactUpload = (id: string, file: File | undefined) => {
     if (!file) return
+    if (modelUpload && !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      setModelUploadStatus((prev) => ({ ...prev, [id]: { kind: 'error', message: 'Use a PNG, JPEG, or WebP image of your model.' } }))
+      return
+    }
     const url = URL.createObjectURL(file)
     const previousUrl = artifactUrls[id]
     if (previousUrl) URL.revokeObjectURL(previousUrl)
     setArtifactUrls((prev) => ({ ...prev, [id]: url }))
+    if (!modelUpload) return
+    delete modelPathsRef.current[id]
+    setModelUploadStatus((prev) => ({ ...prev, [id]: { kind: 'saving', message: 'Saving your model…' } }))
+    modelUpload(file)
+      .then((path) => {
+        modelPathsRef.current[id] = path
+        setModelUploadStatus((prev) => ({ ...prev, [id]: { kind: 'saved', message: 'Your model is saved.' } }))
+      })
+      .catch((error) =>
+        setModelUploadStatus((prev) => ({
+          ...prev,
+          [id]: { kind: 'error', message: `Your model wasn’t saved: ${toApiError(error, 'Please try again.').message} Add it again to retry.` },
+        })),
+      )
   }
 
   const [explanation, setExplanation] = useState(scenario.initialExplanation)
   const explanationRef = useRef<HTMLTextAreaElement>(null)
+  const modelNameRef = useRef<HTMLInputElement>(null)
   const [isExplanationListening, setIsExplanationListening] = useState(false)
   const explanationListenTimeoutRef = useRef<number | null>(null)
 
@@ -14005,11 +14492,115 @@ function StudentFeedbackPage({
   // replaced with a plain confirmation note.
   const [isFinalSubmitted, setIsFinalSubmitted] = useState(false)
 
+  // Saved page: the student's submitted version (loaded on sign-in, or just
+  // submitted), and what the last submit did.
+  const modelTab = tabs.find((item) => item.kind === 'model')
+  const [submitted, setSubmitted] = useState<{ versionNumber: number; event: StudentWork['submissionEvent'] } | null>(null)
+  const [submitStatus, setSubmitStatus] = useState<{ kind: 'saving' | 'saved' | 'error'; message: string } | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const isFinalVersion = submitted?.event === 'final'
+  // Saved page: the one AI feedback conversation for the Model and the
+  // Explanation, oldest first, by the version it's about.
+  const [savedFeedback, setSavedFeedback] = useState<StudentFeedbackMessage[]>([])
+  const [feedbackError, setFeedbackError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!work) return
+    let active = true
+    work
+      .load()
+      .then((saved) => {
+        if (!active || !saved) return
+        setSubmitted({ versionNumber: saved.versionNumber, event: saved.submissionEvent })
+        setSavedFeedback(saved.feedback)
+        setExplanation(saved.explanation ?? '')
+        if (modelTab) {
+          setModelNames((prev) => ({ ...prev, [`assignment:${modelTab.id}`]: saved.modelName ?? '' }))
+          if (saved.imageViewUrl) setArtifactUrls((prev) => ({ ...prev, [modelTab.id]: saved.imageViewUrl as string }))
+        }
+      })
+      .catch((error) => active && setSubmitStatus({ kind: 'error', message: `Your earlier work couldn’t be loaded: ${toApiError(error).message}` }))
+    return () => {
+      active = false
+    }
+    // Loaded once per signed-in student (the page is keyed by student).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // AI feedback on the newest version: the first feedback (no message) or a
+  // reply to the student's message. Shown once the AI answers; on failure
+  // the student's message stays in the box to send again (never retried
+  // automatically).
+  const requestFeedback = async (message: string | null) => {
+    if (!work || isAiThinking) return
+    setIsAiThinking(true)
+    setFeedbackError(null)
+    try {
+      const result = await work.feedback(message)
+      setSavedFeedback((prev) => [
+        ...prev,
+        ...(message ? [{ versionNumber: result.versionNumber, from: 'student' as const, text: message }] : []),
+        { versionNumber: result.versionNumber, from: 'ai' as const, text: result.reply },
+      ])
+      if (message) setFeedbackDraft('')
+    } catch (error) {
+      setFeedbackError(toApiError(error, 'Please try again.').message)
+    } finally {
+      setIsAiThinking(false)
+    }
+  }
+
+  // Submit (initial), Submit Revision (revised), or Submit Final Revision
+  // (final): the assigned work products together as a new version — a model
+  // needs its image and name, an explanation its text, every time. A revision
+  // without a new model image keeps the previous one. The AI gives its first
+  // feedback on each initial or revised version.
+  const submitWork = async (event: StudentWork['submissionEvent']) => {
+    if (!work || isSubmitting || isFinalVersion || (event === 'initial') !== !submitted) return
+    const imagePath = modelTab ? modelPathsRef.current[modelTab.id] : undefined
+    const modelName = (modelTab ? (modelNames[`assignment:${modelTab.id}`] ?? '') : '').trim()
+    const text = products.explanation ? explanation.trim() : ''
+    const upload = modelTab ? modelUploadStatus[modelTab.id]?.kind : undefined
+    const missing = !modelTab
+      ? null
+      : upload === 'saving'
+        ? 'Your model is still saving. Please wait a moment.'
+        : event === 'initial' && !imagePath
+          ? 'Add your model before submitting.'
+          : upload === 'error'
+            ? 'Your new model wasn’t saved. Add it again before submitting.'
+            : !modelName
+              ? 'Name your model before submitting.'
+              : null
+    const missingText = products.explanation && !text ? 'Write your explanation before submitting.' : null
+    if (missing || missingText) {
+      setSubmitStatus({ kind: 'error', message: (missing ?? missingText) as string })
+      return
+    }
+    if (event === 'final' && !window.confirm('Submit this as your final version? You won’t be able to revise it after this.')) return
+    setIsSubmitting(true)
+    setSubmitStatus({ kind: 'saving', message: event === 'initial' ? `Submitting your ${productLabel.toLowerCase()}…` : 'Submitting your revision…' })
+    try {
+      const result = await work.submit({
+        event,
+        imagePath,
+        ...(modelTab ? { modelName } : {}),
+        ...(products.explanation ? { explanation: text } : {}),
+      })
+      setSubmitted({ versionNumber: result.versionNumber, event })
+      setSubmitStatus({ kind: 'saved', message: `Submitted — version ${result.versionNumber}.` })
+      if (event !== 'final') void requestFeedback(null)
+    } catch (error) {
+      setSubmitStatus({ kind: 'error', message: `Your work wasn’t submitted: ${toApiError(error, 'Please try again.').message}` })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   // Keep the chat pinned to the latest message as the conversation grows.
   useEffect(() => {
     const container = chatScrollRef.current
     if (container) container.scrollTop = container.scrollHeight
-  }, [feedbackMessagesByTab, tab.id, isAiThinking])
+  }, [feedbackMessagesByTab, savedFeedback, tab.id, isAiThinking])
 
   useEffect(() => {
     return () => {
@@ -14079,8 +14670,10 @@ function StudentFeedbackPage({
   // the editable explanation back into focus, so the student decides what to
   // revise based on the feedback. Repeatable throughout the formative loop.
   const handleStartIterating = () => {
-    explanationRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    explanationRef.current?.focus()
+    // A Model-only assignment has no explanation box: its model name instead.
+    const target = explanationRef.current ?? modelNameRef.current
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    target?.focus()
     setIsRevisionFlash(true)
     if (revisionFlashTimeoutRef.current !== null) window.clearTimeout(revisionFlashTimeoutRef.current)
     revisionFlashTimeoutRef.current = window.setTimeout(() => setIsRevisionFlash(false), 1200)
@@ -14100,8 +14693,9 @@ function StudentFeedbackPage({
             <p className="card-label">Your Assignment</p>
             <h3>{assignment.lessonTitle}</h3>
             <p>
-              Submit your {joinLabels(assignment.activities.map((activity) => activity.name))} below — both are part of this one assignment.
-              Each time you revise, your new work is saved as a new version.
+              Submit your {joinLabels(assignment.activities.map((activity) => activity.name))} below
+              {assignment.activities.length > 1 ? ' — both are part of this one assignment.' : '.'} Each time you revise, your new work is saved
+              as a new version.
             </p>
             <ul className="student-assignment-list">
               {assignment.activities.map((activity, index) => (
@@ -14111,7 +14705,7 @@ function StudentFeedbackPage({
                 </li>
               ))}
             </ul>
-            <p className="student-assignment-note">The workspace below is the prototype’s example task; submissions aren’t saved yet.</p>
+            {!saved && <p className="student-assignment-note">The workspace below is the prototype’s example task; submissions aren’t saved yet.</p>}
           </div>
         ) : (
           <div className="student-task-card">
@@ -14167,14 +14761,21 @@ function StudentFeedbackPage({
                 <input
                   ref={artifactFileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept={modelUpload ? 'image/png,image/jpeg,image/webp' : 'image/*'}
                   style={{ display: 'none' }}
                   onChange={(event) => handleArtifactUpload(tab.id, event.target.files?.[0])}
                 />
-                <button type="button" className="secondary-button" onClick={() => artifactFileInputRef.current?.click()}>
-                  Add Model
-                </button>
+                {!isFinalVersion && (
+                  <button type="button" className="secondary-button" onClick={() => artifactFileInputRef.current?.click()}>
+                    {submitted ? 'Replace Model' : 'Add Model'}
+                  </button>
+                )}
               </div>
+              {modelUploadStatus[tab.id] && (
+                <p className={`lesson-save-status ${modelUploadStatus[tab.id].kind}`} role={modelUploadStatus[tab.id].kind === 'error' ? 'alert' : 'status'}>
+                  {modelUploadStatus[tab.id].message}
+                </p>
+              )}
             </>
           )}
         </div>
@@ -14184,32 +14785,75 @@ function StudentFeedbackPage({
             <span>Name Your Model</span>
             <input
               type="text"
+              ref={modelNameRef}
               placeholder="Give your model a short name describing its purpose."
+              readOnly={isFinalVersion}
               value={modelNames[submissionKey] ?? ''}
               onChange={(event) => setModelNames((prev) => ({ ...prev, [submissionKey]: event.target.value }))}
             />
           </label>
         )}
 
-        <div className={`student-explanation-field${isRevisionFlash ? ' revision-flash' : ''}`}>
-          <div className="student-explanation-header">
-            <span>{tab.kind === 'explanation' ? 'Your explanation' : 'Explain your thinking'}</span>
-            <span className="empty-state-support">Type your explanation, or use the microphone to speak it.</span>
+        {products.explanation && (
+          <div className={`student-explanation-field${isRevisionFlash ? ' revision-flash' : ''}`}>
+            <div className="student-explanation-header">
+              <span>{tab.kind === 'explanation' ? 'Your explanation' : 'Explain your thinking'}</span>
+              {/* Real pages have no (mock) microphone. */}
+              <span className="empty-state-support">{saved ? 'Type your explanation.' : 'Type your explanation, or use the microphone to speak it.'}</span>
+            </div>
+            <div className="student-explanation-input-row">
+              <textarea
+                ref={explanationRef}
+                rows={6}
+                readOnly={isFinalVersion}
+                value={explanation}
+                onChange={(event) => setExplanation(event.target.value)}
+                placeholder={scenario.explanationPlaceholder}
+              />
+              {/* The mic is a mock (canned text): demo pages only. */}
+              {!saved && <MicButton isListening={isExplanationListening} onClick={toggleExplanationMic} label="your explanation" />}
+            </div>
+            {isExplanationListening && <p className="mic-listening-note">🎤 Listening…</p>}
           </div>
-          <div className="student-explanation-input-row">
-            <textarea
-              ref={explanationRef}
-              rows={6}
-              value={explanation}
-              onChange={(event) => setExplanation(event.target.value)}
-              placeholder={scenario.explanationPlaceholder}
-            />
-            <MicButton isListening={isExplanationListening} onClick={toggleExplanationMic} label="your explanation" />
-          </div>
-          {isExplanationListening && <p className="mic-listening-note">🎤 Listening…</p>}
-        </div>
+        )}
 
-        {isFinalSubmitted ? (
+        {saved ? (
+          // Saved page: the first submission (model, its name, explanation),
+          // then revisions with AI feedback, then the final version.
+          work && (
+            <>
+              {isFinalVersion ? (
+                <p className="inline-ai-applied-note">✓ Final revision submitted — version {submitted?.versionNumber}</p>
+              ) : submitted ? (
+                <>
+                  <p className="inline-ai-applied-note">✓ Submitted — version {submitted.versionNumber}</p>
+                  <div className="model-representation-actions">
+                    <button type="button" className="secondary-button" onClick={handleStartIterating}>
+                      Start Iterating
+                    </button>
+                    <button type="button" className="primary-button" onClick={() => void submitWork('revised')} disabled={isSubmitting}>
+                      Submit Revision
+                    </button>
+                    <button type="button" className="secondary-button" onClick={() => void submitWork('final')} disabled={isSubmitting}>
+                      Submit Final Revision
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="model-representation-actions">
+                  <button type="button" className="primary-button" onClick={() => void submitWork('initial')} disabled={isSubmitting}>
+                    Submit {productLabel}
+                  </button>
+                </div>
+              )}
+              {submitStatus && !(submitted && submitStatus.kind === 'saved') && (
+                <p className={`lesson-save-status ${submitStatus.kind}`} role={submitStatus.kind === 'error' ? 'alert' : 'status'}>
+                  {submitStatus.message}
+                </p>
+              )}
+            </>
+          )
+        ) : isFinalSubmitted ? (
           <p className="inline-ai-applied-note">✓ Final revision submitted</p>
         ) : (
           <div className="model-representation-actions">
@@ -14228,8 +14872,75 @@ function StudentFeedbackPage({
       <section className={`student-ai-panel ai-panel-${tab.tint}`}>
         <div className="panel-header compact ai-panel-header">
           <h3>AI Feedback</h3>
-          <span className="badge ai-panel-badge">{tab.label}</span>
+          <span className="badge ai-panel-badge">{saved ? productLabel : tab.label}</span>
         </div>
+        {saved ? (
+          // One real conversation about the Model and the Explanation, by
+          // version; the server saves every message.
+          <>
+            <p className="empty-state-support deeper-analysis-subtitle">
+              {!submitted
+                ? 'AI feedback is available after you submit your model and explanation.'
+                : isFinalVersion
+                  ? 'Your final version is submitted. Your feedback conversation is saved below.'
+                  : 'Answer the AI’s questions, revise your model or explanation, then submit your revision for new feedback.'}
+            </p>
+            {submitted && (
+              <div className="deeper-analysis-body">
+                <div className="deeper-analysis-chat" ref={chatScrollRef}>
+                  {[...new Set(savedFeedback.map((m) => m.versionNumber))].map((versionNumber) => (
+                    <Fragment key={versionNumber}>
+                      <p className="card-label">Feedback on version {versionNumber}</p>
+                      <ChatThread
+                        messages={savedFeedback
+                          .filter((m) => m.versionNumber === versionNumber)
+                          .map((m) => ({ role: m.from === 'student' ? 'teacher' : 'ai', text: m.text }))}
+                        className={`ai-panel-chat-${tab.tint}`}
+                      />
+                    </Fragment>
+                  ))}
+                  {isAiThinking && <p className="empty-state-support">AI is reading your work…</p>}
+                  {feedbackError && (
+                    <p className="lesson-save-status error" role="alert">
+                      {feedbackError}
+                    </p>
+                  )}
+                </div>
+                {!isFinalVersion &&
+                  (!savedFeedback.some((m) => m.versionNumber === submitted.versionNumber) ? (
+                    <div className="model-representation-actions">
+                      <button type="button" className="primary-button" onClick={() => void requestFeedback(null)} disabled={isAiThinking}>
+                        Get AI Feedback
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="composer-box student-feedback-composer">
+                      <input
+                        type="text"
+                        placeholder="Reply to the feedback..."
+                        maxLength={1000}
+                        value={feedbackDraft}
+                        onChange={(event) => setFeedbackDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' && feedbackDraft.trim()) void requestFeedback(feedbackDraft.trim())
+                        }}
+                        disabled={isAiThinking}
+                      />
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={() => void requestFeedback(feedbackDraft.trim())}
+                        disabled={isAiThinking || !feedbackDraft.trim()}
+                      >
+                        Send
+                      </button>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
         {tab.progressionNote && <p className="ai-panel-progression-note">🔗 {tab.progressionNote}</p>}
         <p className="empty-state-support deeper-analysis-subtitle">{tab.subtitle}</p>
 
@@ -14280,6 +14991,8 @@ function StudentFeedbackPage({
             </button>
           </div>
         </div>
+          </>
+        )}
       </section>
     </div>
   )
@@ -14315,6 +15028,10 @@ type ArtifactVersion = {
   modelDescription: string
   // Absent when the model was submitted without a written explanation.
   explanation?: string
+  // A real submission (Supabase Mode): its model name, and no mock
+  // placeholder when there's no image.
+  modelName?: string | null
+  saved?: boolean
 }
 
 // The AI Summary of a model's most recent submission, read against the
@@ -14877,6 +15594,7 @@ function StudentSearchSelect({
   onSelect,
   reports,
   modelTabs,
+  describe,
 }: {
   students: readonly string[]
   selectedStudent: string | null
@@ -14885,6 +15603,8 @@ function StudentSearchSelect({
   // assignment covers (for the revision counts in the list).
   reports: Record<string, IndividualStudentReport>
   modelTabs: readonly ModelTab[]
+  // A real class (Supabase Mode): each student's line under their name.
+  describe?: (name: string) => string
 }) {
   const [query, setQuery] = useState(selectedStudent ?? '')
   const [isOpen, setIsOpen] = useState(false)
@@ -14977,7 +15697,9 @@ function StudentSearchSelect({
                 >
                   <span className="standard-suggestion-code">{name}</span>
                   <span className="standard-suggestion-description">
-                    {report
+                    {describe
+                      ? describe(name)
+                      : report
                       ? `${revisionCount} ${revisionCount === 1 ? 'revision' : 'revisions'}${modelTabs.length > 1 ? ' across both models' : ''}`
                       : 'No individual report yet'}
                   </span>
@@ -15043,7 +15765,18 @@ function ArtifactVersionCard({
   onVersionChange?: (versionNumber: number) => void
   onExpandImage: (src: string, alt: string) => void
 }) {
-  const imageAlt = `${studentName}'s ${modelTabLabels[modelTab]}, Version ${version.versionNumber}: ${version.modelDescription}`
+  const imageAlt = `${studentName}'s ${version.saved ? 'model' : modelTabLabels[modelTab]}, Version ${version.versionNumber}: ${version.modelDescription}`
+  const imageButton = version.modelImage ? (
+    <button
+      type="button"
+      className="artifact-image-button"
+      aria-label={`Enlarge ${studentName}'s Version ${version.versionNumber} model`}
+      onClick={() => onExpandImage(version.modelImage!, imageAlt)}
+    >
+      <img src={version.modelImage} alt={imageAlt} className="student-artifact-image" />
+      <span className="artifact-image-expand-hint">⤢ Click to enlarge</span>
+    </button>
+  ) : null
   return (
     <article className="artifact-version-card">
       <header className="artifact-version-header">
@@ -15069,16 +15802,18 @@ function ArtifactVersionCard({
         <p className="artifact-version-meta">{version.submittedAt}</p>
       </header>
 
-      {workType === 'explanation' ? null : version.modelImage ? (
-        <button
-          type="button"
-          className="artifact-image-button"
-          aria-label={`Enlarge ${studentName}'s Version ${version.versionNumber} model`}
-          onClick={() => onExpandImage(version.modelImage!, imageAlt)}
-        >
-          <img src={version.modelImage} alt={imageAlt} className="student-artifact-image" />
-          <span className="artifact-image-expand-hint">⤢ Click to enlarge</span>
-        </button>
+      {workType === 'explanation' ? null : version.saved ? (
+        // A real submission: its own Model section (the uploaded image,
+        // unchanged, and its name), apart from the Written explanation below.
+        <div className="artifact-model">
+          <p className="card-label">Model</p>
+          <p className="finding-practices">
+            <strong>Model name:</strong> {version.modelName || 'Not named'}
+          </p>
+          {imageButton ?? <p className="empty-state-support">No model image was submitted in this version.</p>}
+        </div>
+      ) : imageButton ? (
+        imageButton
       ) : (
         <div className="artifact-image-placeholder" role="img" aria-label={imageAlt}>
           <span className="artifact-placeholder-tag">Mock artifact — image not available</span>
@@ -15126,6 +15861,7 @@ function StudentModelWorkView({
   workType,
   work,
   objectives,
+  saved,
 }: {
   studentName: string
   modelTab: ModelTab
@@ -15135,6 +15871,9 @@ function StudentModelWorkView({
   work: StudentModelWork
   // The lesson's learning objectives, in order.
   objectives: readonly ReportObjective[]
+  // A real student's report (Supabase Mode): the version its AI analysis
+  // covers (null: not generated yet).
+  saved?: { analyzedVersion: number | null }
 }) {
   const { versions } = work
   const initialVersion = versions[0]
@@ -15154,6 +15893,10 @@ function StudentModelWorkView({
   // Next steps for the selected work (all of them for a product with its
   // own data), at most two.
   const nextSteps = work.nextSteps.filter((step) => workType === 'both' || step.focus === workType).slice(0, 2)
+  // A real report: its badge, or what to do before there is one.
+  const notGenerated = saved?.analyzedVersion === null
+  const analysisBadge = saved ? (notGenerated ? null : <span className="badge">AI analysis</span>) : <span className="badge">Mock AI analysis</span>
+  const generateFirst = <p className="empty-state-support">Generate this student’s report to see the AI analysis.</p>
 
   const cardProps = {
     studentName,
@@ -15191,10 +15934,12 @@ function StudentModelWorkView({
       <section className="revision-changes" aria-label="Changes between Revisions">
         <div className="student-report-subheader">
           <h4>Changes between Revisions</h4>
-          <span className="badge">Mock AI analysis</span>
+          {analysisBadge}
         </div>
         {revisions.length === 0 ? (
           <p className="empty-state-support">Only one version has been submitted, so there are no changes to compare yet.</p>
+        ) : notGenerated ? (
+          generateFirst
         ) : (
           <>
             <p className="student-analysis-comparison">
@@ -15207,7 +15952,11 @@ function StudentModelWorkView({
                 ))}
               </ul>
             ) : (
-              <p className="empty-state-support">No analysis of changes is available for this revision yet.</p>
+              <p className="empty-state-support">
+                {saved?.analyzedVersion && revisedVersion.versionNumber > saved.analyzedVersion
+                  ? 'This version was submitted after the report was generated. Update the report to include it.'
+                  : 'No analysis of changes is available for this revision yet.'}
+              </p>
             )}
           </>
         )}
@@ -15219,10 +15968,16 @@ function StudentModelWorkView({
       <section className="student-ai-analysis" aria-label="AI Summary">
         <div className="student-report-subheader">
           <h4>AI Summary</h4>
-          <span className="badge">Mock AI analysis</span>
+          {analysisBadge}
         </div>
-        <p className="student-analysis-comparison">Analysis of Most Recent Submission (Version {latestVersion.versionNumber})</p>
-        {objectives.length === 0 ? (
+        {!notGenerated && (
+          <p className="student-analysis-comparison">
+            Analysis of Most Recent Submission (Version {saved?.analyzedVersion ?? latestVersion.versionNumber})
+          </p>
+        )}
+        {notGenerated ? (
+          generateFirst
+        ) : objectives.length === 0 ? (
           <p className="empty-state-support">This lesson has no learning objectives to analyze the submission against.</p>
         ) : (
           <div className="student-summary-sections">
@@ -15263,9 +16018,11 @@ function StudentModelWorkView({
       <section className="next-steps-panel student-next-steps" aria-labelledby="student-next-steps-heading">
         <div className="student-report-subheader">
           <h4 id="student-next-steps-heading">Suggested Next Steps</h4>
-          <span className="badge">Mock AI analysis</span>
+          {analysisBadge}
         </div>
-        {nextSteps.length === 0 ? (
+        {notGenerated ? (
+          generateFirst
+        ) : nextSteps.length === 0 ? (
           <p className="empty-state-support">No next steps for this submission yet.</p>
         ) : (
           <ol className="next-step-list">
@@ -15348,6 +16105,170 @@ function IndividualStudentReportView({
         objectives={objectives}
       />
     </div>
+  )
+}
+
+// Individual Student Reports for a saved lesson (Supabase Mode): the same
+// report as the demo's — the student's versions side by side with the
+// revision picker, Changes between Revisions, the AI Summary, Suggested Next
+// Steps — from the lesson's newest Student Feedback Page
+// (partners-class-feedback). The student's saved AI feedback conversations
+// aren't shown here; they're context for the report. The AI analysis is
+// generated on demand, one student at a time, and adapts to the work
+// products the teacher confirmed (Model, Explanation, or both).
+function SavedStudentReports({
+  lessonId,
+  studentCode,
+  onSelectStudent,
+}: {
+  lessonId: string
+  // The selected student's class Student ID (from the route).
+  studentCode: string | null
+  onSelectStudent: (studentCode: string) => void
+}) {
+  const [state, setState] = useState<
+    { status: 'loading' } | { status: 'error'; message: string } | { status: 'no-page' } | { status: 'ready'; data: StudentReportPage }
+  >({ status: 'loading' })
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [generateError, setGenerateError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      const pageId = await latestFeedbackPageId(lessonId)
+      if (!pageId) return active && setState({ status: 'no-page' })
+      const page = await loadStudentReport(pageId, null)
+      const student = studentCode ? page.students.find((item) => item.studentCode === studentCode) : undefined
+      const data = student ? await loadStudentReport(pageId, student.studentId) : page
+      if (active) setState({ status: 'ready', data })
+    }
+    load().catch((error) => active && setState({ status: 'error', message: toApiError(error).message }))
+    return () => {
+      active = false
+    }
+  }, [lessonId, studentCode])
+
+  if (state.status === 'loading') return <p className="empty-state-support" role="status">Loading student reports…</p>
+  if (state.status === 'no-page') {
+    return <p className="empty-state-support student-reports-empty">This lesson has no Student Feedback Page yet, so there are no student submissions to report on.</p>
+  }
+  if (state.status === 'error') {
+    return (
+      <p className="roster-error" role="alert">
+        Individual Student Reports couldn’t be loaded: {state.message}
+      </p>
+    )
+  }
+
+  const { data } = state
+  if (data.students.length === 0) {
+    return <p className="empty-state-support student-reports-empty">No students have submitted work on this lesson’s Student Feedback Page yet.</p>
+  }
+  const label = (student: { name: string; studentCode: string | null }) => (student.studentCode ? `${student.name} (${student.studentCode})` : student.name)
+  const student = data.student
+  const report = student?.report ?? null
+  const latestVersion = student ? student.versions[student.versions.length - 1].versionNumber : 0
+  const workView: WorkView = data.products.model && data.products.explanation ? 'both' : data.products.model ? 'model' : 'explanation'
+  const objectives: ReportObjective[] = data.context.objectives.map((objective, index) => ({
+    label: objectiveLabelFor(data.context.objectives, index),
+    practices: practicesForObjective(objective, data.context.practices),
+    title: objective,
+  }))
+
+  const generate = async () => {
+    if (!student || isGenerating) return
+    setIsGenerating(true)
+    setGenerateError(null)
+    try {
+      const next = await generateStudentReport(data.feedbackPageId, student.studentId)
+      setState({ status: 'ready', data: next })
+    } catch (error) {
+      setGenerateError(toApiError(error, 'Please try again.').message)
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  return (
+    <>
+      <div className="student-reports-controls">
+        <StudentSearchSelect
+          key={`search-${student?.studentId ?? 'none'}`}
+          students={data.students.map(label)}
+          selectedStudent={student ? label(student) : null}
+          onSelect={(name) => {
+            const picked = data.students.find((item) => label(item) === name)
+            if (picked?.studentCode) onSelectStudent(picked.studentCode)
+          }}
+          reports={{}}
+          modelTabs={[]}
+          describe={(name) => {
+            const item = data.students.find((entry) => label(entry) === name)
+            return item ? `${pluralize(item.versions, 'version')}${item.latestEvent === 'final' ? ' · final submitted' : ''}` : ''
+          }}
+        />
+      </div>
+      {!student ? (
+        <p className="empty-state-support">Select a student to see their report.</p>
+      ) : (
+        <div className="student-report">
+          <div className="student-report-heading">
+            <h4>{student.name}</h4>
+            {student.studentCode && <span className="roster-id">{student.studentCode}</span>}
+            {/* Generate when there's no report; Update only when the student
+                has submitted since. An up-to-date report has no button. */}
+            {(!report || report.analyzedVersion < latestVersion) && (
+              <button
+                type="button"
+                className="regenerate-button"
+                onClick={() => void generate()}
+                disabled={isGenerating || !data.aiAvailable}
+                title={!data.aiAvailable ? 'AI student reports aren’t available for this account yet.' : undefined}
+              >
+                {report ? 'Update Report' : 'Generate Report'}
+              </button>
+            )}
+          </div>
+          {isGenerating && (
+            <p className="lesson-save-status saving" role="status">
+              Analyzing {student.name}’s {pluralize(student.versions.length, 'version')}…
+            </p>
+          )}
+          {generateError && (
+            <p className="lesson-save-status error" role="alert">
+              The report wasn’t generated: {generateError}
+            </p>
+          )}
+          {report && report.analyzedVersion < latestVersion && (
+            <p className="empty-state-support">
+              This report covers Version {report.analyzedVersion}; {student.name} has submitted Version {latestVersion} since. Update the report to include it.
+            </p>
+          )}
+          <StudentModelWorkView
+            key={student.studentId}
+            studentName={student.name}
+            modelTab="descriptive"
+            workType={workView}
+            work={{
+              versions: student.versions.map((version) => ({
+                versionNumber: version.versionNumber,
+                submittedAt: new Date(version.submittedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }),
+                modelImage: version.imageUrl ?? undefined,
+                modelDescription: version.modelName || 'Student model',
+                explanation: version.explanation ?? undefined,
+                modelName: version.modelName,
+                saved: true,
+              })),
+              revisionChanges: report?.revisionChanges ?? {},
+              latestSummary: { overlap: report?.overlap ?? {}, areasForImprovement: report?.areasForImprovement ?? {} },
+              nextSteps: report?.nextSteps ?? [],
+            }}
+            objectives={objectives}
+            saved={{ analyzedVersion: report?.analyzedVersion ?? null }}
+          />
+        </div>
+      )}
+    </>
   )
 }
 
@@ -15473,6 +16394,9 @@ function StudentReportsPage({
         the Library.
       </p>
     )
+  } else if (usesSupabase('classFeedback')) {
+    // A saved lesson: its students' real submissions (SavedStudentReports).
+    body = <SavedStudentReports key={lesson.id} lessonId={lesson.id} studentCode={route.studentId} onSelectStudent={(code) => onRouteChange({ ...route, studentId: code })} />
   } else if (!hasSubmissions) {
     body = (
       <p className="empty-state-support student-reports-empty">
@@ -16532,6 +17456,519 @@ function FeedbackDashboardPage({
 }
 
 // ---------------------------------------------------------------------------
+// Class Feedback for a saved lesson (Supabase Mode) — the same page and flow
+// as the demo's FeedbackDashboardPage: Statistics → AI Summary → Student
+// Work Evidence → AI Interaction → Next Steps and Facilitation Questions,
+// from the students' real submissions on the lesson's newest Student
+// Feedback Page (partners-class-feedback). Each finding is linked to the
+// student work behind it; selecting it shows that work on the right and
+// opens its own AI discussion.
+// ---------------------------------------------------------------------------
+
+function SavedClassFeedbackPage({
+  lesson,
+  onOpenStudentReport,
+}: {
+  lesson: LibraryLesson
+  // Opens a student's Individual Student Report (by class Student ID).
+  onOpenStudentReport: (studentCode: string) => void
+}) {
+  const [state, setState] = useState<
+    { status: 'loading' } | { status: 'error'; message: string } | { status: 'no-page' } | { status: 'ready'; data: ClassFeedbackData }
+  >({ status: 'loading' })
+  const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [generateError, setGenerateError] = useState<string | null>(null)
+  const [chatDraft, setChatDraft] = useState('')
+  const [isAiThinking, setIsAiThinking] = useState(false)
+  const [chatError, setChatError] = useState<string | null>(null)
+  const chatInputRef = useRef<HTMLInputElement>(null)
+  const [isRegeneratingQuestions, setIsRegeneratingQuestions] = useState(false)
+  const [questionsError, setQuestionsError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    latestFeedbackPageId(lesson.id)
+      .then((pageId) => (pageId ? loadClassFeedback(pageId).then((data) => active && setState({ status: 'ready', data })) : active && setState({ status: 'no-page' })))
+      .catch((error) => active && setState({ status: 'error', message: toApiError(error).message }))
+    return () => {
+      active = false
+    }
+  }, [lesson.id])
+
+  if (state.status !== 'ready') {
+    return (
+      <div className="dashboard-page">
+        <section className="dashboard-task-card">
+          <p className="card-label">Assignment</p>
+          <h3>{lesson.title}</h3>
+          {state.status === 'loading' ? (
+            <p className="dashboard-task-question" role="status">
+              Loading Class Feedback…
+            </p>
+          ) : state.status === 'no-page' ? (
+            <p className="dashboard-task-question">
+              This lesson has no Student Feedback Page yet. Confirm its student work in Lesson Planning to create one; Class Feedback appears once
+              students submit.
+            </p>
+          ) : (
+            <p className="roster-error" role="alert">
+              Class Feedback couldn’t be loaded: {state.message}
+            </p>
+          )}
+        </section>
+      </div>
+    )
+  }
+
+  const { data } = state
+  const { context, statistics, summary } = data
+  const objectiveLabel = (index: number) => objectiveLabelFor(context.objectives, index)
+  const findings = summary ? [...summary.overlap, ...summary.areasForImprovement] : []
+  const selected = findings.find((finding) => finding.id === selectedFindingId) ?? null
+  const selectedKind = selected && summary?.overlap.includes(selected) ? 'objective' : 'misconception'
+  const discussion = selected ? (data.discussions[selected.id] ?? []) : []
+  const smallSample = summary !== null && summary.sampleSize < 5
+
+  const generate = async () => {
+    if (isGenerating) return
+    setIsGenerating(true)
+    setGenerateError(null)
+    try {
+      const next = await generateClassSummary(data.feedbackPageId)
+      setState({ status: 'ready', data: next })
+      setSelectedFindingId(null)
+    } catch (error) {
+      setGenerateError(toApiError(error, 'Please try again.').message)
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  // Replaces only the questions; on failure the current ones stay.
+  const regenerateQuestions = async () => {
+    if (isRegeneratingQuestions) return
+    setIsRegeneratingQuestions(true)
+    setQuestionsError(null)
+    try {
+      const questions = await regenerateFacilitationQuestions(data.feedbackPageId)
+      setState((prev) => (prev.status === 'ready' ? { status: 'ready', data: { ...prev.data, questions } } : prev))
+    } catch (error) {
+      setQuestionsError(toApiError(error, 'Please try again.').message)
+    } finally {
+      setIsRegeneratingQuestions(false)
+    }
+  }
+
+  const ask = async (question: string) => {
+    const text = question.trim()
+    if (!text || !selected || isAiThinking) return
+    const findingId = selected.id
+    setIsAiThinking(true)
+    setChatError(null)
+    try {
+      const { reply } = await discussFinding(data.feedbackPageId, findingId, text)
+      setState((prev) =>
+        prev.status === 'ready'
+          ? {
+              status: 'ready',
+              data: {
+                ...prev.data,
+                discussions: {
+                  ...prev.data.discussions,
+                  [findingId]: [...(prev.data.discussions[findingId] ?? []), { sender: 'teacher', text }, { sender: 'ai', text: reply }],
+                },
+              },
+            }
+          : prev,
+      )
+      setChatDraft('')
+    } catch (error) {
+      setChatError(toApiError(error, 'Please try again.').message)
+    } finally {
+      setIsAiThinking(false)
+    }
+  }
+
+  const metrics = [
+    { label: 'Submissions', value: String(statistics.studentsSubmitted), note: `of ${pluralize(statistics.enrolled, 'student')}` },
+    { label: 'Average Versions per Student', value: statistics.averageVersions === null ? '—' : String(statistics.averageVersions), note: '' },
+    { label: 'Resubmissions', value: String(statistics.resubmissions), note: `${statistics.finalSubmissions} final` },
+    { label: 'AI Feedback Requests', value: String(statistics.aiFeedbackRequests), note: '' },
+  ]
+  const nextSteps = (summary?.areasForImprovement ?? []).filter((finding) => finding.nextStep)
+
+  return (
+    <div className="dashboard-page">
+      <section className="dashboard-task-card">
+        <div className="dashboard-task-header">
+          <div>
+            <p className="card-label">Assignment</p>
+            <h3>{context.title}</h3>
+          </div>
+        </div>
+        {context.assignmentPrompt.map((item) => (
+          <p key={item.product} className="dashboard-task-question">
+            <strong>{item.product}:</strong> {item.prompt}
+          </p>
+        ))}
+      </section>
+
+      <section className="dashboard-task-card lesson-context-card" aria-labelledby="lesson-context-heading">
+        <p className="card-label" id="lesson-context-heading">
+          Lesson Context
+        </p>
+        <dl className="lesson-context-grid">
+          <div>
+            <dt>Lesson Topic</dt>
+            <dd>{context.topic}</dd>
+          </div>
+          <div>
+            <dt>Grade Level</dt>
+            <dd>{context.gradeLevel}</dd>
+          </div>
+          <div className="lesson-context-wide">
+            <dt>Science Practices to Emphasize</dt>
+            <dd>
+              {context.practices.length > 0 ? (
+                <span className="context-tags">
+                  {context.practices.map((practice) => (
+                    <span key={practice} className="tag">
+                      {practice}
+                    </span>
+                  ))}
+                </span>
+              ) : (
+                'Not set for this lesson'
+              )}
+            </dd>
+          </div>
+          <div className="lesson-context-wide">
+            <dt>Learning Objectives</dt>
+            <dd>
+              <ul className="lesson-context-objectives">
+                {context.objectives.map((objective) => (
+                  <li key={objective}>{objective}</li>
+                ))}
+              </ul>
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      {/* Class Statistics, from the students' submissions and AI feedback. */}
+      <div className="metrics-row">
+        {metrics.map((metric) => (
+          <div key={metric.label} className="metric-card">
+            <p>{metric.label}</p>
+            <strong>{metric.value}</strong>
+            {metric.note && <span>{metric.note}</span>}
+          </div>
+        ))}
+      </div>
+
+      <div className="report-grid">
+        <section className="report-panel class-summary-panel">
+          <div className="panel-header compact">
+            <h3>Class Summary</h3>
+            {/* Generate when there's no summary; Update only when students
+                have submitted since. An up-to-date summary has no button. */}
+            {(!summary || summary.studentsWithNewWork > 0) && (
+              <button
+                type="button"
+                className="regenerate-button"
+                onClick={() => void generate()}
+                disabled={isGenerating || !data.aiAvailable || statistics.studentsSubmitted === 0}
+                title={!data.aiAvailable ? 'AI class summaries aren’t available for this account yet.' : undefined}
+              >
+                {summary ? 'Update Summary' : 'Generate Summary'}
+              </button>
+            )}
+          </div>
+          {summary && summary.studentsWithNewWork > 0 && (
+            <p className="empty-state-support">
+              {pluralize(summary.studentsWithNewWork, 'student has', 'students have')} submitted new work since this summary. Update the summary to include it.
+            </p>
+          )}
+          {isGenerating && (
+            <p className="lesson-save-status saving" role="status">
+              Analyzing {pluralize(statistics.studentsSubmitted, 'student’s work', 'students’ work')}…
+            </p>
+          )}
+          {generateError && (
+            <p className="lesson-save-status error" role="alert">
+              The summary wasn’t generated: {generateError}
+            </p>
+          )}
+          {smallSample && summary && (
+            <p className="empty-state-support">
+              Based on {pluralize(summary.sampleSize, 'submission')} — too few to describe the whole class.
+            </p>
+          )}
+
+          <h4 className="practice-objectives-heading">Practice-Oriented Learning Objectives</h4>
+          {summary ? (
+            ([
+              { key: 'overlap', title: 'Overlap with Practice-Oriented Learning Objectives', className: 'summary-section-objective', findings: summary.overlap },
+              { key: 'improvement', title: 'Areas for Improvement', className: 'summary-section-misconception', findings: summary.areasForImprovement },
+            ] as const).map((section) => (
+              <div key={section.key} className={`summary-section ${section.className}`}>
+                <p className="summary-section-title">{section.title}</p>
+                {section.findings.length === 0 ? (
+                  <p className="empty-state-support">Nothing to report from the submitted work.</p>
+                ) : (
+                  section.findings.map((finding) => (
+                    <div key={finding.id} className="pattern-group">
+                      <p className="pattern-group-title" title={context.objectives[finding.objectiveIndex]}>
+                        {objectiveLabel(finding.objectiveIndex)}
+                      </p>
+                      {finding.practices.length > 0 && <p className="finding-practices">Practices: {finding.practices.join(' · ')}</p>}
+                      <p className="finding-summary">
+                        <span className="finding-field-label">Summary:</span> {finding.summary}
+                      </p>
+                      {/* Selecting the summary shows the student work behind it. */}
+                      <div className="pattern-row-list">
+                        <div
+                          className={`pattern-row${selectedFindingId === finding.id ? ' active' : ''}`}
+                          role="button"
+                          tabIndex={0}
+                          aria-pressed={selectedFindingId === finding.id}
+                          onClick={() => {
+                            setSelectedFindingId(finding.id)
+                            setChatDraft('')
+                            setChatError(null)
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault()
+                              setSelectedFindingId(finding.id)
+                            }
+                          }}
+                        >
+                          <span className="pattern-row-label">Supporting student work</span>
+                          <span className="pattern-row-count">{finding.artifactIds.length}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            ))
+          ) : (
+            <p className="empty-state-support">
+              {statistics.studentsSubmitted === 0
+                ? 'No students have submitted work yet.'
+                : data.aiAvailable
+                  ? 'Generate a summary to analyze the submitted work against the Assignment Prompt, learning objectives, and science practices.'
+                  : 'AI class summaries aren’t available for this account yet.'}
+            </p>
+          )}
+        </section>
+
+        <div className="right-column">
+          <section className={`report-panel right-panel evidence-workspace-panel${selected ? ` evidence-${selectedKind}` : ''}`}>
+            <div className="evidence-workspace-scroll">
+              <div className="panel-header">
+                <h3>Student Evidence</h3>
+              </div>
+              {selected && (
+                <p className={`evidence-context-row tag evidence-tag-${selectedKind}`}>
+                  {objectiveLabel(selected.objectiveIndex)} · {pluralize(selected.artifactIds.length, 'student')}
+                </p>
+              )}
+              {selected ? (
+                <div className="student-list">
+                  {selected.artifactIds.map((id) => {
+                    const work = data.evidence[id]
+                    if (!work) return null
+                    return (
+                      <div key={id} className="evidence-card">
+                        <div className="student-header">
+                          <h4>{work.studentName}</h4>
+                          <span className="empty-state-support">
+                            Version {work.versionNumber}
+                            {work.submissionEvent === 'final' ? ' (final)' : work.submissionEvent === 'revised' ? ' (revised)' : ''}
+                          </span>
+                        </div>
+                        {work.modelName && (
+                          <p className="finding-practices">
+                            <strong>Model:</strong> {work.modelName}
+                          </p>
+                        )}
+                        {work.imageUrl && <img src={work.imageUrl} alt={`${work.studentName}'s model`} className="student-artifact-image" />}
+                        {work.explanation && <p className="student-quote">&ldquo;{work.explanation}&rdquo;</p>}
+                        {work.studentCode && (
+                          <div className="student-footer">
+                            <button
+                              type="button"
+                              className="secondary-button student-report-link"
+                              aria-label={`Access Individual Student Report for ${work.studentName}`}
+                              onClick={() => onOpenStudentReport(work.studentCode as string)}
+                            >
+                              Access Individual Student Report
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="empty-state-support">Select a summary on the left to see the student work behind it.</p>
+              )}
+
+              <div className="deeper-analysis-section">
+                <div className="panel-header">
+                  <h3>Deeper AI Analysis</h3>
+                </div>
+                {selected ? (
+                  <div className="deeper-analysis-body">
+                    {(discussion.length > 0 || isAiThinking) && (
+                      <div className="deeper-analysis-chat">
+                        <ChatThread messages={discussion.map((message) => ({ role: message.sender === 'teacher' ? 'teacher' : 'ai', text: message.text }))} />
+                        {isAiThinking && <p className="empty-state-support">AI is analyzing this student work…</p>}
+                      </div>
+                    )}
+                    {chatError && (
+                      <p className="lesson-save-status error" role="alert">
+                        {chatError}
+                      </p>
+                    )}
+                    <div className="deeper-analysis-suggestions" role="group" aria-label="Example questions">
+                      {deeperAnalysisStarterQuestions.map((question) => (
+                        <button
+                          key={question}
+                          type="button"
+                          className="practice-chip"
+                          disabled={isAiThinking}
+                          onClick={() => {
+                            setChatDraft(question)
+                            chatInputRef.current?.focus()
+                          }}
+                        >
+                          {question}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="composer-box">
+                      <input
+                        ref={chatInputRef}
+                        type="text"
+                        placeholder={data.aiAvailable ? 'Ask about this summary and its student work...' : 'AI discussion isn’t available for this account yet.'}
+                        maxLength={1500}
+                        value={chatDraft}
+                        onChange={(event) => setChatDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') void ask(chatDraft)
+                        }}
+                        disabled={isAiThinking || !data.aiAvailable}
+                      />
+                      <button
+                        type="button"
+                        className="send-button"
+                        aria-label="Send"
+                        onClick={() => void ask(chatDraft)}
+                        disabled={isAiThinking || !chatDraft.trim() || !data.aiAvailable}
+                      >
+                        <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false">
+                          <path
+                            fill="currentColor"
+                            d="M3 10a1 1 0 0 1 1-1h9.09l-3.3-3.3a1 1 0 1 1 1.42-1.4l5 5a1 1 0 0 1 0 1.4l-5 5a1 1 0 0 1-1.42-1.4l3.3-3.3H4a1 1 0 0 1-1-1Z"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="empty-state-support">Select a summary on the left to discuss it and its student work with AI.</p>
+                )}
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      {/* From the Areas for Improvement in the class summary. */}
+      <section className="questions-panel next-steps-panel" aria-labelledby="next-steps-heading">
+        <div className="panel-header compact">
+          <h3 id="next-steps-heading">Suggested Next Steps</h3>
+        </div>
+        {nextSteps.length === 0 ? (
+          <p className="empty-state-support">
+            {summary ? 'No next steps — the analysis didn’t find gaps to address.' : 'Next steps will appear once the class summary is generated.'}
+          </p>
+        ) : (
+          <ol className="next-step-list">
+            {nextSteps.map((step) => (
+              <li key={step.id} className="next-step-item">
+                <p className="next-step-objective" title={context.objectives[step.objectiveIndex]}>
+                  {objectiveLabel(step.objectiveIndex)}
+                  {step.practices.length > 0 && <span className="next-step-practices"> · {step.practices.join(' · ')}</span>}
+                </p>
+                <p className="next-step-action">{step.nextStep}</p>
+                <p className="next-step-addresses">Addresses {pluralize(step.artifactIds.length, 'student’s work', 'students’ work')} in Areas for Improvement</p>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
+
+      {/* Generated with the class summary; Regenerate Questions renews only
+          the questions, from the saved summary and its student work. */}
+      <section className="questions-panel">
+        <div className="panel-header compact">
+          <h3>Suggested Facilitation Questions</h3>
+          <button
+            type="button"
+            className="regenerate-button"
+            onClick={() => void regenerateQuestions()}
+            disabled={isRegeneratingQuestions || isGenerating || !summary || !data.aiAvailable}
+          >
+            <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true" focusable="false">
+              <path
+                fill="currentColor"
+                d="M10 4a6 6 0 0 1 5.29 3.17.75.75 0 1 1-1.33.7A4.5 4.5 0 1 0 14.4 13h-1.65a.75.75 0 0 1 0-1.5h3.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-1.46A6 6 0 1 1 10 4Z"
+              />
+            </svg>
+            Regenerate Questions
+          </button>
+        </div>
+        {questionsError && (
+          <p className="lesson-save-status error" role="alert">
+            New questions weren’t generated: {questionsError}
+          </p>
+        )}
+        {isRegeneratingQuestions ? (
+          <p className="empty-state-support">Generating new questions…</p>
+        ) : data.questions.length === 0 ? (
+          <p className="empty-state-support">Facilitation questions will appear once the class summary is generated.</p>
+        ) : (
+          <div className="question-groups">
+            {facilitationCategories.map((category) => {
+              const questions = data.questions.filter((question) => question.category === category)
+              if (questions.length === 0) return null
+              const headingId = `facilitation-${category.toLowerCase().replace(/[^a-z]+/g, '-')}`
+              return (
+                <section key={category} className={`question-group ${headingId}`} aria-labelledby={headingId}>
+                  <h4 className="question-category" id={headingId}>
+                    {category}
+                  </h4>
+                  <ol className="question-list">
+                    {questions.map((question) => (
+                      <li key={question.text}>{question.text}</li>
+                    ))}
+                  </ol>
+                </section>
+              )
+            })}
+          </div>
+        )}
+      </section>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // AppRoot — who is using the app
 //
 // Holds the session (nobody, the demo, or a Supabase teacher) and gives each
@@ -16572,7 +18009,9 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
 
 function AppRoot() {
   const [session, setSession] = useState<AppSession>(() => {
-    const demo = readStoredDemoSession()
+    // A saved Student Feedback Page link (#student-feedback?page=…) is for a
+    // real class: it never resumes an Explore Demo remembered in this tab.
+    const demo = readStoredDemoSession() && !(appMode === 'supabase' && readStudentPageToken())
     setSessionDataMode(demo ? 'demo' : 'none')
     return demo ? { kind: 'demo' } : { kind: 'none' }
   })

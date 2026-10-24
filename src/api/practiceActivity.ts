@@ -26,6 +26,19 @@ export async function generateActivityDraft(input: ActivityDraftInput): Promise<
   return result.output
 }
 
+// The newest Student Feedback Page's access token for a lesson (or activity),
+// if it has one.
+export async function latestStudentFeedbackPage(lessonId: string): Promise<string | null> {
+  const { data, error } = await getSupabase()
+    .from('student_feedback_pages')
+    .select('access_url')
+    .eq('lesson_id', lessonId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+  if (error) throw toApiError(error, 'Couldn’t look up the Student Feedback Page.')
+  return (data?.[0]?.access_url as string | undefined) ?? null
+}
+
 // The Student Feedback Page's access token (access_url) for a lesson version:
 // the existing page for that version, or a new one.
 export async function studentFeedbackPageFor(lessonId: string, lessonVersionId: string): Promise<string> {

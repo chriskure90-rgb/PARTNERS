@@ -122,20 +122,25 @@ export async function listRosters(classIds: readonly string[]): Promise<Record<s
 // register_student_roster(p_class_id uuid, p_students jsonb) function, which
 // writes students and class_enrollments. Each student needs a name and the
 // Student ID the app generated for them.
+// Adds students to the class. The server creates each new student's Student
+// ID (8 random characters); a student already in the class is matched by
+// their ID. Returns each student's record id and Student ID, in order.
 export async function registerStudentRoster(
   classId: string,
-  students: readonly { studentName: string; studentPseudonym: string }[],
-): Promise<void> {
-  if (students.length === 0) return
+  students: readonly { studentName: string; studentPseudonym?: string }[],
+): Promise<{ studentId: string; studentPseudonym: string }[]> {
+  if (students.length === 0) return []
   await requireUserId()
   const { data, error } = await getSupabase().rpc('register_student_roster', {
     p_class_id: classId,
-    p_students: students.map((student) => ({ student_name: student.studentName, student_pseudonym: student.studentPseudonym })),
+    p_students: students.map((student) => ({ student_name: student.studentName, ...(student.studentPseudonym ? { student_pseudonym: student.studentPseudonym } : {}) })),
   })
   if (error) throw toApiError(error, 'Couldn’t add the students.')
-  const result = data as { success?: unknown; error?: unknown; message?: unknown } | null
+  const result = data as { success?: unknown; error?: unknown; message?: unknown; students?: unknown } | null
   if (!result || result.success !== true) {
     const message = typeof result?.error === 'string' ? result.error : typeof result?.message === 'string' ? result.message : null
     throw new ApiError(message ?? 'Couldn’t add the students.', { code: 'registration_failed', cause: data })
   }
+  const saved = (Array.isArray(result.students) ? result.students : []) as { student_id?: unknown; student_pseudonym?: unknown }[]
+  return saved.map((student) => ({ studentId: String(student.student_id ?? ''), studentPseudonym: String(student.student_pseudonym ?? '') }))
 }
