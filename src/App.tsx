@@ -488,7 +488,7 @@ const learningObjectiveOverlap: LearningObjectiveGroup[] = [
       {
         id: 'lo1a-permafrost-thawing',
         label: 'Identifies permafrost thawing as what lets the underground fire keep burning',
-        count: 16,
+        count: 7,
         kind: 'objective',
         students: [
           {
@@ -505,12 +505,35 @@ const learningObjectiveOverlap: LearningObjectiveGroup[] = [
               'I noticed warmer-than-average summer and fall temperatures come right before the fires start, so I drew an arrow connecting those two boxes in my model.',
             artifact: 'Diagram with a labeled "warmer than average temperatures" box arrowed into a "fire" box.',
           },
+          {
+            name: 'Diego H.',
+            response: 'When the permafrost thaws, the peat underneath dries out and the fire can creep into it and keep smoldering all winter.',
+            artifact: 'Cross-section showing a thawed layer above frozen permafrost, with a glowing fire line running through the peat.',
+          },
+          {
+            name: 'Ava B.',
+            response: 'I think the thawing permafrost is what opens up the peat so the fire has fuel underground even when there’s snow on top.',
+          },
+          {
+            name: 'Leo C.',
+            response: 'The fire keeps going because the ground isn’t frozen solid anymore — the thawed peat burns slowly under the snow.',
+            artifact: 'Two-panel drawing: frozen ground with no fire next to thawed ground with fire spreading underground.',
+          },
+          {
+            name: 'Nora D.',
+            response: 'In my model the permafrost layer melts in summer, and that is where the fire hides and keeps burning through the winter.',
+          },
+          {
+            name: 'Omar G.',
+            response: 'Thawed permafrost lets air reach the peat, so the fire can stay alive underground until spring.',
+            artifact: 'Diagram with arrows showing air moving down into thawed peat where a fire is burning.',
+          },
         ],
       },
       {
         id: 'lo1a-earlier-spring-fires',
         label: 'Connects earlier-than-usual spring temperatures to new fires flaring up',
-        count: 11,
+        count: 2,
         kind: 'objective',
         students: [
           {
@@ -527,7 +550,7 @@ const learningObjectiveOverlap: LearningObjectiveGroup[] = [
       {
         id: 'lo1a-no-mechanism',
         label: 'Notes zombie fires are unusual without identifying a cause',
-        count: 7,
+        count: 2,
         kind: 'objective',
         students: [
           {
@@ -545,7 +568,7 @@ const learningObjectiveOverlap: LearningObjectiveGroup[] = [
       {
         id: 'lo1b-matter-energy-labeled',
         label: 'Model explicitly labels peat/permafrost as matter and fire as energy, both flowing to the atmosphere',
-        count: 12,
+        count: 2,
         kind: 'objective',
         students: [
           {
@@ -564,7 +587,7 @@ const learningObjectiveOverlap: LearningObjectiveGroup[] = [
       {
         id: 'lo1b-underground-persists',
         label: 'Model shows fire burning underground beneath snow/ice throughout winter',
-        count: 13,
+        count: 2,
         kind: 'objective',
         students: [
           {
@@ -581,7 +604,7 @@ const learningObjectiveOverlap: LearningObjectiveGroup[] = [
       {
         id: 'lo1b-above-ground-only',
         label: 'Model draws fire only above ground, without showing it persisting underground',
-        count: 6,
+        count: 2,
         kind: 'objective',
         students: [
           {
@@ -600,7 +623,7 @@ const learningObjectiveOverlap: LearningObjectiveGroup[] = [
       {
         id: 'lo1c-human-role',
         label: 'Asks how human activity might be making zombie fires more frequent',
-        count: 12,
+        count: 2,
         kind: 'objective',
         students: [
           {
@@ -616,7 +639,7 @@ const learningObjectiveOverlap: LearningObjectiveGroup[] = [
       {
         id: 'lo1c-carbon-amount',
         label: 'Asks how much carbon zombie fires actually release compared to normal wildfires',
-        count: 9,
+        count: 2,
         kind: 'objective',
         students: [
           {
@@ -632,7 +655,7 @@ const learningObjectiveOverlap: LearningObjectiveGroup[] = [
       {
         id: 'lo1c-restated-fact',
         label: 'Restates what’s already known rather than posing a new question',
-        count: 6,
+        count: 2,
         kind: 'objective',
         students: [
           { name: 'Emma K.', response: 'Zombie fires burn underground in the winter and start again in spring.' },
@@ -659,7 +682,7 @@ const scienceInPracticePatterns: PracticeGroup[] = [
       {
         id: 'practice-models-system-components',
         label: 'Models include key system components: peat/permafrost, underground fire, snow/ice, and smoke/CO₂',
-        count: 15,
+        count: 2,
         kind: 'practice',
         students: [
           {
@@ -678,7 +701,7 @@ const scienceInPracticePatterns: PracticeGroup[] = [
       {
         id: 'practice-models-matter-energy-flows',
         label: 'Models distinguish matter (peat) from energy (fire) and show both flowing to the atmosphere',
-        count: 11,
+        count: 2,
         kind: 'practice',
         students: [
           {
@@ -695,7 +718,7 @@ const scienceInPracticePatterns: PracticeGroup[] = [
       {
         id: 'practice-models-seasonal-change',
         label: 'Models represent how conditions change across seasons while the fire persists underground',
-        count: 8,
+        count: 2,
         kind: 'practice',
         students: [
           {
@@ -718,17 +741,29 @@ const misconceptionPatterns: PatternRow[] = [
   {
     id: 'misconception-new-fire-each-spring',
     label: 'Believes the spring fire is a brand-new fire rather than the same fire continuing underground',
-    count: 8,
+    count: 5,
     kind: 'misconception',
     students: [
       { name: 'Emma K.', response: 'A new fire probably starts in spring once things dry out again.' },
       { name: 'Carlos M.', response: 'I think the winter fire goes out, and then a different fire starts in the same spot later.' },
+      {
+        name: 'Ruby N.',
+        response: 'I think lightning in the spring starts new fires, and that’s why they show up in the same places again.',
+      },
+      {
+        name: 'Zoe F.',
+        response: 'The fires in the spring are new ones, because the old fires would have gone out under all that snow.',
+      },
+      {
+        name: 'Liam O.',
+        response: 'Every spring the dry plants catch fire again, so it’s a new fire each year.',
+      },
     ],
   },
   {
     id: 'misconception-no-matter-energy-distinction',
     label: 'Treats peat and fire as the same thing rather than distinguishing matter (peat) from energy (fire)',
-    count: 6,
+    count: 2,
     kind: 'misconception',
     students: [
       { name: 'Liam O.', response: 'The peat and the fire are kind of the same thing — the peat is just the fire underground.' },
@@ -738,7 +773,7 @@ const misconceptionPatterns: PatternRow[] = [
   {
     id: 'misconception-common-everywhere',
     label: 'Assumes zombie fires are common wherever wildfires occur, not a specific, increasing permafrost phenomenon',
-    count: 4,
+    count: 2,
     kind: 'misconception',
     students: [
       {
@@ -759,7 +794,7 @@ const covidDescriptivePatterns: PatternRow[] = [
   {
     id: 'covid-d-virus-structures-labeled',
     label: 'Labels the virus’s protein, fatty envelope, and genetic material',
-    count: 15,
+    count: 7,
     kind: 'objective',
     students: [
       {
@@ -771,12 +806,32 @@ const covidDescriptivePatterns: PatternRow[] = [
         name: 'Kai D.',
         artifact: 'Coronavirus drawn as a circle with spikes labeled “protein,” an outer ring labeled “fatty envelope,” and squiggles inside labeled “genetic material.”',
       },
+      {
+        name: 'Avery L.',
+        artifact: 'Coronavirus with spikes labeled “protein,” a double outline labeled “fatty envelope,” and a coil labeled “genetic material.”',
+      },
+      {
+        name: 'Priya M.',
+        response: 'I labeled the spikes as protein, the outer layer as the fatty envelope, and the RNA inside as the genetic material.',
+      },
+      {
+        name: 'Uma V.',
+        artifact: 'Labeled virus diagram: protein spikes, a fatty envelope around the outside, and genetic material in the center.',
+      },
+      {
+        name: 'Vince C.',
+        response: 'My drawing shows the three parts of the virus — protein on the outside, then the fatty envelope, then the genetic material inside.',
+      },
+      {
+        name: 'Yusuf Q.',
+        artifact: 'Virus drawn as a circle with protein spikes, a shaded fatty envelope, and a squiggle of genetic material, all labeled.',
+      },
     ],
   },
   {
     id: 'covid-d-soap-two-ends',
     label: 'Draws the soap molecule with a hydrophilic head and a hydrophobic tail',
-    count: 12,
+    count: 2,
     kind: 'objective',
     students: [
       {
@@ -793,7 +848,7 @@ const covidDescriptivePatterns: PatternRow[] = [
   {
     id: 'covid-d-fat-attraction',
     label: 'Notes that the soap’s hydrophobic tail and the virus’s fatty envelope are both associated with fat',
-    count: 7,
+    count: 2,
     kind: 'objective',
     students: [
       {
@@ -807,7 +862,7 @@ const covidDescriptivePatterns: PatternRow[] = [
   {
     id: 'covid-d-envelope-unlabeled',
     label: 'Draws the virus without labeling the fatty envelope',
-    count: 6,
+    count: 2,
     kind: 'objective',
     students: [
       { name: 'Eli N.', artifact: 'Coronavirus with spikes labeled “protein” and inner squiggles labeled “genetic material”; the outer layer has no label.' },
@@ -817,7 +872,7 @@ const covidDescriptivePatterns: PatternRow[] = [
   {
     id: 'covid-d-ends-swapped',
     label: 'Labels the soap molecule’s hydrophilic and hydrophobic ends the wrong way around',
-    count: 4,
+    count: 2,
     kind: 'misconception',
     students: [
       {
@@ -831,7 +886,7 @@ const covidDescriptivePatterns: PatternRow[] = [
   {
     id: 'covid-d-no-relationship',
     label: 'Draws the virus and the soap separately, without showing how their structures relate',
-    count: 9,
+    count: 2,
     kind: 'objective',
     students: [
       { name: 'Isaac P.', artifact: 'Virus and soap molecule drawn on opposite sides of the page with no arrows or notes between them.' },
@@ -844,7 +899,7 @@ const covidMechanisticPatterns: PatternRow[] = [
   {
     id: 'covid-m-parts-labeled',
     label: 'Labels which end of each soap molecule faces the oil and which faces the water',
-    count: 8,
+    count: 2,
     kind: 'objective',
     students: [
       { name: 'Mateo R.', artifact: 'Oil droplet in the middle with soap tails labeled “tail → oil” pointing in and heads labeled “head → water” pointing out.' },
@@ -854,7 +909,7 @@ const covidMechanisticPatterns: PatternRow[] = [
   {
     id: 'covid-m-single-molecule',
     label: 'Shows only one soap molecule, so many molecules working together isn’t represented',
-    count: 7,
+    count: 2,
     kind: 'objective',
     students: [
       { name: 'Dana G.', artifact: 'A single soap molecule touching one oil drop, with an arrow labeled “soap cleans.”' },
@@ -864,7 +919,7 @@ const covidMechanisticPatterns: PatternRow[] = [
   {
     id: 'covid-m-soap-surrounds-oil',
     label: 'Shows soap molecules surrounding oil with their hydrophilic heads facing the water',
-    count: 10,
+    count: 2,
     kind: 'objective',
     students: [
       {
@@ -878,7 +933,7 @@ const covidMechanisticPatterns: PatternRow[] = [
   {
     id: 'covid-m-tail-into-envelope',
     label: 'Shows the soap’s hydrophobic tail pushing into the virus’s fatty envelope',
-    count: 12,
+    count: 5,
     kind: 'objective',
     students: [
       {
@@ -887,12 +942,24 @@ const covidMechanisticPatterns: PatternRow[] = [
           'In my model I drew the soap’s hydrophobic tail sticking into the virus’s fatty envelope, since both of those are supposed to be attracted to fat.',
       },
       { name: 'Jada W.', artifact: 'Virus envelope with several soap tails stuck into it and a crack drawn across the envelope.' },
+      {
+        name: 'Willa J.',
+        response: 'The tails of the soap molecules go into the fatty envelope because they’re attracted to fat, and that breaks it open.',
+      },
+      {
+        name: 'Avery L.',
+        artifact: 'Virus outline with soap molecules whose tails poke into the envelope, and arrows showing the envelope splitting.',
+      },
+      {
+        name: 'Owen F.',
+        response: 'I drew the hydrophobic tails sticking into the virus’s fat layer, kind of like pins, so the layer falls apart.',
+      },
     ],
   },
   {
     id: 'covid-m-no-water-role',
     label: 'Doesn’t show how water and the hydrophilic heads carry the trapped oil or virus away',
-    count: 10,
+    count: 2,
     kind: 'objective',
     students: [
       {
@@ -905,7 +972,7 @@ const covidMechanisticPatterns: PatternRow[] = [
   {
     id: 'covid-m-soap-kills',
     label: 'Describes soap as “killing” the virus rather than breaking apart its structure',
-    count: 5,
+    count: 2,
     kind: 'misconception',
     students: [
       { name: 'Caleb Z.', response: 'The soap kills the virus, so it can’t make you sick anymore.' },
@@ -1288,12 +1355,16 @@ function generateFacilitationQuestions(
   return readFacilitationQuestions(raw, classAnalysis, previousQuestions, assignment.id)
 }
 
-// Example questions shown above the Deeper AI Analysis input.
-const deeperAnalysisStarterQuestions = [
-  'What misconceptions are common?',
-  'How do students\u2019 models differ?',
-  'Which students need additional support?',
-  'What should I focus on next?',
+// Suggested questions about the selected idea in Deeper AI Analysis, shown
+// until the conversation starts: what the students understand,
+// misconceptions, the learning objective, facilitation questions, and an
+// instructional next step.
+const ideaQuestionSuggestions = [
+  'What do these students understand about this idea?',
+  'What misconceptions show up in their work?',
+  'How does this idea connect to the learning objective?',
+  'What facilitation questions could I ask these students?',
+  'What instructional next step would help these students?',
 ]
 
 // The class analysis Deeper AI Analysis answers class-wide questions from:
@@ -1361,12 +1432,55 @@ function mockClassWideReply(question: string, analysis: ClassAnalysisForAi | nul
 // focused a specific student (via the comment action on their evidence
 // card), the reply narrows to that one student's actual words instead of
 // generalizing across the pattern.
+// The suggested questions (ideaQuestionSuggestions), answered from the
+// selected idea's own student work and its learning objective; null for
+// any other question.
+function mockIdeaReply(pattern: PatternRow, question: string, analysis: ClassAnalysisForAi | null): string | null {
+  const lower = question.toLowerCase()
+  if (!/these students|this idea|their work/.test(lower)) return null
+  const finding = [...(analysis?.overlap ?? []), ...(analysis?.areasForImprovement ?? [])].find((item) =>
+    item.patterns.some((row) => row.label === pattern.label),
+  )
+  const nextStep = analysis?.areasForImprovement.find((item) => item === finding)?.nextStep
+  const objective = finding?.objective ?? 'the lesson’s learning objectives'
+  const idea = `“${pattern.label}”`
+  const examples = pattern.students
+    .slice(0, 2)
+    .map((student) => `${student.name} (“${student.response ?? student.artifact ?? 'their model'}”)`)
+    .join(' and ')
+  const isGap = pattern.kind === 'misconception'
+  if (lower.includes('understand')) {
+    return isGap
+      ? `The ${pattern.count} students behind ${idea} are working with an incomplete idea: ${examples} show what they currently think, which is a starting point to build from rather than a settled understanding.`
+      : `The ${pattern.count} students behind ${idea} understand the core of it — ${examples} state it in their own words. What’s less clear is whether they can explain why, using their models as evidence.`
+  }
+  if (lower.includes('misconception')) {
+    return isGap
+      ? `The misconception here is the idea itself: ${idea}. You can hear it in ${examples}. It’s worth surfacing directly, since it affects ${objective}.`
+      : `No misconception defines this group — ${idea} is a strength. Watch for students who state it without the mechanism behind it; ${examples} are good places to check.`
+  }
+  if (lower.includes('objective')) {
+    return `This idea speaks to ${objective}. ${isGap ? 'It shows where students fall short of it' : 'It shows students moving toward it'} — compare ${examples} with what the objective asks students to explain.`
+  }
+  if (lower.includes('facilitation')) {
+    return `Try: “What evidence in your model supports this idea?” and “What would you expect to see if this idea were wrong?” Starting with the work of ${examples} keeps the discussion grounded in ${idea}.`
+  }
+  if (lower.includes('next step')) {
+    return nextStep
+      ? `A good next step: ${nextStep.charAt(0).toLowerCase()}${nextStep.slice(1)} Begin with the ${pattern.count} students behind ${idea}, such as ${examples}.`
+      : `Have the ${pattern.count} students behind ${idea} explain one part of their model to a partner who reasoned differently, then revise — ${examples} would make a strong pair to start.`
+  }
+  return null
+}
+
 function mockDeeperAnalysisReply(
   pattern: PatternRow,
   question: string,
   focusedStudent?: StudentEvidence | null,
   classAnalysis: ClassAnalysisForAi | null = null,
 ): string {
+  const ideaReply = mockIdeaReply(pattern, question, classAnalysis)
+  if (ideaReply) return ideaReply
   const classWide = mockClassWideReply(question, classAnalysis)
   if (classWide) return classWide
   const lower = question.toLowerCase()
@@ -2615,6 +2729,15 @@ function RevisionChatPanel({
   // is the whole point.
   const [isChatOpen, setIsChatOpen] = useState(!hasProposal)
 
+  // Before removing a focused input or textarea, move focus to the clicked
+  // button (it stays on screen: Hide AI chat becomes Ask AI about this,
+  // Cancel Edit becomes Edit) and clear the caret, so no blinking cursor is
+  // left behind in non-editable text.
+  const keepFocusOn = (button: HTMLButtonElement) => {
+    button.focus()
+    window.getSelection()?.removeAllRanges()
+  }
+
   return (
     <div className="revision-chat-panel">
       <div className="revision-chat-header">
@@ -2655,7 +2778,14 @@ function RevisionChatPanel({
               Apply to Lesson
             </button>
             {isEditingProposal ? (
-              <button type="button" className="proposal-edit-button" onClick={() => setProposalDraft(null)}>
+              <button
+                type="button"
+                className="proposal-edit-button"
+                onClick={(event) => {
+                  keepFocusOn(event.currentTarget)
+                  setProposalDraft(null)
+                }}
+              >
                 Cancel Edit
               </button>
             ) : (
@@ -2673,7 +2803,10 @@ function RevisionChatPanel({
               className="proposal-edit-button"
               aria-expanded={isChatOpen}
               aria-controls="revision-chat"
-              onClick={() => setIsChatOpen((open) => !open)}
+              onClick={(event) => {
+                if (isChatOpen) keepFocusOn(event.currentTarget)
+                setIsChatOpen((open) => !open)
+              }}
             >
               {isChatOpen ? 'Hide AI chat' : 'Ask AI about this'}
             </button>
@@ -2847,6 +2980,8 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
   // The lesson's Student Feedback Activities, and the Library lesson the
   // workspace lesson is saved as (if any) so they stay with it.
   const [feedbackActivities, setFeedbackActivities] = useState<FeedbackActivity[]>(() => identifyFeedbackActivities(null))
+  // The workspace lesson's assignment (title and description).
+  const [lessonAssignment, setLessonAssignment] = useState<LessonAssignment>(() => defaultLessonAssignment(demoLessonDocument))
   const [workspaceLessonId, setWorkspaceLessonId] = useState<string | null>(null)
   // The Student Feedback URL the app opened on, if any (see StudentFeedbackRoute).
   const [initialStudentRoute] = useState(readStudentFeedbackRoute)
@@ -2870,20 +3005,25 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
   const [studentReportsReturnTo, setStudentReportsReturnTo] = useState<PageId | null>(null)
   // The Class Summary finding selected on Class Feedback — kept here so
   // Back from a student's report lands on the same finding.
-  const [classFeedbackPatternId, setClassFeedbackPatternId] = useState<string | null>(defaultPatternId)
+  const [classFeedbackPatternId, setClassFeedbackPatternId] = useState<string | null>(null)
+  // Class Feedback's Deeper AI Analysis conversations in the demo, by
+  // assignment and idea, and the summary picked on a saved lesson's Class
+  // Feedback — kept here so a visit to a student's report doesn't lose them.
+  const [classFeedbackChats, setClassFeedbackChats] = useState<Record<string, ChatMessage[]>>({})
+  const [savedClassFeedbackFinding, setSavedClassFeedbackFinding] = useState<{ lessonId: string; findingId: string } | null>(null)
   // The Class Feedback assignment shown (null: the lesson's first), kept
   // for the same reason.
   const [classFeedbackAssignmentId, setClassFeedbackAssignmentId] = useState<string | null>(null)
-  // Class Feedback's Model / Explanation selection, kept with the assignment.
-  const [classFeedbackWorkType, setClassFeedbackWorkType] = useState<WorkType>('model')
   // A different lesson starts with no revisions, conversations, dismissed
   // suggestions, or manual edits carried over from the previous one.
   const showLessonDocument = (
     document: LessonDocument,
     libraryLessonId: string | null,
     activities: FeedbackActivity[] = identifyFeedbackActivities(libraryLessonId),
+    assignment: LessonAssignment = defaultLessonAssignment(document),
   ) => {
     setFeedbackActivities(activities)
+    setLessonAssignment(assignment)
     setWorkspaceLessonId(libraryLessonId)
     revisionEditor.reset()
     setDismissedSuggestions([])
@@ -3008,7 +3148,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
           for (const item of stored) {
             const content = readSavedLessonContent(item.currentVersion?.content)
             if (content) lessonFormsRef.current.set(item.lessonId, content.form)
-            if (content) savedProductsRef.current.set(item.lessonId, studentProductsKey(content.studentProducts ?? []))
+            if (content) savedProductsRef.current.set(item.lessonId, studentProductsKey(content.studentProducts ?? [], lessonAssignmentFrom(content)))
             if (item.currentVersion) {
               lessonVersionNumbersRef.current.set(item.lessonId, item.currentVersion.versionNumber)
               lessonVersionIdsRef.current.set(item.lessonId, item.currentVersion.lessonVersionId)
@@ -3078,8 +3218,8 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
     url?: string
     message?: string
   } | null>(null)
-  const buildLessonFeedbackPage = (lessonId: string, products: readonly FeedbackActivity[], reuseLatest: boolean) => {
-    const key = studentProductsKey(products)
+  const buildLessonFeedbackPage = (lessonId: string, products: readonly FeedbackActivity[], assignment: LessonAssignment, reuseLatest: boolean) => {
+    const key = studentProductsKey(products, assignment)
     setLessonPage({ lessonId, productsKey: key, status: 'saving' })
     const effective = effectiveLessonDocument({ ...lessonDocument, id: lessonId }, manualEdits, revisionEditor.revisedLesson)
     const form = lessonFormsRef.current.get(lessonId)
@@ -3100,7 +3240,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
           if (!form || !lesson) throw new Error('This lesson’s saved form couldn’t be found. Reload the page and try again.')
           const saved = await saveLessonVersion({
             lessonId,
-            content: lessonContentFrom(effective, form, products),
+            content: lessonContentFrom(effective, form, products, assignment),
             createdBy: 'teacher',
             fields: lessonFieldsFrom(form, lesson.title, classroom?.gradeLevel ?? ''),
           })
@@ -3344,7 +3484,8 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
     setClassFeedbackLessonId(null)
     setPlanningTarget(null)
     setStartCreatingClass(false)
-    setClassFeedbackPatternId(defaultPatternId)
+    setClassFeedbackPatternId(null)
+    setSavedClassFeedbackFinding(null)
     setClassFeedbackAssignmentId(null)
     if (page === 'library' && selectedClassId) expandLibraryClass(selectedClassId)
     // From the drawer, reports start unselected (and have no page to go back to).
@@ -3371,18 +3512,17 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
   }
 
   // From Student Evidence on Class Feedback: that student's report for the
-  // same assignment and student work (Model or Explanation), in the class
-  // whose submissions the evidence came from.
-  const handleOpenStudentReport = (lesson: LibraryLesson, studentName: string, assignmentId: string) => {
+  // same assignment, in the class whose submissions the evidence came from.
+  const handleOpenStudentReport = (lesson: LibraryLesson, studentName: string | null, assignmentId: string | null) => {
     const classId = analyzedSubmissionClassIds[lesson.id] ?? null
     const assignment = classFeedbackAssignments.find((item) => item.id === assignmentId)
     openStudentReports({
       lessonId: lesson.id,
       classId,
-      studentId: classId ? classStudentIdFor(classId, studentName) : null,
+      studentId: classId && studentName ? classStudentIdFor(classId, studentName) : null,
       modelTab: assignment?.modelTabs[0] ?? 'descriptive',
       assignmentId,
-      work: classFeedbackWorkType,
+      work: 'model',
     })
   }
 
@@ -3480,7 +3620,10 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
     const { classId, savedLessonId } = planningTarget
     const existingId = savedLessonId && remoteLessonIdsRef.current.has(savedLessonId) ? savedLessonId : null
     const studentProducts = identifyFeedbackActivities(existingId)
-    const content = lessonContentFrom(effectiveLessonDocument(document, {}, {}), details, studentProducts, generation, upload)
+    // A newly generated lesson's assignment comes from its own text.
+    const effectiveDocument = effectiveLessonDocument(document, {}, {})
+    const assignment = defaultLessonAssignment(effectiveDocument)
+    const content = lessonContentFrom(effectiveDocument, details, studentProducts, assignment, generation, upload)
     const framework = (currentAccount.state ?? 'NGSS') as StandardsFrameworkId
     setIsSavingLesson(true)
     setLessonSaveStatus({ kind: 'saving', message: 'Saving to your Library…' })
@@ -3493,13 +3636,19 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
       lessonFormsRef.current.set(lessonId, details)
       lessonVersionNumbersRef.current.set(lessonId, saved.versionNumber)
       lessonVersionIdsRef.current.set(lessonId, saved.lessonVersionId)
-      savedProductsRef.current.set(lessonId, studentProductsKey(studentProducts))
+      savedProductsRef.current.set(lessonId, studentProductsKey(studentProducts, assignment))
       const savedDocument = { ...content.document, id: lessonId }
       lastSavedLessonRef.current = { lessonId, snapshot: JSON.stringify(savedDocument) }
       const record = (bannerColor: string): LibraryLesson => ({
         ...createLibraryLessonFromPlanning(lessonId, details, bannerColor, currentTeacherEmail, uploadedFileName, savedDocument),
         title,
-        lessonPlan: { hasDemoContent: true, document: savedDocument, feedbackActivities: studentProducts, formSeed: formSeedFromDetails(details, framework) },
+        lessonPlan: {
+          hasDemoContent: true,
+          document: savedDocument,
+          feedbackActivities: studentProducts,
+          assignment,
+          formSeed: formSeedFromDetails(details, framework),
+        },
       })
       if (existingId) {
         // A new version keeps the lesson's Student Feedback Page.
@@ -3582,10 +3731,11 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
   // in the Library they're kept with it, and once all are confirmed the
   // lesson lists the assignment under Student Feedback.
   const lessonLinkId = workspaceLessonId ?? lessonDocument.id
-  const updateFeedbackActivities = (next: FeedbackActivity[]) => {
+  const updateFeedbackActivities = (next: FeedbackActivity[], assignment: LessonAssignment = lessonAssignment) => {
     setFeedbackActivities(next)
+    setLessonAssignment(assignment)
     if (!workspaceLessonId) return
-    const link = assignmentLinkFor(lessonLinkId, lessonDocument.title, next)
+    const link = assignmentLinkFor(lessonLinkId, lessonDocument.title, next, assignment)
     const generatedId = `${workspaceLessonId}-feedback-activities`
     setLibraryLessons((prev) =>
       prev.map((lesson) => {
@@ -3599,7 +3749,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
         const others = lesson.studentFeedback.filter((assignment) => assignment.id !== id)
         return {
           ...lesson,
-          lessonPlan: { ...lesson.lessonPlan, feedbackActivities: next },
+          lessonPlan: { ...lesson.lessonPlan, feedbackActivities: next, assignment },
           studentFeedback: updated ? [...others, updated] : id === generatedId ? others : lesson.studentFeedback,
         }
       }),
@@ -3610,8 +3760,8 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
       const confirmed = next.length > 0 && next.every((activity) => activity.confirmed)
       if (!confirmed) {
         setLessonPage((prev) => (prev?.lessonId === workspaceLessonId ? null : prev))
-      } else if (lessonPage?.lessonId !== workspaceLessonId || lessonPage.productsKey !== studentProductsKey(next) || lessonPage.status === 'error') {
-        buildLessonFeedbackPage(workspaceLessonId, next, false)
+      } else if (lessonPage?.lessonId !== workspaceLessonId || lessonPage.productsKey !== studentProductsKey(next, assignment) || lessonPage.status === 'error') {
+        buildLessonFeedbackPage(workspaceLessonId, next, assignment, false)
       }
     }
   }
@@ -3622,7 +3772,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
     if (lessonPersistence !== 'supabase' || !workspaceLessonId || !lessonGenerated || !remoteLessonIdsRef.current.has(workspaceLessonId)) return
     if (feedbackActivities.length === 0 || !feedbackActivities.every((activity) => activity.confirmed)) return
     if (lessonPage?.lessonId === workspaceLessonId) return
-    buildLessonFeedbackPage(workspaceLessonId, feedbackActivities, true)
+    buildLessonFeedbackPage(workspaceLessonId, feedbackActivities, lessonAssignment, true)
     // Runs when a lesson (and its products) opens; the rest is read then.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceLessonId, lessonGenerated, feedbackActivities])
@@ -3705,7 +3855,12 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
   const openSavedLesson = (lesson: LibraryLesson, classroom: LibraryClass | null, source: 'library' | 'class-setup') => {
     resetGeneratedLesson()
     const document = lesson.lessonPlan.document ?? demoLessonDocument
-    showLessonDocument(document, lesson.id, lesson.lessonPlan.feedbackActivities ?? identifyFeedbackActivities(lesson.id))
+    showLessonDocument(
+      document,
+      lesson.id,
+      lesson.lessonPlan.feedbackActivities ?? identifyFeedbackActivities(lesson.id),
+      lesson.lessonPlan.assignment ?? defaultLessonAssignment(document),
+    )
     setLessonGenerated(lesson.lessonPlan.hasDemoContent)
     setPlanningFormSeed(demoLessonFormSeeds[lesson.id] ?? lesson.lessonPlan.formSeed ?? null)
     setPlanningSessionKey((key) => key + 1)
@@ -3791,7 +3946,12 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
       details.instructionalSequence.trim() === seed.instructionalSequence.trim()
     if (pendingDemoLesson && unchanged) {
       const saved = pendingDemoLesson.lessonPlan.document ?? demoLessonDocument
-      showLessonDocument(saved, pendingDemoLesson.id, pendingDemoLesson.lessonPlan.feedbackActivities ?? identifyFeedbackActivities(pendingDemoLesson.id))
+      showLessonDocument(
+        saved,
+        pendingDemoLesson.id,
+        pendingDemoLesson.lessonPlan.feedbackActivities ?? identifyFeedbackActivities(pendingDemoLesson.id),
+        pendingDemoLesson.lessonPlan.assignment ?? defaultLessonAssignment(saved),
+      )
     } else if (lessonPersistence !== 'mock' && usesSupabase('lessonGeneration')) {
       void generateWithAi(details, method, brainstorm)
       return
@@ -3955,6 +4115,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
     const lesson = libraryLessons.find((item) => item.id === lessonId)
     const classroom = libraryClasses.find((item) => item.lessonIds.includes(lessonId))
     const activities = feedbackActivities
+    const assignment = lessonAssignment
     versionSaveQueueRef.current = versionSaveQueueRef.current.then(async () => {
       if (!form || !lesson) {
         setLessonSaveStatus({ kind: 'error', message: 'Your changes aren’t saved: this lesson’s saved form couldn’t be found. Reload the page and try again.' })
@@ -3973,14 +4134,14 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
       try {
         const saved = await saveLessonVersion({
           lessonId,
-          content: lessonContentFrom(effective, form, activities),
+          content: lessonContentFrom(effective, form, activities, assignment),
           createdBy,
           fields: lessonFieldsFrom(form, lesson.title, classroom?.gradeLevel ?? ''),
         })
         lastSavedLessonRef.current = { lessonId, snapshot }
         lessonVersionNumbersRef.current.set(lessonId, saved.versionNumber)
         lessonVersionIdsRef.current.set(lessonId, saved.lessonVersionId)
-        savedProductsRef.current.set(lessonId, studentProductsKey(activities))
+        savedProductsRef.current.set(lessonId, studentProductsKey(activities, assignment))
         setLibraryLessons((prev) =>
           prev.map((item) => (item.id === lessonId ? { ...item, lessonPlan: { ...item.lessonPlan, document: effective } } : item)),
         )
@@ -4024,6 +4185,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
       .filter((classroom) => classroom.lessonIds.includes(lessonLinkId))
       .map((classroom) => ({ id: classroom.id, label: classDisplayName(classroom) })),
     feedbackActivities,
+    assignment: lessonAssignment,
     onFeedbackActivitiesChange: updateFeedbackActivities,
     setPlanningTab,
     lessonSource,
@@ -4074,9 +4236,9 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
             )
             return activityDraftFromAi(request, output)
           },
-          save: async ({ draft, collection, savedLessonId, createdBy, conversation }) => {
+          save: async ({ draft, collection, assignment, savedLessonId, createdBy, conversation }) => {
             if (!planningTarget || !planningTargetClass) throw new Error(notLinkedMessage)
-            const content = { format: activityContentFormat, activity: { ...draft, collection } }
+            const content = { format: activityContentFormat, activity: { ...draft, collection, assignments: savedAssignments(assignment, collection) } }
             const fields: LessonFields = {
               lesson_title: draft.title,
               grade_level: planningTargetClass.gradeLevel.trim() || draft.gradeLabel,
@@ -4306,7 +4468,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
         </div>
       </header>
 
-      <main className="app-main">
+      <main className="app-main" data-page={activePage}>
         <div className="page-heading">
           <div>
             <p className="eyebrow">Workspace</p>
@@ -4463,6 +4625,10 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
                 work: 'model',
               })
             }
+            selectedFindingId={savedClassFeedbackFinding?.lessonId === savedClassFeedbackLesson.id ? savedClassFeedbackFinding.findingId : null}
+            onSelectFinding={(findingId) =>
+              setSavedClassFeedbackFinding(findingId ? { lessonId: savedClassFeedbackLesson.id, findingId } : null)
+            }
           />
         )}
         {activePage === 'class-feedback-dashboard' && !savedClassFeedbackLesson && (
@@ -4471,11 +4637,15 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
             lesson={classFeedbackLesson}
             assignmentId={classFeedbackAssignmentId}
             onAssignmentChange={setClassFeedbackAssignmentId}
-            workType={classFeedbackWorkType}
-            onWorkTypeChange={setClassFeedbackWorkType}
             selectedPatternId={classFeedbackPatternId}
             onSelectPattern={setClassFeedbackPatternId}
             onOpenStudentReport={(studentName, assignmentId) => handleOpenStudentReport(classFeedbackLesson, studentName, assignmentId)}
+            studentIdFor={(studentName) => {
+              const classId = analyzedSubmissionClassIds[classFeedbackLesson.id]
+              return classId ? classStudentIdFor(classId, studentName) : null
+            }}
+            chats={classFeedbackChats}
+            onChatsChange={setClassFeedbackChats}
           />
         )}
         {activePage === 'student-reports' && (
@@ -5723,7 +5893,11 @@ function isContextOnlyMessage(text: string, context: ActivityContext): boolean {
 
 // A point in the activity where students submit work for feedback. All of
 // an activity's opportunities belong to one assignment (one link), in order.
-type CollectionOpportunity = { id: string; name: string; submission: string }
+// `description`: set only when the teacher edits it (else the lesson's own
+// activity text is shown; see workTypeDescriptions). `title`: the card's
+// title as the teacher renamed it — `id` and `name` stay the work type
+// that Student Feedback and the AI go by.
+type CollectionOpportunity = { id: string; name: string; submission: string; description?: string; title?: string }
 
 type ActivityDraft = {
   title: string
@@ -5769,6 +5943,7 @@ type ActivityRemote = {
   save: (input: {
     draft: ActivityDraft
     collection: CollectionOpportunity[]
+    assignment: LessonAssignment
     savedLessonId: string | null
     createdBy: VersionCreatedBy
     conversation: ChatMessage[]
@@ -8238,22 +8413,22 @@ function LessonWorkspacePlaceholder({
 function BrandWordmark() {
   return (
     <div className="brand-text">
-      {/* The PARTNERS wordmark is a single dark blue (see .brand-name
-          in App.css); the subtitle below keeps its per-letter-group
-          accent colors (brand-color-* classes). */}
+      {/* A dark navy wordmark over a softer blue subtitle (see
+          .brand-name and .brand-subtitle in App.css); the letters spelling
+          PARTNERS are bold. */}
       <span className="brand-name">PARTNERS</span>
       <span className="brand-subtitle">
         <span>
-          <span className="brand-subtitle-highlight brand-color-blue">P</span>romoting an{' '}
-          <span className="brand-subtitle-highlight brand-color-blue">A</span>rtificial Intelligence-
-          <span className="brand-subtitle-highlight brand-color-blue">R</span>esearcher-
-          <span className="brand-subtitle-highlight brand-color-green">T</span>eacher{' '}
-          <span className="brand-subtitle-highlight brand-color-green">N</span>etwork
+          <span className="brand-subtitle-highlight">P</span>romoting an{' '}
+          <span className="brand-subtitle-highlight">A</span>rtificial Intelligence-
+          <span className="brand-subtitle-highlight">R</span>esearcher-
+          <span className="brand-subtitle-highlight">T</span>eacher{' '}
+          <span className="brand-subtitle-highlight">N</span>etwork
         </span>
         <span>
-          to <span className="brand-subtitle-highlight brand-color-purple">E</span>nhance P
-          <span className="brand-subtitle-highlight brand-color-purple">r</span>actices in{' '}
-          <span className="brand-subtitle-highlight brand-color-orange">S</span>cience
+          to <span className="brand-subtitle-highlight">E</span>nhance P
+          <span className="brand-subtitle-highlight">r</span>actices in{' '}
+          <span className="brand-subtitle-highlight">S</span>cience
         </span>
       </span>
     </div>
@@ -8459,6 +8634,8 @@ type LibraryLesson = {
     hasDemoContent: boolean
     document?: LessonDocument
     feedbackActivities?: FeedbackActivity[]
+    // Its assignment's title and description (a saved lesson's, or as edited).
+    assignment?: LessonAssignment
     formSeed?: PlanningFormSeed
     // A saved Science Practice Activity (Brainstorm with AI): reopened in the
     // Activity workspace instead of the lesson workspace.
@@ -8682,6 +8859,9 @@ type SavedLessonContent = {
   document: LessonDocument
   form: PlanningLessonDetails
   studentProducts: FeedbackActivity[]
+  // The assignment (title, description, required student work); absent on
+  // versions saved before assignments had their own title and description.
+  assignments?: SavedAssignment[]
   // Present on a version the real AI generated (model, token usage, warnings).
   generation?: LessonGenerationRecord
   // An uploaded lesson: its file name and the text read from it, as uploaded.
@@ -8743,10 +8923,24 @@ function lessonContentFrom(
   document: LessonDocument,
   form: PlanningLessonDetails,
   studentProducts: readonly FeedbackActivity[],
+  assignment: LessonAssignment,
   generation?: LessonGenerationRecord,
   upload?: { fileName: string; text: string },
 ): SavedLessonContent {
-  return { format: lessonContentFormat, document, form, studentProducts: [...studentProducts], ...(generation ? { generation } : {}), ...(upload ? { upload } : {}) }
+  return {
+    format: lessonContentFormat,
+    document,
+    form,
+    studentProducts: [...studentProducts],
+    assignments: savedAssignments(assignment, studentProducts),
+    ...(generation ? { generation } : {}),
+    ...(upload ? { upload } : {}),
+  }
+}
+
+// A saved lesson's assignment: as saved, or (older versions) from its lesson text.
+function lessonAssignmentFrom(content: SavedLessonContent): LessonAssignment {
+  return readAssignment(content.assignments, () => defaultLessonAssignment(content.document))
 }
 
 // The planning form to reopen a saved lesson with.
@@ -8779,15 +8973,42 @@ function readSavedLessonContent(content: Record<string, unknown> | undefined): S
 
 // A saved activity to reopen: its current version's draft and the student
 // work it collects (lesson_content in the activity format).
-type SavedActivityOpen = { lessonId: string; lessonVersionId: string; versionNumber: number; draft: ActivityDraft; collection: CollectionOpportunity[] }
+type SavedActivityOpen = {
+  lessonId: string
+  lessonVersionId: string
+  versionNumber: number
+  draft: ActivityDraft
+  collection: CollectionOpportunity[]
+  assignment: LessonAssignment
+}
+
+// A Science Practice Activity's assignment before the teacher edits it: the
+// activity's title and description.
+function defaultActivityAssignment(draft: ActivityDraft): LessonAssignment {
+  return { id: 'assignment-1', title: draft.title, description: draft.description }
+}
+
+// An activity's student work and assignment as a saved version holds them,
+// to tell whether edits still need saving.
+function activityWorkKey(collection: readonly CollectionOpportunity[], assignment: LessonAssignment): string {
+  return JSON.stringify({ collection, assignment: { title: assignment.title, description: assignment.description } })
+}
 
 function readSavedActivity(stored: StoredLesson): SavedActivityOpen | undefined {
   const version = stored.currentVersion
   if (!version) return undefined
-  const content = version.content as { format?: unknown; activity?: Partial<ActivityDraft> }
+  const content = version.content as { format?: unknown; activity?: Partial<ActivityDraft> & { assignments?: unknown } }
   const activity = content.format === activityContentFormat ? content.activity : undefined
   if (!activity || typeof activity.title !== 'string' || !Array.isArray(activity.collection) || !Array.isArray(activity.sequence)) return undefined
-  return { lessonId: stored.lessonId, lessonVersionId: version.lessonVersionId, versionNumber: version.versionNumber, draft: activity as ActivityDraft, collection: activity.collection }
+  const draft = activity as ActivityDraft
+  return {
+    lessonId: stored.lessonId,
+    lessonVersionId: version.lessonVersionId,
+    versionNumber: version.versionNumber,
+    draft,
+    collection: activity.collection,
+    assignment: readAssignment(activity.assignments, () => defaultActivityAssignment(draft)),
+  }
 }
 
 // A lesson from Supabase as a Library lesson (its current version).
@@ -8805,6 +9026,7 @@ function libraryLessonFromStored(stored: StoredLesson, index: number, ownerEmail
       hasDemoContent: content !== null,
       document: content ? { ...content.document, id: stored.lessonId } : undefined,
       feedbackActivities: content?.studentProducts,
+      assignment: content ? lessonAssignmentFrom(content) : undefined,
       formSeed: content ? formSeedFromDetails(content.form, defaultFramework) : undefined,
       activity: readSavedActivity(stored),
     },
@@ -11102,10 +11324,7 @@ function ClassSetupPage({
 
         <aside className="privacy-notice" aria-labelledby="student-privacy-heading">
           <h4 id="student-privacy-heading">Student Privacy</h4>
-          <p>
-            Student names are shown only to you — in Class Setup and in your downloaded roster. Students see only their
-            Student ID. Do not include other identifying information such as emails or birthdates.
-          </p>
+          <p>Student names are visible only to teachers. Student IDs are used to access Student Feedback activities.</p>
           <p>Student roster data will not be sent to AI models.</p>
         </aside>
 
@@ -11649,7 +11868,10 @@ function RosterUpload(props: RosterSectionProps) {
         <div>
           <h4>Upload Student Roster</h4>
           <p className="roster-upload-hint">
-            {isReading ? 'Reading file…' : (uploadName ?? 'CSV or Excel (.xlsx) · Student names')}
+            {isReading
+              ? 'Reading file…'
+              : (uploadName ??
+                'Upload a CSV or Excel file containing student names. A unique Student ID will be automatically generated for each student to log in to Student Feedback activities.')}
           </p>
         </div>
         <div className="roster-upload-actions">
@@ -11666,10 +11888,6 @@ function RosterUpload(props: RosterSectionProps) {
           </label>
         </div>
       </div>
-      <p className="library-class-note">
-        Each student receives a unique Student ID (e.g., <span className="roster-id">{formatClassStudentId(idPrefix, 1)}</span>).
-        Students sign in to Student Feedback assignments using only this Student ID. Existing IDs remain unchanged when the roster is updated.
-      </p>
       {uploadError && (
         <p className="roster-error" role="alert">
           {uploadError}
@@ -12169,6 +12387,9 @@ function LessonPlanningPage({
   const [isGeneratingActivity, setIsGeneratingActivity] = useState(false)
   const [activityConfirmed, setActivityConfirmed] = useState(Boolean(openedActivity))
   const [collection, setCollection] = useState<CollectionOpportunity[]>(openedActivity?.collection ?? [])
+  // The activity's assignment (title and description); null: the draft's own.
+  const [activityAssignment, setActivityAssignment] = useState<LessonAssignment | null>(openedActivity?.assignment ?? null)
+  const assignment = activityAssignment ?? (activityDraft ? defaultActivityAssignment(activityDraft) : null)
   const [collectionConfirmed, setCollectionConfirmed] = useState(false)
   // Identifies this activity in its Student Feedback link.
   const [activityLinkId] = useState(() => `activity-${Date.now()}`)
@@ -12183,7 +12404,9 @@ function LessonPlanningPage({
   // work they confirmed or edited.
   const [pendingRegeneration, setPendingRegeneration] = useState<{ request: ActivityDraftRequest; conversation: ChatMessage[] } | null>(null)
   const collectionEdited =
-    activityDraft !== null && JSON.stringify(collection) !== JSON.stringify(activityDraft.collection)
+    activityDraft !== null &&
+    activityWorkKey(collection, assignment ?? defaultActivityAssignment(activityDraft)) !==
+      activityWorkKey(activityDraft.collection, defaultActivityAssignment(activityDraft))
 
   // Supabase Mode: the conversation the current draft came from, the saved
   // activity (lesson + version, and the collection saved with it), how many
@@ -12191,7 +12414,13 @@ function LessonPlanningPage({
   // and what saving last did.
   const [activityConversation, setActivityConversation] = useState<ChatMessage[]>([])
   const [savedActivity, setSavedActivity] = useState<{ lessonId: string; lessonVersionId: string; collectionJson: string } | null>(
-    openedActivity ? { lessonId: openedActivity.lessonId, lessonVersionId: openedActivity.lessonVersionId, collectionJson: JSON.stringify(openedActivity.collection) } : null,
+    openedActivity
+      ? {
+          lessonId: openedActivity.lessonId,
+          lessonVersionId: openedActivity.lessonVersionId,
+          collectionJson: activityWorkKey(openedActivity.collection, openedActivity.assignment),
+        }
+      : null,
   )
   const savedConversationCountRef = useRef(0)
   const [activityPageUrl, setActivityPageUrl] = useState<string | null>(null)
@@ -12216,6 +12445,7 @@ function LessonPlanningPage({
         .then((draft) => {
           setActivityDraft(draft)
           setCollection(draft.collection)
+          setActivityAssignment(null)
           setActivityConfirmed(false)
           setCollectionConfirmed(false)
           setActivityConversation(conversation)
@@ -12229,6 +12459,7 @@ function LessonPlanningPage({
       const draft = callAiModel('practice-activity', request, mockActivityDraft)
       setActivityDraft(draft)
       setCollection(draft.collection)
+      setActivityAssignment(null)
       setActivityConfirmed(false)
       setCollectionConfirmed(false)
       setIsGeneratingActivity(false)
@@ -12239,7 +12470,7 @@ function LessonPlanningPage({
   // first time, a new version after regenerating — with the part of its
   // conversation not saved yet. It's confirmed only once saved.
   const confirmActivity = async () => {
-    if (!activityRemote || !activityDraft) {
+    if (!activityRemote || !activityDraft || !assignment) {
       setActivityConfirmed(true)
       return
     }
@@ -12250,12 +12481,13 @@ function LessonPlanningPage({
       const saved = await activityRemote.save({
         draft: activityDraft,
         collection,
+        assignment,
         savedLessonId: savedActivity?.lessonId ?? null,
         createdBy: 'ai',
         conversation: activityConversation.slice(savedConversationCountRef.current),
       })
       if (!saved.conversationError) savedConversationCountRef.current = activityConversation.length
-      setSavedActivity({ lessonId: saved.lessonId, lessonVersionId: saved.lessonVersionId, collectionJson: JSON.stringify(collection) })
+      setSavedActivity({ lessonId: saved.lessonId, lessonVersionId: saved.lessonVersionId, collectionJson: activityWorkKey(collection, assignment) })
       setActivityConfirmed(true)
       setActivityStatus({
         kind: saved.conversationError ? 'error' : 'saved',
@@ -12272,7 +12504,7 @@ function LessonPlanningPage({
   // collection is saved as a new version first, then that version gets its
   // Student Feedback Page (an existing one is reused) and its URL.
   const confirmCollection = async () => {
-    if (!activityRemote || !activityDraft || !savedActivity) {
+    if (!activityRemote || !activityDraft || !savedActivity || !assignment) {
       setCollectionConfirmed(true)
       return
     }
@@ -12281,9 +12513,16 @@ function LessonPlanningPage({
     setActivityStatus({ kind: 'saving', message: 'Creating the Student Feedback Page…' })
     try {
       let version = savedActivity
-      if (JSON.stringify(collection) !== savedActivity.collectionJson) {
-        const saved = await activityRemote.save({ draft: activityDraft, collection, savedLessonId: savedActivity.lessonId, createdBy: 'teacher', conversation: [] })
-        version = { lessonId: saved.lessonId, lessonVersionId: saved.lessonVersionId, collectionJson: JSON.stringify(collection) }
+      if (activityWorkKey(collection, assignment) !== savedActivity.collectionJson) {
+        const saved = await activityRemote.save({
+          draft: activityDraft,
+          collection,
+          assignment,
+          savedLessonId: savedActivity.lessonId,
+          createdBy: 'teacher',
+          conversation: [],
+        })
+        version = { lessonId: saved.lessonId, lessonVersionId: saved.lessonVersionId, collectionJson: activityWorkKey(collection, assignment) }
         setSavedActivity(version)
       }
       setActivityPageUrl(await activityRemote.pageUrl(version.lessonId, version.lessonVersionId))
@@ -12325,8 +12564,10 @@ function LessonPlanningPage({
           onConfirm={() => void confirmActivity()}
           onContinueRefining={continueRefining}
           collection={collection}
-          onCollectionChange={(next) => {
+          assignment={assignment}
+          onCollectionChange={(next, nextAssignment) => {
             setCollection(next)
+            setActivityAssignment(nextAssignment)
             setCollectionConfirmed(false)
             setActivityPageUrl(null)
           }}
@@ -12364,6 +12605,7 @@ function PracticeActivityWorkspace({
   onConfirm,
   onContinueRefining,
   collection,
+  assignment,
   onCollectionChange,
   collectionConfirmed,
   onConfirmCollection,
@@ -12388,7 +12630,9 @@ function PracticeActivityWorkspace({
   onConfirm: () => void
   onContinueRefining: () => void
   collection: readonly CollectionOpportunity[]
-  onCollectionChange: (next: CollectionOpportunity[]) => void
+  // The activity’s assignment (title and description); null before there’s a draft.
+  assignment: LessonAssignment | null
+  onCollectionChange: (next: CollectionOpportunity[], assignment: LessonAssignment) => void
   collectionConfirmed: boolean
   onConfirmCollection: () => void
   // The classes the activity belongs to (from where it was planned).
@@ -12435,9 +12679,17 @@ function PracticeActivityWorkspace({
           <p className="card-label">Activity workspace</p>
           <h3 id="activity-draft-heading">Activity draft</h3>
         </div>
-        <span className={`badge activity-status${confirmed ? ' confirmed' : ''}`} role="status">
-          {confirmed ? '✓ Teacher-approved' : 'Draft — not yet confirmed'}
-        </span>
+        <div className="canvas-header-actions">
+          <span className={`badge activity-status${confirmed ? ' confirmed' : ''}`} role="status">
+            {confirmed ? '✓ Teacher-approved' : 'Draft — not yet confirmed'}
+          </span>
+          {/* The assignment section exists once the activity is confirmed. */}
+          {confirmed && (
+            <button type="button" className="secondary-button" onClick={() => goToAssignmentSection('activity-collection-heading')}>
+              Confirm Student Assignments
+            </button>
+          )}
+        </div>
       </div>
       {isGenerating && (
         <p className="lesson-suggestion-summary" role="status">
@@ -12555,19 +12807,25 @@ function PracticeActivityWorkspace({
           headingId="activity-collection-heading"
           products={draft.products}
           items={collection}
+          assignment={assignment ?? defaultActivityAssignment(draft)}
+          workDescriptions={activityWorkDescriptions(draft)}
           confirmed={collectionConfirmed}
           onChange={onCollectionChange}
           onConfirm={onConfirmCollection}
         >
           {pageUrl === undefined ? (
             <ClassFeedbackLinks
-              link={{ lessonId: linkId, lessonTitle: draft.title, activities: collection.map(({ name, submission }) => ({ name, submission })) }}
+              link={{
+                lessonId: linkId,
+                lessonTitle: draft.title,
+                activities: collection.map(({ name, submission }) => ({ name, submission })),
+                ...(assignment ? { title: assignment.title, description: assignment.description } : {}),
+              }}
               classes={classes}
               kind="activity"
-              contents={`the ${joinLabels(collection.map((item) => item.name))}`}
             />
           ) : (
-            pageUrl && <SavedFeedbackPageLink url={pageUrl} classLabel={classes[0]?.label ?? ''} contents={`the ${joinLabels(collection.map((item) => item.name))}`} />
+            pageUrl && <SavedFeedbackPageLink url={pageUrl} classLabel={classes[0]?.label ?? ''} />
           )}
         </StudentProductCollection>
       )}
@@ -12596,6 +12854,49 @@ type FeedbackActivity = {
   sourceLabel?: string
 }
 
+// The assignment students complete for a lesson or activity: a title and a
+// description (prefilled from the lesson's own text; the teacher can edit
+// both). The student work it requires, and the prompt for each, stay the
+// lesson's student products (studentProducts / activity.collection), which
+// the Student Feedback Page and AI feedback read. One per lesson for now.
+type LessonAssignment = { id: string; title: string; description: string }
+
+// As saved in a version's content (`assignments`, a list so a lesson can
+// have several later): with the ids of the student work it requires.
+type SavedAssignment = LessonAssignment & { studentWork: string[] }
+
+function savedAssignments(assignment: LessonAssignment, work: readonly { id: string }[]): SavedAssignment[] {
+  return [{ ...assignment, studentWork: work.map((item) => item.id) }]
+}
+
+// A version's saved assignment; an older version without one gets `fallback`.
+function readAssignment(saved: unknown, fallback: () => LessonAssignment): LessonAssignment {
+  const first = (Array.isArray(saved) ? saved[0] : null) as Partial<SavedAssignment> | null
+  return first && typeof first.title === 'string' && typeof first.description === 'string'
+    ? { id: typeof first.id === 'string' ? first.id : 'assignment-1', title: first.title, description: first.description }
+    : fallback()
+}
+
+// Lesson sections that describe the lesson rather than what students do.
+const lessonInfoSectionPattern = /^(Topic|Grade Level|Lesson Duration|Standards|Crosscutting Concept|Learning Objective|Driving Question|Materials|Equipment|Safety|Prior Instruction|Subsequent Instruction|Differentiation)/i
+
+// A lesson's assignment before the teacher edits it: the lesson's title, and
+// a description from its own text — the first sentences of the section where
+// students build their model and explain it (or either), else its first
+// activity.
+function defaultLessonAssignment(document: LessonDocument): LessonAssignment {
+  const textOf = (step: LessonStep) => segmentsToText(step.segments).replace(/\s+/g, ' ').trim()
+  const sections = document.steps.filter((step) => !lessonInfoSectionPattern.test(step.label) && textOf(step))
+  const mentions = (step: LessonStep, pattern: RegExp) => pattern.test(textOf(step))
+  const section =
+    sections.find((step) => mentions(step, /\bmodel/i) && mentions(step, /\bexplain/i)) ??
+    sections.find((step) => mentions(step, /\bmodel/i)) ??
+    sections.find((step) => mentions(step, /\bexplain/i)) ??
+    sections[0]
+  const sentences = section ? (textOf(section).match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g) ?? []) : []
+  return { id: 'assignment-1', title: document.title, description: sentences.slice(0, 2).join('').trim().slice(0, 600) }
+}
+
 // The lesson-specific assignment a Student Feedback link opens. `classId`
 // is the class whose students may sign in to it; each class the lesson is
 // assigned to gets its own link.
@@ -12605,6 +12906,9 @@ type StudentAssignmentLink = {
   // `id` (model / explanation) is the teacher-confirmed work product.
   activities: { id?: string; name: string; submission: string }[]
   classId?: string
+  // The assignment's own title and description (shown above the student work).
+  title?: string
+  description?: string
 }
 
 // The work products a saved Student Feedback Page asks for: by their ids,
@@ -12625,9 +12929,19 @@ function identifyFeedbackActivities(lessonId: string | null): FeedbackActivity[]
 
 // The link's assignment, or null until there's at least one activity and
 // every activity is confirmed.
-function assignmentLinkFor(lessonId: string, lessonTitle: string, activities: readonly FeedbackActivity[]): StudentAssignmentLink | null {
+function assignmentLinkFor(
+  lessonId: string,
+  lessonTitle: string,
+  activities: readonly FeedbackActivity[],
+  assignment?: LessonAssignment,
+): StudentAssignmentLink | null {
   if (activities.length === 0 || activities.some((activity) => !activity.confirmed)) return null
-  return { lessonId, lessonTitle, activities: activities.map(({ name, submission }) => ({ name, submission })) }
+  return {
+    lessonId,
+    lessonTitle,
+    activities: activities.map(({ name, submission }) => ({ name, submission })),
+    ...(assignment ? { title: assignment.title, description: assignment.description } : {}),
+  }
 }
 
 function encodeAssignment(link: StudentAssignmentLink): string {
@@ -12635,6 +12949,7 @@ function encodeAssignment(link: StudentAssignmentLink): string {
     l: link.lessonId,
     t: link.lessonTitle,
     a: link.activities.map((item) => [item.name, item.submission]),
+    ...(link.title ? { at: link.title, ad: link.description ?? '' } : {}),
   })
   let binary = ''
   new TextEncoder().encode(json).forEach((byte) => {
@@ -12648,12 +12963,13 @@ function decodeAssignment(value: string): StudentAssignmentLink | null {
     const binary = atob(value.replace(/-/g, '+').replace(/_/g, '/'))
     const data: unknown = JSON.parse(new TextDecoder().decode(Uint8Array.from(binary, (char) => char.charCodeAt(0))))
     if (!data || typeof data !== 'object') return null
-    const { l, t, a } = data as { l?: unknown; t?: unknown; a?: unknown }
+    const { l, t, a, at, ad } = data as { l?: unknown; t?: unknown; a?: unknown; at?: unknown; ad?: unknown }
     if (typeof l !== 'string' || typeof t !== 'string' || !Array.isArray(a)) return null
     const activities = a
       .filter((item): item is [string, string] => Array.isArray(item) && typeof item[0] === 'string' && typeof item[1] === 'string')
       .map(([name, submission]) => ({ name, submission }))
-    return activities.length > 0 ? { lessonId: l, lessonTitle: t, activities } : null
+    const assignment = typeof at === 'string' ? { title: at, description: typeof ad === 'string' ? ad : '' } : {}
+    return activities.length > 0 ? { lessonId: l, lessonTitle: t, activities, ...assignment } : null
   } catch {
     return null
   }
@@ -12690,10 +13006,14 @@ function studentAssignmentUrl(link: StudentAssignmentLink): string {
 }
 
 // The Student Feedback route in the current URL, if there is one.
-// A lesson's student products as a saved version holds them (whether they
-// were confirmed aside), to tell whether confirmed ones still need saving.
-function studentProductsKey(items: readonly FeedbackActivity[]): string {
-  return JSON.stringify(items.map(({ id, name, submission }) => ({ id, name, submission })))
+// A lesson's student products and assignment as a saved version holds them
+// (whether they were confirmed aside), to tell whether confirmed ones still
+// need saving.
+function studentProductsKey(items: readonly FeedbackActivity[], assignment: LessonAssignment): string {
+  return JSON.stringify({
+    products: items.map(({ id, name, submission }) => ({ id, name, submission })),
+    assignment: { title: assignment.title, description: assignment.description },
+  })
 }
 
 // The link students open for a Student Feedback Page saved in Supabase.
@@ -12784,6 +13104,30 @@ function findDemoAssignment(lessonId: string, taskId: string | null): StudentFee
   return lesson?.studentFeedback.find((assignment) => assignment.id === taskId) ?? null
 }
 
+// Under a generated Student Feedback link: how to share it. Class Roster
+// opens Class Setup (its hash) and scrolls to the roster section once it's
+// shown.
+function StudentLinkHelp() {
+  const showRoster = () => {
+    let tries = 0
+    const scroll = () => {
+      const heading = document.getElementById('roster-heading')
+      if (heading) heading.closest('section')?.scrollIntoView({ block: 'start' })
+      else if (++tries < 30) window.setTimeout(scroll, 100)
+    }
+    window.setTimeout(scroll, 0)
+  }
+  return (
+    <p className="feedback-link-note">
+      Copy link to share with students to collect this assignment. Students use their Student ID (found in{' '}
+      <a href="#class-setup" onClick={showRoster}>
+        Class Roster
+      </a>
+      ) to log in.
+    </p>
+  )
+}
+
 // A class the lesson is assigned to, for its Student Feedback link.
 type LinkClass = { id: string; label: string }
 
@@ -12795,14 +13139,11 @@ function ClassFeedbackLinks({
   link,
   classes,
   kind,
-  contents,
 }: {
   // The assignment, without a class; each class's link adds its own.
   link: StudentAssignmentLink
   classes: readonly LinkClass[]
   kind: 'lesson' | 'activity'
-  // What the link lists, e.g. "all 3 activities".
-  contents: string
 }) {
   // The link just copied; a changed link shows Copy Link again.
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null)
@@ -12848,18 +13189,14 @@ function ClassFeedbackLinks({
           </div>
         )
       })}
-      <p className="feedback-link-note">
-        {classes.length > 1 ? `Each class has its own link to this ${kind}` : `This ${kind}’s link for ${classes[0].label}`} — one assignment
-        where students submit {contents}. Students sign in with their class Student ID — the same ID for every lesson in the class. Student
-        submissions aren’t saved yet in the prototype.
-      </p>
+      <StudentLinkHelp />
     </>
   )
 }
 
 // A saved activity's Student Feedback Page link (Supabase Mode): the page
 // created for its class, laid out like ClassFeedbackLinks.
-function SavedFeedbackPageLink({ url, classLabel, contents }: { url: string; classLabel: string; contents: string }) {
+function SavedFeedbackPageLink({ url, classLabel }: { url: string; classLabel: string }) {
   const [copied, setCopied] = useState(false)
   const copyLink = async () => {
     try {
@@ -12883,9 +13220,7 @@ function SavedFeedbackPageLink({ url, classLabel, contents }: { url: string; cla
           </a>
         </div>
       </div>
-      <p className="feedback-link-note">
-        This activity’s Student Feedback Page — one assignment where students submit {contents}. Students sign in with their class Student ID.
-      </p>
+      <StudentLinkHelp />
     </>
   )
 }
@@ -12895,10 +13230,137 @@ function SavedFeedbackPageLink({ url, classLabel, contents }: { url: string; cla
 // description or remove it (and add it back), and confirm them together;
 // the assignment then gets one Student Feedback link (`children`). Initial
 // and revised submissions are versions of these products, not new items.
+// "Confirm Student Assignments" at the top of a workspace: scrolls to its
+// assignment section (instantly when the teacher prefers reduced motion) and
+// moves keyboard focus to the section's heading.
+function goToAssignmentSection(headingId: string) {
+  const heading = document.getElementById(headingId)
+  if (!heading) return
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  ;(heading.closest('section') ?? heading).scrollIntoView({ behavior: reduceMotion ? 'instant' : 'smooth', block: 'start' })
+  heading.focus({ preventScroll: true })
+}
+
+// Each student work type's description, from the lesson activity where
+// students do that work — the first activity where they build a model /
+// construct an explanation, else the first that mentions it (see
+// describeWork). No such activity: the description the card already had
+// (workTypeFallback). Shown on the work type's card.
+const workTypeActivity: Record<string, readonly RegExp[]> = {
+  model: [/\b(build|construct|develop|draw|create|make|sketch|design)\w*\b[^.!?]{0,60}\bmodels?\b/i, /\bmodel/i],
+  explanation: [/\b(construct|write|develop|build|draft)\w*\b[^.!?]{0,40}\bexplanations?\b/i, /\bexplain/i],
+}
+const workTypeFallback: Record<string, string> = {
+  model: 'Students develop a model that represents their understanding of the phenomenon.',
+  explanation: 'Students explain the phenomenon in writing, using their model and evidence.',
+}
+
+// A card's description: about 15–30 words.
+const workDescriptionWords = { min: 15, max: 30 }
+
+// An activity as a description source: its name (e.g. "Build a model") and text.
+type WorkSource = { name: string; text: string }
+
+const wordCount = (text: string) => text.split(/\s+/).filter(Boolean).length
+const capitalizeFirst = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
+
+// Words that point outside the sentence ("it", "this reasoning", "the
+// previous activity") — a sentence without them reads clearly on its own.
+const unclearReference =
+  /\b(?:it|its)\b|\b(?:this|that|these|those) (?:reasoning|idea|ideas|claim|claims|work|evidence|data|step|activity|part|one|question)\b|\b(?:previous|last|earlier) (?:activity|step|task)\b/i
+// A sentence opening that links it to the one before ("Then they …").
+const leadingConnective = /^(?:then|next|finally|lastly|last|afterward|afterwards|after that|now)\b,?\s+/i
+
+// The smallest changes that let an excerpt stand alone, using only the
+// lesson's own words: no linking opener, "they" (the students) named,
+// and "the previous activity" named.
+function clarifyExcerpt(text: string, sources: readonly WorkSource[], index: number): string {
+  let out = text.replace(leadingConnective, '')
+  out = out.replace(/^they\b/i, 'Students')
+  const previous = sources[index - 1]?.name
+  if (previous) out = out.replace(/\bthe (?:previous|last|earlier) (activity|step|task)\b/gi, (_, kind: string) => `the “${previous}” ${kind}`)
+  return capitalizeFirst(out)
+}
+
+// Over 30 words: without parentheses, else its clause about the work (a
+// clause that starts with a verb gets the sentence's own subject back, e.g.
+// "Students"), else cut at a word (marked "…").
+function shortenExcerpt(text: string, about: (part: string) => boolean): string {
+  const bare = text.replace(/\s*\([^)]*\)/g, '')
+  if (wordCount(bare) <= workDescriptionWords.max) return bare
+  const subject = /^(students|each student|pairs|small groups|groups|the class)\b/i.exec(bare)?.[1]
+  // Clauses: at ; : — and at ", and" / ", then" before what students do next
+  // (not inside a list such as "peat, permafrost, and snow").
+  const clauses = bare
+    .split(
+      /\s*[;:]\s+|\s+—\s+|,\s+(?:and\s+)?(?:then\s+)?(?=(?:build|compare|construct|create|describe|design|develop|discuss|draft|draw|explain|identify|label|make|present|record|revise|share|sketch|test|use|write)\b)/,
+    )
+    .filter(Boolean)
+  const clause = clauses.find((part) => about(part) && wordCount(part) <= workDescriptionWords.max)
+  if (clause) {
+    const named = clause.replace(/^they\b/i, 'Students')
+    return capitalizeFirst(subject && /^[a-z]/.test(named) && !named.toLowerCase().startsWith(subject.toLowerCase()) ? `${subject} ${named}` : named)
+  }
+  return `${bare.split(/\s+/).slice(0, workDescriptionWords.max).join(' ').replace(/[,;:]$/, '')}…`
+}
+
+// A work type's description from its activity (`sources[index]`): the
+// activity's first sentence about that work — one that's clear on its own
+// when there is one — plus the next sentence when it's short and that one
+// is about the same work; then clarified and, if needed, shortened. Mostly
+// the lesson's own words; nothing is added that the lesson doesn't say.
+function describeWork(sources: readonly WorkSource[], index: number, patterns: readonly RegExp[]): string {
+  const about = (part: string) => patterns.some((pattern) => pattern.test(part))
+  const flat = sources[index].text.replace(/\s+/g, ' ').trim()
+  const sentences = (flat.match(/[^.!?]+(?:[.!?]+|$)/g) ?? [flat]).map((sentence) => sentence.trim()).filter(Boolean)
+  const aboutWork = sentences.filter(about)
+  let excerpt = aboutWork.find((sentence) => !unclearReference.test(sentence)) ?? aboutWork[0] ?? sentences[0] ?? flat
+  const next = sentences[sentences.indexOf(excerpt) + 1]
+  if (next && about(next) && wordCount(excerpt) < workDescriptionWords.min && wordCount(`${excerpt} ${next}`) <= workDescriptionWords.max) {
+    excerpt = `${excerpt} ${next}`
+  }
+  excerpt = clarifyExcerpt(excerpt, sources, index)
+  return wordCount(excerpt) > workDescriptionWords.max ? shortenExcerpt(excerpt, about) : excerpt
+}
+
+function workTypeDescriptions(sources: readonly WorkSource[]): Record<string, string> {
+  const usable = sources.filter((source) => source.text.trim())
+  return Object.fromEntries(
+    Object.entries(workTypeActivity).map(([id, patterns]) => {
+      const index = patterns.map((pattern) => usable.findIndex((source) => pattern.test(source.text))).find((found) => found >= 0)
+      return [id, index !== undefined ? describeWork(usable, index, patterns) : workTypeFallback[id]]
+    }),
+  )
+}
+
+// A lesson's activities are its timed steps (named by their titles, e.g.
+// "2. Build a model:"); an uploaded lesson has none, so its sections other
+// than the lesson information stand in.
+function lessonWorkDescriptions(document: LessonDocument): Record<string, string> {
+  const activities = document.steps.filter((step) => step.duration !== undefined)
+  const sections = activities.length > 0 ? activities : document.steps.filter((step) => !lessonInfoSectionPattern.test(step.label))
+  return workTypeDescriptions(
+    sections.map((step) => ({
+      name: (step.displayPrefix ?? '').replace(/^\d+\.\s*/, '').replace(/:$/, '').trim() || step.label,
+      text: segmentsToText(step.segments),
+    })),
+  )
+}
+
+function activityWorkDescriptions(draft: ActivityDraft): Record<string, string> {
+  return workTypeDescriptions([
+    ...draft.sequence.map((step) => ({ name: step.name, text: step.text })),
+    { name: 'Activity goal', text: draft.goal },
+    { name: 'Activity description', text: draft.description },
+  ])
+}
+
 function StudentProductCollection({
   headingId,
   products,
   items,
+  assignment,
+  workDescriptions,
   confirmed,
   onChange,
   onConfirm,
@@ -12907,58 +13369,139 @@ function StudentProductCollection({
   headingId: string
   // The lesson's two product types, in order (what a removed one comes back as).
   products: readonly CollectionOpportunity[]
+  // The required student work, each with its Prompt for Students.
   items: readonly CollectionOpportunity[]
+  assignment: LessonAssignment
+  // What each work type involves, by id (see workTypeDescriptions).
+  workDescriptions: Record<string, string>
   confirmed: boolean
-  onChange: (next: CollectionOpportunity[]) => void
+  onChange: (next: CollectionOpportunity[], assignment: LessonAssignment) => void
   onConfirm: () => void
   // The Student Feedback link, shown once confirmed.
   children: ReactNode
 }) {
-  const [editing, setEditing] = useState<{ id: string; submission: string } | null>(null)
+  // The assignment's title while its Edit is open (its description is kept
+  // as saved, not shown).
+  const [editingDetails, setEditingDetails] = useState<{ title: string } | null>(null)
+  // A work type's Prompt for Students while its Edit is open.
+  const [editing, setEditing] = useState<{ id: string; title: string; submission: string; description: string } | null>(null)
+  const descriptionOf = (item: CollectionOpportunity) => item.description ?? workDescriptions[item.id] ?? workTypeFallback[item.id] ?? ''
   const removed = products.filter((product) => !items.some((item) => item.id === product.id))
   const names = joinLabels(items.map((item) => item.name))
 
+  const saveDetails = () => {
+    if (!editingDetails?.title.trim()) return
+    onChange([...items], { ...assignment, title: editingDetails.title.trim() })
+    setEditingDetails(null)
+  }
   const saveEdit = () => {
     if (!editing?.submission.trim()) return
-    onChange(items.map((item) => (item.id === editing.id ? { ...item, submission: ensurePeriod(editing.submission.trim()) } : item)))
+    onChange(
+      items.map((item) => {
+        if (item.id !== editing.id) return item
+        // Saved only once the teacher changes it, so the card otherwise keeps
+        // following the lesson's text.
+        const description = editing.description.trim()
+        const edited = item.description !== undefined || description !== descriptionOf(item).trim()
+        const next: CollectionOpportunity = { ...item, submission: ensurePeriod(editing.submission.trim()), ...(edited ? { description } : {}) }
+        // A title left empty or set back to the work type's name is dropped.
+        const title = editing.title.trim()
+        if (title && title !== item.name) next.title = title
+        else delete next.title
+        return next
+      }),
+      assignment,
+    )
     setEditing(null)
   }
   // Back in its usual place, in the lesson's product order.
   const addBack = (product: CollectionOpportunity) =>
-    onChange(products.flatMap((option) => (option.id === product.id ? [{ ...product }] : items.filter((item) => item.id === option.id))))
+    onChange(
+      products.flatMap((option) => (option.id === product.id ? [{ ...product }] : items.filter((item) => item.id === option.id))),
+      assignment,
+    )
 
   return (
     <section className="feedback-activities" aria-labelledby={headingId}>
       <div className="feedback-activities-header">
         <div>
-          <p className="card-label">Student Work Collection</p>
-          <h4 id={headingId}>{items.length > 0 ? `One assignment: ${names}` : 'One assignment'}</h4>
+          <p className="card-label">Assignment Confirmation</p>
+          {/* Focusable (not a tab stop) for the workspace's Confirm Student
+              Assignments button (goToAssignmentSection). */}
+          <h4 id={headingId} tabIndex={-1}>
+            Confirm Student Assignments
+          </h4>
         </div>
         {items.length > 0 && (
           <span className={`badge feedback-confirmed-count${confirmed ? ' all-confirmed' : ''}`}>{confirmed ? 'Confirmed' : 'Needs confirmation'}</span>
         )}
       </div>
-      <p className="feedback-activities-hint">
-        Students submit both products in the same assignment. When they revise, the new work is saved as a new version of it — not a
-        separate assignment.
-      </p>
+
+      {/* The assignment itself (one per lesson for now). */}
+      <div className="assignment-details" aria-label="Assignment">
+        {editingDetails ? (
+          <div className="feedback-activity-editor">
+            <label>
+              <span>Assignment Title</span>
+              <input
+                type="text"
+                value={editingDetails.title}
+                autoFocus
+                onChange={(event) => setEditingDetails({ title: event.target.value })}
+              />
+            </label>
+            <div className="feedback-activity-actions">
+              <button type="button" className="primary-button" disabled={!editingDetails.title.trim()} onClick={saveDetails}>
+                Save
+              </button>
+              <button type="button" className="secondary-button" onClick={() => setEditingDetails(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="feedback-activity-text collection-opportunity-text">
+              <p className="feedback-activity-name">{assignment.title || 'Untitled assignment'}</p>
+            </div>
+            <div className="feedback-activity-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                aria-label="Edit assignment title"
+                onClick={() => setEditingDetails({ title: assignment.title })}
+              >
+                Edit
+              </button>
+            </div>
+          </>
+        )}
+      </div>
 
       {items.length > 0 && (
         <ul className="feedback-activity-list student-product-list">
           {items.map((item) => (
-            <li key={item.id} className={`feedback-activity${confirmed ? ' confirmed' : ''}`}>
+            <li key={item.id} data-work={item.id} className={`feedback-activity${confirmed ? ' confirmed' : ''}`}>
               <div className="feedback-activity-text collection-opportunity-text">
-                <p className="feedback-activity-name">{item.name}</p>
+                {editing?.id !== item.id && <p className="feedback-activity-name">{item.title ?? item.name}</p>}
                 {editing?.id === item.id ? (
                   <div className="feedback-activity-editor">
                     <label>
-                      <span>Description</span>
-                      <textarea
-                        rows={2}
-                        value={editing.submission}
+                      <span>Title</span>
+                      <input
+                        type="text"
+                        value={editing.title}
                         autoFocus
-                        onChange={(event) => setEditing({ id: item.id, submission: event.target.value })}
+                        onChange={(event) => setEditing({ ...editing, title: event.target.value })}
                       />
+                    </label>
+                    <label>
+                      <span>Description</span>
+                      <textarea rows={4} value={editing.description} onChange={(event) => setEditing({ ...editing, description: event.target.value })} />
+                    </label>
+                    <label>
+                      <span>Prompt for Students</span>
+                      <textarea rows={4} value={editing.submission} onChange={(event) => setEditing({ ...editing, submission: event.target.value })} />
                     </label>
                     <div className="feedback-activity-actions">
                       <button type="button" className="primary-button" disabled={!editing.submission.trim()} onClick={saveEdit}>
@@ -12970,21 +13513,31 @@ function StudentProductCollection({
                     </div>
                   </div>
                 ) : (
-                  <p>
-                    <span className="collection-field-label">Description:</span> {item.submission}
-                  </p>
+                  <>
+                    <p>
+                      <span className="collection-field-label">Description:</span> {descriptionOf(item)}
+                    </p>
+                    <p>
+                      <span className="collection-field-label">Prompt for Students:</span> {item.submission}
+                    </p>
+                  </>
                 )}
               </div>
               {editing?.id !== item.id && (
                 <div className="feedback-activity-actions">
-                  <button type="button" className="secondary-button" onClick={() => setEditing({ id: item.id, submission: item.submission })}>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    aria-label={`Edit ${item.name}`}
+                    onClick={() => setEditing({ id: item.id, title: item.title ?? item.name, submission: item.submission, description: descriptionOf(item) })}
+                  >
                     Edit
                   </button>
                   <button
                     type="button"
                     className="ghost-button feedback-activity-remove"
                     aria-label={`Remove ${item.name}`}
-                    onClick={() => onChange(items.filter((other) => other.id !== item.id))}
+                    onClick={() => onChange(items.filter((other) => other.id !== item.id), assignment)}
                   >
                     Remove
                   </button>
@@ -13002,7 +13555,12 @@ function StudentProductCollection({
       ))}
 
       {!confirmed && items.length > 0 && (
-        <button type="button" className="primary-button activity-collection-confirm" disabled={editing !== null} onClick={onConfirm}>
+        <button
+          type="button"
+          className="primary-button activity-collection-confirm"
+          disabled={editing !== null || editingDetails !== null}
+          onClick={onConfirm}
+        >
           Confirm {names}
         </button>
       )}
@@ -13027,6 +13585,8 @@ function StudentFeedbackActivities({
   lessonId,
   lessonTitle,
   activities,
+  assignment,
+  workDescriptions,
   linkClasses,
   onChange,
   savedPage,
@@ -13034,27 +13594,34 @@ function StudentFeedbackActivities({
   lessonId: string
   lessonTitle: string
   activities: readonly FeedbackActivity[]
+  assignment: LessonAssignment
+  workDescriptions: Record<string, string>
   linkClasses: readonly LinkClass[]
-  onChange: (next: FeedbackActivity[]) => void
+  onChange: (next: FeedbackActivity[], assignment: LessonAssignment) => void
   // A saved lesson's Student Feedback Page; undefined: the prototype's link.
   savedPage?: LessonWorkspaceCanvasProps['savedPage']
 }) {
-  const link = assignmentLinkFor(lessonId, lessonTitle, activities)
-  const contents = `the ${joinLabels(activities.map((activity) => activity.name))}`
+  const link = assignmentLinkFor(lessonId, lessonTitle, activities, assignment)
   return (
     <StudentProductCollection
       headingId="feedback-activities-heading"
       products={studentProductsFor(lessonId)}
       items={activities}
+      assignment={assignment}
+      workDescriptions={workDescriptions}
       confirmed={link !== null}
-      // An edited product keeps its confirmation; one added back needs it.
-      onChange={(next) =>
-        onChange(next.map((item) => ({ ...item, confirmed: activities.find((activity) => activity.id === item.id)?.confirmed ?? false })))
+      // An edited product or assignment keeps its confirmation; a product
+      // added back needs it.
+      onChange={(next, nextAssignment) =>
+        onChange(
+          next.map((item) => ({ ...item, confirmed: activities.find((activity) => activity.id === item.id)?.confirmed ?? false })),
+          nextAssignment,
+        )
       }
-      onConfirm={() => onChange(activities.map((activity) => ({ ...activity, confirmed: true })))}
+      onConfirm={() => onChange(activities.map((activity) => ({ ...activity, confirmed: true })), assignment)}
     >
-      {link && savedPage === undefined && <ClassFeedbackLinks link={link} classes={linkClasses} kind="lesson" contents={contents} />}
-      {link && savedPage?.status === 'ready' && savedPage.url && <SavedFeedbackPageLink url={savedPage.url} classLabel={linkClasses[0]?.label ?? ''} contents={contents} />}
+      {link && savedPage === undefined && <ClassFeedbackLinks link={link} classes={linkClasses} kind="lesson" />}
+      {link && savedPage?.status === 'ready' && savedPage.url && <SavedFeedbackPageLink url={savedPage.url} classLabel={linkClasses[0]?.label ?? ''} />}
       {link && (savedPage === null || savedPage?.status === 'saving') && (
         <p className="lesson-save-status saving" role="status">
           Creating the Student Feedback Page…
@@ -13090,7 +13657,9 @@ type LessonWorkspaceCanvasProps = {
   // The classes the lesson is assigned to; each gets its own link.
   linkClasses: readonly LinkClass[]
   feedbackActivities: readonly FeedbackActivity[]
-  onFeedbackActivitiesChange: (next: FeedbackActivity[]) => void
+  // The lesson’s assignment (title and description).
+  assignment: LessonAssignment
+  onFeedbackActivitiesChange: (next: FeedbackActivity[], assignment: LessonAssignment) => void
   setPlanningTab: (tab: PlanningTab) => void
   lessonSource: LessonSource
   dismissedSuggestions: readonly string[]
@@ -13122,6 +13691,7 @@ function LessonWorkspaceCanvas({
   lessonLinkId,
   linkClasses,
   feedbackActivities,
+  assignment,
   onFeedbackActivitiesChange,
   setPlanningTab,
   lessonSource,
@@ -13490,6 +14060,9 @@ function LessonWorkspaceCanvas({
             >
               {isEditing ? 'Save Edits' : 'Edit Lesson'}
             </button>
+            <button type="button" className="secondary-button" onClick={() => goToAssignmentSection('feedback-activities-heading')}>
+              Confirm Student Assignments
+            </button>
             <button type="button" className="primary-button">
               Export Lesson Plan
             </button>
@@ -13576,6 +14149,8 @@ function LessonWorkspaceCanvas({
           lessonId={lessonLinkId}
           lessonTitle={lesson.title}
           activities={feedbackActivities}
+          assignment={assignment}
+          workDescriptions={lessonWorkDescriptions(lesson)}
           linkClasses={linkClasses}
           onChange={onFeedbackActivitiesChange}
           savedPage={savedPage}
@@ -13590,8 +14165,6 @@ function LessonWorkspaceCanvas({
 // Every summary row across all three sections defaults to unselected except
 // the very first Learning Objective idea, so the individual-evidence panel
 // always has something to show rather than opening empty.
-const defaultPatternId = learningObjectiveOverlap[0]?.ideas[0]?.id ?? null
-
 // One clickable row shared by all three summary sections — a pattern's
 // label and its student count. Highlights with the same light-blue
 // selection style used elsewhere in the app (`.trend-item.active` before
@@ -13652,47 +14225,10 @@ const modelTabLabels: Record<ModelTab, string> = {
 }
 
 // The two student products one assignment collects (see studentProducts).
-// Class Feedback and Individual Student Reports switch between them — the
-// type of work reviewed, never the assignment.
+// (A report link still names one; reports and evidence show both.)
 type WorkType = 'model' | 'explanation'
 // What a report or evidence card shows of each submission.
 type WorkView = WorkType | 'both'
-
-// The switch between the assignment's two student products (Model /
-// Explanation, or the lesson's own, e.g. Descriptive / Mechanistic).
-function WorkTypeSwitch({ options, value, onChange }: { options: ProductSwitch['options']; value: string; onChange: (next: string) => void }) {
-  return (
-    <div className="work-type-switch">
-      <span>Student Work</span>
-      <div className="work-type-options" role="group" aria-label="Student work type">
-        {options.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            className={`work-type-option${value === option.id ? ' active' : ''}`}
-            aria-pressed={value === option.id}
-            onClick={() => onChange(option.id)}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// What the switch's choice means for an assignment: a product's own entry
-// (`assignmentId`), or the work type within the same entry.
-function chooseProduct(
-  assignment: ClassFeedbackAssignment,
-  productId: string,
-): { assignment: ClassFeedbackAssignment; workType: WorkType | null } {
-  if (assignment.productId) {
-    const entry = classFeedbackAssignmentsFor(assignment.lessonId).find((item) => item.productId === productId) ?? assignment
-    return { assignment: entry, workType: null }
-  }
-  return { assignment, workType: productId === 'explanation' ? 'explanation' : 'model' }
-}
 
 // The Descriptive Model prompt has two lettered parts (virus, then soap),
 // each with its own set of structures to label — kept as data so the JSX
@@ -14244,10 +14780,14 @@ function StudentLoginGate({
 function assignmentFromStudentPage(accessToken: string, lesson: StudentPageLesson): StudentAssignmentLink {
   const content = (lesson.content && typeof lesson.content === 'object' ? lesson.content : {}) as {
     format?: string
-    activity?: { title?: string; collection?: { id?: string; name?: string; submission?: string }[] }
+    activity?: { title?: string; collection?: { id?: string; name?: string; submission?: string }[]; assignments?: unknown }
     studentProducts?: { id?: string; name?: string; submission?: string }[]
+    assignments?: unknown
   }
-  const items = content.format === activityContentFormat ? content.activity?.collection : content.studentProducts
+  const isActivity = content.format === activityContentFormat
+  const items = isActivity ? content.activity?.collection : content.studentProducts
+  // The assignment's title and description, when the version saved them.
+  const saved = readAssignment(isActivity ? content.activity?.assignments : content.assignments, () => ({ id: '', title: '', description: '' }))
   const activities = (Array.isArray(items) ? items : [])
     .filter((item) => item?.name && item.submission)
     .map((item) => ({ ...(item.id ? { id: item.id } : {}), name: item.name as string, submission: item.submission as string }))
@@ -14255,6 +14795,7 @@ function assignmentFromStudentPage(accessToken: string, lesson: StudentPageLesso
     lessonId: accessToken,
     lessonTitle: content.activity?.title || lesson.title,
     activities: activities.length > 0 ? activities : studentProducts.map(({ name, submission }) => ({ name, submission })),
+    ...(saved.title ? { title: saved.title, description: saved.description } : {}),
   }
 }
 
@@ -14688,33 +15229,6 @@ function StudentFeedbackPage({
   return (
     <div className="student-workspace-layout">
       <section className="student-model-panel">
-        {assignment ? (
-          <div className="student-task-card student-assignment-card">
-            <p className="card-label">Your Assignment</p>
-            <h3>{assignment.lessonTitle}</h3>
-            <p>
-              Submit your {joinLabels(assignment.activities.map((activity) => activity.name))} below
-              {assignment.activities.length > 1 ? ' — both are part of this one assignment.' : '.'} Each time you revise, your new work is saved
-              as a new version.
-            </p>
-            <ul className="student-assignment-list">
-              {assignment.activities.map((activity, index) => (
-                <li key={`${index}-${activity.name}`} className="student-assignment-item">
-                  <strong>{activity.name}</strong>
-                  <span>{activity.submission}</span>
-                </li>
-              ))}
-            </ul>
-            {!saved && <p className="student-assignment-note">The workspace below is the prototype’s example task; submissions aren’t saved yet.</p>}
-          </div>
-        ) : (
-          <div className="student-task-card">
-            <p className="card-label">Your Task</p>
-            <h3>{scenario.task.topic}</h3>
-            <p>{scenario.task.prompt}</p>
-          </div>
-        )}
-
         <div className="planning-tabs" role="tablist" aria-label="Model representation">
           {tabs.map((item) => (
             <button
@@ -14732,7 +15246,7 @@ function StudentFeedbackPage({
 
         <div className="model-representation-area">
           <div className="model-task-prompt">
-            <p className="model-task-prompt-label">{tab.promptLabel}</p>
+            <p className="model-task-prompt-label">Prompt for the Assignment</p>
             {typeof tab.prompt === 'string' ? (
               <p>{tab.prompt}</p>
             ) : (
@@ -15582,9 +16096,16 @@ function individualStudentReportsFor(lessonId: string): Record<string, Individua
 // — the prototype's stand-in for the demo class roster (Period 4). A real
 // backend would scope this to the signed-in teacher's class via
 // students.feedback_page_id.
-const assignmentStudentRoster: string[] = Array.from(
-  new Set(zombieFiresPatternIds.flatMap((id) => allPatternRows[id].students.map((student) => student.name))),
-).sort((a, b) => a.localeCompare(b))
+// Demo students added to show Student Evidence's pages: they come after the
+// original students, so everyone else keeps their Student ID.
+const addedDemoEvidenceStudents = ['Ava B.', 'Leo C.', 'Nora D.', 'Omar G.', 'Ruby N.']
+
+const assignmentStudentRoster: string[] = [
+  ...Array.from(new Set(zombieFiresPatternIds.flatMap((id) => allPatternRows[id].students.map((student) => student.name))))
+    .filter((name) => !addedDemoEvidenceStudents.includes(name))
+    .sort((a, b) => a.localeCompare(b)),
+  ...addedDemoEvidenceStudents,
+]
 
 // A searchable dropdown (ARIA combobox) over the assignment roster. Typing
 // filters by name; arrow keys + Enter pick a student; Escape closes.
@@ -16368,13 +16889,11 @@ function StudentReportsPage({
   const assignment = assignments.find((item) => item.id === route?.assignmentId) ?? assignments[0] ?? null
   const modelTabs: ModelTab[] = assignment?.modelTabs ?? ['descriptive', 'mechanistic']
   const modelTab = route && modelTabs.includes(route.modelTab) ? route.modelTab : modelTabs[0]
-  // The assignment as the teacher chooses it, and its student-product switch.
-  const choices = assignmentChoices(assignments)
-  const choice = assignment ? choices.find((item) => assignmentLabel(item) === assignmentLabel(assignment)) : undefined
-  const productSwitch = assignment ? productSwitchFor(assignment, route?.work ?? 'model') : null
-  // A product with its own data shows its whole submission; otherwise the
-  // selected Model or Explanation.
-  const workView: WorkView = assignment?.productId ? 'both' : (route?.work ?? 'model')
+  // Every entry is its own choice (see assignmentChoiceLabel), and the
+  // report shows each submission whole: model and explanation.
+  const choices = assignments
+  const choice = assignment ?? undefined
+  const workView: WorkView = 'both'
   const hasSubmissions = Boolean(lesson && classroom && assignment && analyzedSubmissionClassIds[lesson.id] === classroom.id)
   const reports = lesson ? individualStudentReportsFor(lesson.id) : {}
   const selected = route?.studentId ? roster.find((student) => student.studentId === route.studentId) : undefined
@@ -16435,26 +16954,11 @@ function StudentReportsPage({
               >
                 {choices.map((option) => (
                   <option key={option.id} value={option.id}>
-                    {assignmentLabel(option)}
+                    {assignmentChoiceLabel(option, lesson ? libraryAssignmentTitle(lesson) : null)}
                   </option>
                 ))}
               </select>
             </label>
-          )}
-          {assignment && productSwitch && (
-            <WorkTypeSwitch
-              options={productSwitch.options}
-              value={productSwitch.value}
-              onChange={(productId) => {
-                const next = chooseProduct(assignment, productId)
-                onRouteChange({
-                  ...route,
-                  assignmentId: next.assignment.id,
-                  modelTab: next.assignment.id === assignment.id ? modelTab : next.assignment.modelTabs[0],
-                  work: next.workType ?? route.work,
-                })
-              }}
-            />
           )}
         </div>
         {!selected && <p className="empty-state-support">Select a student to see their report.</p>}
@@ -16633,24 +17137,21 @@ function classFeedbackAssignmentsFor(lessonId: string): ClassFeedbackAssignment[
 // The assignment an entry belongs to, as the teacher sees it.
 const assignmentLabel = (assignment: ClassFeedbackAssignment) => assignment.assignmentTitle ?? assignment.title
 
-// The assignments to choose between: entries that are products of the same
-// assignment count once.
-function assignmentChoices(assignments: readonly ClassFeedbackAssignment[]): ClassFeedbackAssignment[] {
-  return assignments.filter((assignment, index) => assignments.findIndex((other) => assignmentLabel(other) === assignmentLabel(assignment)) === index)
+// An entry as a choice in the Assignment dropdown (Class Feedback and
+// Individual Student Reports): every entry is its own choice, and a product
+// with its own data (e.g. Descriptive / Mechanistic) is listed with that
+// product's name.
+function assignmentChoiceLabel(entry: ClassFeedbackAssignment, assignmentTitle: string | null = null): string {
+  const title = assignmentTitle ?? assignmentLabel(entry)
+  if (!entry.productId) return title
+  const product = studentProductsFor(entry.lessonId).find((item) => item.id === entry.productId)
+  return `${title} — ${product?.name ?? entry.productId}`
 }
 
-// The student-work switch for an entry: its lesson's products. Selecting a
-// product either picks that product's entry (data split by product) or, for
-// one entry covering both, changes only which work is shown (`workType`).
-type ProductSwitch = { options: { id: string; label: string }[]; value: string; byEntry: boolean }
-
-function productSwitchFor(assignment: ClassFeedbackAssignment, workType: WorkType): ProductSwitch {
-  const products = studentProductsFor(assignment.lessonId)
-  return {
-    options: products.map((product) => ({ id: product.id, label: product.name })),
-    value: assignment.productId ?? workType,
-    byEntry: Boolean(assignment.productId),
-  }
+// The Assignment Title the teacher set in Confirm Student Assignments, as
+// the lesson's (or activity's) current version saved it; null without one.
+function libraryAssignmentTitle(lesson: LibraryLesson): string | null {
+  return (lesson.lessonPlan.assignment?.title || lesson.lessonPlan.activity?.assignment.title || '').trim() || null
 }
 
 type ClassSummaryFinding = {
@@ -16662,6 +17163,185 @@ type ClassSummaryFinding = {
 }
 
 type ClassSummaryOutput = { overlap: ClassSummaryFinding[]; areasForImprovement: ClassSummaryFinding[] }
+
+// Student Evidence shows this many students' work per page.
+const evidencePageSize = 3
+
+// The Student Evidence page for the current selection (`key`): back to
+// page 1 whenever the selected idea or analysis changes.
+function useEvidencePage(key: string): [number, (page: number) => void] {
+  const [state, setState] = useState({ key, page: 1 })
+  // A new selection forgets the old page, so coming back to it starts at 1.
+  if (state.key !== key) setState({ key, page: 1 })
+  return [state.key === key ? state.page : 1, (page) => setState({ key, page })]
+}
+
+// Previous, the page numbers, and Next, under the Student Evidence cards.
+function EvidencePagination({ page, total, onPage }: { page: number; total: number; onPage: (page: number) => void }) {
+  const pageCount = Math.ceil(total / evidencePageSize)
+  if (pageCount < 2) return null
+  return (
+    <nav className="evidence-pagination" aria-label="Student Evidence pages">
+      <button type="button" className="secondary-button student-report-link" disabled={page === 1} onClick={() => onPage(page - 1)}>
+        Previous
+      </button>
+      {Array.from({ length: pageCount }, (_, index) => index + 1).map((number) => (
+        <button
+          key={number}
+          type="button"
+          className={`${number === page ? 'primary-button' : 'secondary-button'} student-report-link`}
+          aria-current={number === page ? 'page' : undefined}
+          aria-label={`Page ${number}`}
+          onClick={() => onPage(number)}
+        >
+          {number}
+        </button>
+      ))}
+      <button type="button" className="secondary-button student-report-link" disabled={page === pageCount} onClick={() => onPage(page + 1)}>
+        Next
+      </button>
+    </nav>
+  )
+}
+
+// Below Student Evidence and Deeper AI Analysis: opens Class Summary again
+// and takes the teacher to it (see openClassSummary).
+function BackToSummaryButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" className="primary-button back-to-summary" aria-expanded={false} onClick={onClick}>
+      <span aria-hidden="true">←</span> Back to Class Summary
+    </button>
+  )
+}
+
+// Opens Class Summary, then scrolls to it (instantly when the teacher
+// prefers reduced motion) and moves focus to its heading once it's shown.
+function openClassSummary(setSummaryOpen: (open: boolean) => void) {
+  setSummaryOpen(true)
+  requestAnimationFrame(() => goToAssignmentSection('class-summary-heading'))
+}
+
+// Deeper AI Analysis for the selected idea: the idea, then suggested
+// questions until the conversation starts (choosing one asks it), then the
+// conversation; a follow-up box throughout. `onAsk` returns false when the
+// question wasn't sent, so it goes back in the box. Keyed by idea, so each
+// idea keeps its own draft.
+function IdeaConversation({
+  idea,
+  kind,
+  messages,
+  isThinking,
+  thinkingText,
+  busy,
+  error,
+  placeholder,
+  onAsk,
+}: {
+  idea: string
+  kind: string
+  messages: readonly ChatMessage[]
+  // The AI is answering this idea's question.
+  isThinking: boolean
+  thinkingText: string
+  // Nothing can be asked right now (AI unavailable, or answering another idea).
+  busy: boolean
+  error: string | null
+  placeholder: string
+  onAsk: (text: string) => boolean | Promise<boolean>
+}) {
+  const [draft, setDraft] = useState('')
+  const composerRef = useRef<HTMLDivElement>(null)
+  const chatRef = useRef<HTMLDivElement>(null)
+  // The conversation scrolls on its own: it opens at its latest message, and
+  // a new message scrolls to it with the follow-up box in view.
+  const shown = messages.length + (isThinking ? 1 : 0)
+  const shownRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight
+    if (shownRef.current !== null && shown > shownRef.current) composerRef.current?.scrollIntoView({ block: 'nearest' })
+    shownRef.current = shown
+    // An AI reply replaces "thinking" without changing `shown`.
+  }, [shown, messages.length])
+  const send = async (text: string) => {
+    const question = text.trim()
+    if (!question || isThinking || busy) return
+    setDraft('')
+    if (!(await onAsk(question))) setDraft(question)
+  }
+  const started = messages.length > 0 || isThinking
+  return (
+    <div className="deeper-analysis-body">
+      <p className={`evidence-context-row tag evidence-tag-${kind}`}>Selected idea: {idea}</p>
+      {started ? (
+        <div className="deeper-analysis-chat" ref={chatRef}>
+          <ChatThread messages={messages} />
+          {isThinking && <p className="empty-state-support">{thinkingText}</p>}
+        </div>
+      ) : (
+        <div className="deeper-analysis-suggestions" role="group" aria-label="Suggested questions">
+          {ideaQuestionSuggestions.map((question) => (
+            <button key={question} type="button" className="practice-chip" disabled={busy} onClick={() => void send(question)}>
+              {question}
+            </button>
+          ))}
+        </div>
+      )}
+      {error && (
+        <p className="lesson-save-status error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="composer-box" ref={composerRef}>
+        <input
+          type="text"
+          placeholder={placeholder}
+          aria-label="Ask about this idea"
+          maxLength={1500}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') void send(draft)
+          }}
+          disabled={isThinking || busy}
+        />
+        <button type="button" className="send-button" aria-label="Send" onClick={() => void send(draft)} disabled={isThinking || busy || !draft.trim()}>
+          <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false">
+            <path
+              fill="currentColor"
+              d="M3 10a1 1 0 0 1 1-1h9.09l-3.3-3.3a1 1 0 1 1 1.42-1.4l5 5a1 1 0 0 1 0 1.4l-5 5a1 1 0 0 1-1.42-1.4l3.3-3.3H4a1 1 0 0 1-1-1Z"
+            />
+          </svg>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// Class Summary's two analyses, shown one at a time.
+type SummaryTab = 'overlap' | 'improvement'
+
+function SummaryTabs({ value, onChange }: { value: SummaryTab; onChange: (next: SummaryTab) => void }) {
+  const tabs = [
+    { id: 'overlap', label: 'Overlap with Practice-Oriented Learning Objectives' },
+    { id: 'improvement', label: 'Areas for Improvement' },
+  ] as const
+  return (
+    <div className="planning-tabs summary-tabs" role="tablist" aria-label="Class Summary analysis">
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          role="tab"
+          aria-selected={value === tab.id}
+          className={`planning-tab ${value === tab.id ? 'active' : ''}`}
+          onClick={() => onChange(tab.id)}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  )
+}
 
 const classSummaryInstructions = [
   'You analyze one class’s submitted science work (models and written explanations) for the assignment in "assignment", part of the lesson in "lesson".',
@@ -16878,41 +17558,49 @@ function FeedbackDashboardPage({
   lesson,
   assignmentId,
   onAssignmentChange,
-  workType,
-  onWorkTypeChange,
   selectedPatternId,
   onSelectPattern: setSelectedPatternId,
   onOpenStudentReport,
+  studentIdFor,
+  chats,
+  onChatsChange,
 }: {
   lesson: LibraryLesson
   // The lesson's assignment being analyzed (null: its first), kept by App
   // so Back from a student's report returns to it.
   assignmentId: string | null
   onAssignmentChange: (assignmentId: string) => void
-  // The student work reviewed within the assignment: Model or Explanation.
-  workType: WorkType
-  onWorkTypeChange: (next: WorkType) => void
   // The Class Summary finding whose students Student Evidence shows (kept
   // by App so Back from a student's report returns to it).
   selectedPatternId: string | null
   onSelectPattern: (id: string) => void
-  // Opens one student's Individual Student Report for this assignment.
-  onOpenStudentReport: (studentName: string, assignmentId: string) => void
+  // Opens Individual Student Reports for this assignment: one student's
+  // report, or (null) the student picker.
+  onOpenStudentReport: (studentName: string | null, assignmentId: string | null) => void
+  // A student's class Student ID from the roster, or null if they aren't on it.
+  studentIdFor: (studentName: string) => string | null
+  // Deeper AI Analysis conversations, by assignment and idea (kept by App).
+  chats: Record<string, ChatMessage[]>
+  onChatsChange: Dispatch<SetStateAction<Record<string, ChatMessage[]>>>
 }) {
+  const [summaryTab, setSummaryTab] = useState<SummaryTab>('overlap')
   // The lesson this page is about, its assignments, and the class summary
   // of each assignment's submitted work (only lessons whose submissions
   // have been analyzed have assignments here).
   const [lessonContext] = useState(() => lessonContextFor(lesson))
   const assignments = classFeedbackAssignmentsFor(lesson.id)
   const assignment = assignments.find((item) => item.id === assignmentId) ?? assignments[0] ?? null
-  // The assignment as the teacher chooses it, and its student-product switch.
-  const choices = assignmentChoices(assignments)
-  const choice = assignment ? choices.find((item) => assignmentLabel(item) === assignmentLabel(assignment)) : undefined
-  const productSwitch = assignment ? productSwitchFor(assignment, workType) : null
-  const productLabel = productSwitch?.options.find((option) => option.id === productSwitch.value)?.label ?? ''
-  // A product with its own data shows its whole submission; otherwise the
-  // selected Model or Explanation.
-  const workView: WorkView = assignment?.productId ? 'both' : workType
+  // Every entry is its own choice (see assignmentChoiceLabel), named by the
+  // teacher's Assignment Title when there is one.
+  const assignmentTitle = libraryAssignmentTitle(lesson)
+  const products = studentProductsFor(lesson.id)
+  const productName = (entry: ClassFeedbackAssignment) => products.find((product) => product.id === entry.productId)?.name
+  const choices = assignments
+  const choice = assignment ?? undefined
+  // The student work the entry covers; evidence shows each student's whole
+  // submission (model and explanation).
+  const productLabel = assignment ? (assignment.productId ? (productName(assignment) ?? '') : joinLabels(products.map((product) => product.name))) : ''
+  const workView: WorkView = 'both'
   const [classSummaries] = useState<Record<string, ClassSummaryOutput>>(() =>
     Object.fromEntries(classFeedbackAssignmentsFor(lesson.id).map((item) => [item.id, analyzeClassSummary(lessonContext, item)])),
   )
@@ -16938,14 +17626,12 @@ function FeedbackDashboardPage({
     }
   }, [])
 
-  // The selected finding within this assignment — the first strength when
-  // the teacher hasn't picked one here yet (or picked one in another).
+  // The idea the teacher picked in this assignment; none until they pick
+  // one (or when their pick was in another assignment).
   const assignmentPatternIds = assignment?.patternIds ?? []
-  const activePatternId =
-    selectedPatternId && assignmentPatternIds.includes(selectedPatternId)
-      ? selectedPatternId
-      : (classSummary?.overlap[0]?.patternIds[0] ?? assignmentPatternIds[0] ?? null)
+  const activePatternId = selectedPatternId && assignmentPatternIds.includes(selectedPatternId) ? selectedPatternId : null
   const selectedPattern = activePatternId ? allPatternRows[activePatternId] : undefined
+  const [evidencePage, setEvidencePage] = useEvidencePage(`${summaryTab}:${assignment?.id ?? ''}:${activePatternId ?? ''}`)
 
   const objectiveLabel = (index: number) => objectiveLabelFor(lessonContext.objectives, index)
 
@@ -16981,10 +17667,23 @@ function FeedbackDashboardPage({
     }, 900)
   }
 
-  const [deeperChatMessages, setDeeperChatMessages] = useState<ChatMessage[]>([])
-  const [deeperChatDraft, setDeeperChatDraft] = useState('')
-  const deeperChatInputRef = useRef<HTMLInputElement>(null)
-  const [isDeeperAiThinking, setIsDeeperAiThinking] = useState(false)
+  // Deeper AI Analysis: one conversation per idea (by assignment and idea),
+  // there again when the teacher comes back to the idea.
+  const conversationKey = `${assignment?.id ?? ''}:${activePatternId ?? ''}`
+  const deeperChats = chats
+  const setDeeperChats = onChatsChange
+  // The idea whose question the AI is answering.
+  const [deeperThinkingKey, setDeeperThinkingKey] = useState<string | null>(null)
+  // The teacher picked an idea in this assignment (App keeps the pick, so
+  // it lasts through a visit to a student's report): Student Evidence and
+  // Deeper AI Analysis take Class Summary's place (`summaryOpen`: Back to
+  // Class Summary shows it again, in their place, to pick another).
+  const ideaFocused = activePatternId !== null
+  const [summaryOpen, setSummaryOpen] = useState(false)
+  const selectIdea = (id: string) => {
+    setSelectedPatternId(id)
+    setSummaryOpen(false)
+  }
   // What Deeper AI Analysis answers class-wide questions from.
   const classAnalysisForAi: ClassAnalysisForAi | null = classSummary && {
     overlap: classSummary.overlap.map((finding) => ({
@@ -17002,40 +17701,12 @@ function FeedbackDashboardPage({
     })),
   }
   const deeperAiTimeoutRef = useRef<number | null>(null)
-  // Student Evidence and Deeper AI Analysis are one unified, single-scroll
-  // workspace (see .evidence-workspace-scroll) rather than two independently
-  // scrolling panes, so this ref targets the whole workspace's scroll
-  // container, not just the chat transcript.
+  // Student Evidence's scroll container (pinned beside Class Summary until
+  // the teacher picks an idea).
   const evidenceWorkspaceScrollRef = useRef<HTMLDivElement | null>(null)
 
-  // Without this, the workspace would silently stay scrolled wherever the
-  // teacher left it as new messages arrive below the fold, instead of
-  // following the conversation down to the composer like every other chat
-  // surface in the app. Guarded to skip the empty/not-thinking case —
-  // otherwise this would also fire right after the pattern-change reset
-  // below (which clears deeperChatMessages to a new empty array), fighting
-  // that effect's scrollTop-to-0 and leaving the workspace stuck scrolled
-  // to the bottom every time the teacher picks a new pattern.
+  // A new idea's Student Evidence starts at its top.
   useEffect(() => {
-    if (deeperChatMessages.length === 0 && !isDeeperAiThinking) return
-    const container = evidenceWorkspaceScrollRef.current
-    if (container) container.scrollTop = container.scrollHeight
-  }, [deeperChatMessages, isDeeperAiThinking])
-
-  // A new pattern means a new context for both the student evidence shown
-  // and "Deeper AI Analysis" — start the conversation over rather than
-  // carrying stale answers about a different group of students into the new
-  // selection, and scroll the workspace back to the top so the teacher sees
-  // the new Student Evidence header/context first, not wherever the
-  // previous pattern's scroll position happened to land.
-  useEffect(() => {
-    setDeeperChatMessages([])
-    setDeeperChatDraft('')
-    setIsDeeperAiThinking(false)
-    if (deeperAiTimeoutRef.current !== null) {
-      window.clearTimeout(deeperAiTimeoutRef.current)
-      deeperAiTimeoutRef.current = null
-    }
     if (evidenceWorkspaceScrollRef.current) evidenceWorkspaceScrollRef.current.scrollTop = 0
   }, [activePatternId, assignment?.id])
 
@@ -17045,12 +17716,13 @@ function FeedbackDashboardPage({
     }
   }, [])
 
-  const askDeeperAnalysis = (question: string) => {
-    const text = question.trim()
-    if (!text || !selectedPattern || isDeeperAiThinking) return
-    setDeeperChatMessages((prev) => [...prev, { role: 'teacher', text }])
-    setDeeperChatDraft('')
-    setIsDeeperAiThinking(true)
+  // Asks about the selected idea; the reply joins that idea's conversation
+  // even if the teacher has moved on to another idea.
+  const askDeeperAnalysis = (text: string) => {
+    if (!selectedPattern || deeperThinkingKey !== null) return false
+    const key = conversationKey
+    setDeeperChats((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), { role: 'teacher', text }] }))
+    setDeeperThinkingKey(key)
     const pattern = selectedPattern
     // Deeper AI Analysis is class-level: individual students are reviewed in
     // their Individual Student Report instead.
@@ -17060,10 +17732,165 @@ function FeedbackDashboardPage({
         { pattern, question: text, focusedStudent: null, classAnalysis: classAnalysisForAi, assignment: assignment?.title },
         (request) => mockDeeperAnalysisReply(request.pattern, request.question, request.focusedStudent, request.classAnalysis),
       )
-      setDeeperChatMessages((prev) => [...prev, { role: 'ai', text: reply }])
-      setIsDeeperAiThinking(false)
+      setDeeperChats((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), { role: 'ai', text: reply }] }))
+      setDeeperThinkingKey(null)
     }, 700)
+    return true
   }
+
+  const summaryPanel = (
+    <section className="report-panel class-summary-panel">
+      <div className="panel-header compact">
+        <h3 id="class-summary-heading" tabIndex={-1}>
+          Class Summary
+        </h3>
+        {assignment && <span className="badge">{productLabel}</span>}
+      </div>
+
+      <h4 className="practice-objectives-heading">Practice-Oriented Learning Objectives</h4>
+      {classSummary && <SummaryTabs value={summaryTab} onChange={setSummaryTab} />}
+      {classSummary ? (
+        ([
+          { key: 'overlap', title: 'Overlap with Practice-Oriented Learning Objectives', className: 'summary-section-objective', findings: classSummary.overlap },
+          { key: 'improvement', title: 'Areas for Improvement', className: 'summary-section-misconception', findings: classSummary.areasForImprovement },
+        ] as const)
+          .filter((section) => section.key === summaryTab)
+          .map((section) => (
+          <div key={section.key} className={`summary-section ${section.className}`}>
+            <p className="summary-section-title">{section.title}</p>
+            {section.findings.length === 0 ? (
+              <p className="empty-state-support">Nothing to report from the submitted work.</p>
+            ) : (
+              section.findings.map((finding) => (
+                <div key={finding.objectiveIndex} className="pattern-group">
+                  {/* The objective by its label only; the full text is
+                      in the lesson plan (and the tooltip). */}
+                  <p className="pattern-group-title" title={lessonContext.objectives[finding.objectiveIndex]}>
+                    {objectiveLabel(finding.objectiveIndex)}
+                  </p>
+                  {finding.practices.length > 0 && (
+                    <p className="finding-practices">Practices: {finding.practices.join(' · ')}</p>
+                  )}
+                  <p className="finding-summary">
+                    <span className="finding-field-label">Summary:</span> {finding.summary}
+                  </p>
+                  {/* Student ideas and counts for this summary. */}
+                  <div className="pattern-row-list">
+                    {finding.patternIds.map((id) => (
+                      <PatternRowButton
+                        key={id}
+                        row={allPatternRows[id]}
+                        isActive={activePatternId === id}
+                        onSelect={selectIdea}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        ))
+      ) : (
+        <p className="empty-state-support">No student submissions have been analyzed for this lesson yet.</p>
+      )}
+    </section>
+  )
+  const evidencePanel = (
+    <section
+      className={`report-panel right-panel evidence-workspace-panel${selectedPattern ? ` evidence-${selectedPattern.kind}` : ''}`}
+    >
+      <div className="evidence-workspace-scroll" ref={evidenceWorkspaceScrollRef}>
+        <div className="panel-header">
+          <h3>Student Evidence</h3>
+          <button
+            type="button"
+            className="secondary-button student-report-link"
+            onClick={() => onOpenStudentReport(null, assignment?.id ?? null)}
+          >
+            Access Individual Student Report
+          </button>
+        </div>
+        {selectedPattern && (
+          <p className={`evidence-context-row tag evidence-tag-${selectedPattern.kind}`}>
+            {selectedPattern.label} · {selectedPattern.count} students · {productLabel}
+          </p>
+        )}
+
+        {selectedPattern ? (
+          <>
+          <div className="student-list">
+            {selectedPattern.students.slice((evidencePage - 1) * evidencePageSize, evidencePage * evidencePageSize).map((student) => {
+              // Priority order is always: name, the student's own words,
+              // then their actual model. A real image IS the artifact —
+              // a text caption describing it would just restate what the
+              // teacher can already see, so the caption only renders as a
+              // fallback for students with no scanned/photographed model.
+              const responseBlock = student.response && (
+                <p className="student-quote">&ldquo;{student.response}&rdquo;</p>
+              )
+              const imageBlock = student.artifactImage && (
+                <img
+                  src={student.artifactImage}
+                  alt={`${student.name}'s model`}
+                  className="student-artifact-image"
+                />
+              )
+              const artifactBlock = !student.artifactImage && student.artifact && (
+                <p className="student-artifact">{student.artifact}</p>
+              )
+              return (
+                <div key={student.name} className="evidence-card">
+                  <div className="student-header">
+                    {/* The name and the button both open this
+                        student's own report — not Deeper AI Analysis. */}
+                    <h4>
+                      <button
+                        type="button"
+                        className="student-name-link"
+                        title={`Open ${student.name}'s Individual Student Report`}
+                        onClick={() => assignment && onOpenStudentReport(student.name, assignment.id)}
+                      >
+                        {student.name}
+                        {studentIdFor(student.name) && ` (${studentIdFor(student.name)})`}
+                      </button>
+                    </h4>
+                  </div>
+                  {/* Only the selected student work: the model, or
+                      the student's written explanation. */}
+                  {workView === 'both' ? (
+                    <>
+                      {responseBlock}
+                      {imageBlock}
+                      {artifactBlock}
+                    </>
+                  ) : workView === 'explanation' ? (
+                    responseBlock || <p className="empty-state-support">No written explanation in this mock data.</p>
+                  ) : (
+                    imageBlock || artifactBlock || <p className="empty-state-support">No model in this mock data.</p>
+                  )}
+                  <div className="student-footer">
+                    <button
+                      type="button"
+                      className="secondary-button student-report-link"
+                      aria-label={`Access Individual Student Report for ${student.name}`}
+                      onClick={() => assignment && onOpenStudentReport(student.name, assignment.id)}
+                    >
+                      Access Individual Student Report
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          <EvidencePagination page={evidencePage} total={selectedPattern.students.length} onPage={setEvidencePage} />
+          </>
+        ) : (
+          <p className="empty-state-support">Select a pattern on the left to see individual student evidence.</p>
+        )}
+
+      </div>
+    </section>
+  )
 
   return (
     <div className="dashboard-page">
@@ -17071,7 +17898,7 @@ function FeedbackDashboardPage({
         <div className="dashboard-task-header">
           <div>
             <p className="card-label">Assignment</p>
-            <h3>{assignment?.task.topic ?? lesson.title}</h3>
+            <h3>{assignmentTitle ?? assignment?.task.topic ?? lesson.title}</h3>
           </div>
           {/* The lesson's assignments; with only one there's nothing to
               switch to, so the dropdown is shown but disabled. */}
@@ -17086,23 +17913,12 @@ function FeedbackDashboardPage({
               >
                 {choices.map((option) => (
                   <option key={option.id} value={option.id}>
-                    {assignmentLabel(option)}
+                    {assignmentChoiceLabel(option, assignmentTitle)}
                   </option>
                 ))}
               </select>
               {choices.length < 2 && <small className="work-view-note">Only assignment in this lesson</small>}
             </label>
-          )}
-          {assignment && productSwitch && (
-            <WorkTypeSwitch
-              options={productSwitch.options}
-              value={productSwitch.value}
-              onChange={(productId) => {
-                const next = chooseProduct(assignment, productId)
-                if (next.assignment.id !== assignment.id) onAssignmentChange(next.assignment.id)
-                if (next.workType) onWorkTypeChange(next.workType)
-              }}
-            />
           )}
         </div>
         <p className="dashboard-task-question">
@@ -17164,248 +17980,67 @@ function FeedbackDashboardPage({
         ))}
       </div>
 
-      <div className="report-grid">
-        <section className="report-panel class-summary-panel">
-          <div className="panel-header compact">
-            <h3>Class Summary</h3>
-            {assignment && <span className="badge">{productLabel}</span>}
-          </div>
-
-          <h4 className="practice-objectives-heading">Practice-Oriented Learning Objectives</h4>
-          {classSummary ? (
-            ([
-              { key: 'overlap', title: 'Overlap with Practice-Oriented Learning Objectives', className: 'summary-section-objective', findings: classSummary.overlap },
-              { key: 'improvement', title: 'Areas for Improvement', className: 'summary-section-misconception', findings: classSummary.areasForImprovement },
-            ] as const).map((section) => (
-              <div key={section.key} className={`summary-section ${section.className}`}>
-                <p className="summary-section-title">{section.title}</p>
-                {section.findings.length === 0 ? (
-                  <p className="empty-state-support">Nothing to report from the submitted work.</p>
-                ) : (
-                  section.findings.map((finding) => (
-                    <div key={finding.objectiveIndex} className="pattern-group">
-                      {/* The objective by its label only; the full text is
-                          in the lesson plan (and the tooltip). */}
-                      <p className="pattern-group-title" title={lessonContext.objectives[finding.objectiveIndex]}>
-                        {objectiveLabel(finding.objectiveIndex)}
-                      </p>
-                      {finding.practices.length > 0 && (
-                        <p className="finding-practices">Practices: {finding.practices.join(' · ')}</p>
-                      )}
-                      <p className="finding-summary">
-                        <span className="finding-field-label">Summary:</span> {finding.summary}
-                      </p>
-                      {/* Student ideas and counts for this summary. */}
-                      <div className="pattern-row-list">
-                        {finding.patternIds.map((id) => (
-                          <PatternRowButton
-                            key={id}
-                            row={allPatternRows[id]}
-                            isActive={activePatternId === id}
-                            onSelect={setSelectedPatternId}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            ))
-          ) : (
-            <p className="empty-state-support">No student submissions have been analyzed for this lesson yet.</p>
-          )}
-        </section>
-
-        <div className="right-column">
-          {/* One unified, single-scroll Student Evidence workspace — Deeper
-              AI Analysis is a section within it (see .deeper-analysis-section
-              below), not a second standalone card with its own scrollbar. */}
-          <section
-            className={`report-panel right-panel evidence-workspace-panel${selectedPattern ? ` evidence-${selectedPattern.kind}` : ''}`}
-          >
-            <div className="evidence-workspace-scroll" ref={evidenceWorkspaceScrollRef}>
+      {ideaFocused && selectedPattern && !summaryOpen ? (
+        <>
+          <div className="report-grid idea-focus-grid">
+            {evidencePanel}
+            <section className="report-panel deeper-analysis-panel" aria-labelledby="deeper-analysis-heading">
               <div className="panel-header">
-                <h3>Student Evidence</h3>
+                <h3 id="deeper-analysis-heading">Deeper AI Analysis</h3>
               </div>
-              {selectedPattern && (
-                <p className={`evidence-context-row tag evidence-tag-${selectedPattern.kind}`}>
-                  {selectedPattern.label} · {selectedPattern.count} students · {productLabel}
-                </p>
-              )}
+              <IdeaConversation
+                key={conversationKey}
+                idea={selectedPattern.label}
+                kind={selectedPattern.kind}
+                messages={deeperChats[conversationKey] ?? []}
+                isThinking={deeperThinkingKey === conversationKey}
+                thinkingText="AI is analyzing these responses…"
+                busy={deeperThinkingKey !== null && deeperThinkingKey !== conversationKey}
+                error={null}
+                placeholder="Ask about these student responses..."
+                onAsk={askDeeperAnalysis}
+              />
+            </section>
+          </div>
+          <div className="back-to-summary-row">
+            <BackToSummaryButton onClick={() => openClassSummary(setSummaryOpen)} />
+          </div>
+        </>
+      ) : (
+        summaryPanel
+      )}
 
-              {selectedPattern ? (
-                <div className="student-list">
-                  {selectedPattern.students.map((student) => {
-                    // Priority order is always: name, the student's own words,
-                    // then their actual model. A real image IS the artifact —
-                    // a text caption describing it would just restate what the
-                    // teacher can already see, so the caption only renders as a
-                    // fallback for students with no scanned/photographed model.
-                    const responseBlock = student.response && (
-                      <p className="student-quote">&ldquo;{student.response}&rdquo;</p>
-                    )
-                    const imageBlock = student.artifactImage && (
-                      <img
-                        src={student.artifactImage}
-                        alt={`${student.name}'s model`}
-                        className="student-artifact-image"
-                      />
-                    )
-                    const artifactBlock = !student.artifactImage && student.artifact && (
-                      <p className="student-artifact">{student.artifact}</p>
-                    )
-                    return (
-                      <div key={student.name} className="evidence-card">
-                        <div className="student-header">
-                          {/* The name and the button both open this
-                              student's own report — not Deeper AI Analysis. */}
-                          <h4>
-                            <button
-                              type="button"
-                              className="student-name-link"
-                              title={`Open ${student.name}'s Individual Student Report`}
-                              onClick={() => assignment && onOpenStudentReport(student.name, assignment.id)}
-                            >
-                              {student.name}
-                            </button>
-                          </h4>
-                        </div>
-                        {/* Only the selected student work: the model, or
-                            the student's written explanation. */}
-                        {workView === 'both' ? (
-                          <>
-                            {responseBlock}
-                            {imageBlock}
-                            {artifactBlock}
-                          </>
-                        ) : workView === 'explanation' ? (
-                          responseBlock || <p className="empty-state-support">No written explanation in this mock data.</p>
-                        ) : (
-                          imageBlock || artifactBlock || <p className="empty-state-support">No model in this mock data.</p>
-                        )}
-                        <div className="student-footer">
-                          <button
-                            type="button"
-                            className="secondary-button student-report-link"
-                            aria-label={`Access Individual Student Report for ${student.name}`}
-                            onClick={() => assignment && onOpenStudentReport(student.name, assignment.id)}
-                          >
-                            Access Individual Student Report
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              ) : (
-                <p className="empty-state-support">Select a pattern on the left to see individual student evidence.</p>
-              )}
-
-              <div className="deeper-analysis-section">
-                <div className="panel-header">
-                  <h3>Deeper AI Analysis</h3>
-                </div>
-
-                {selectedPattern ? (
-                  <div className="deeper-analysis-body">
-                    {/* The conversation appears once the teacher asks
-                        something; until then there's only the input. */}
-                    {(deeperChatMessages.length > 0 || isDeeperAiThinking) && (
-                      <div className="deeper-analysis-chat">
-                        <ChatThread messages={deeperChatMessages} />
-                        {isDeeperAiThinking && <p className="empty-state-support">AI is analyzing these responses…</p>}
-                      </div>
-                    )}
-
-                    {/* Example questions: clicking one only fills the input,
-                        so the teacher can edit it before sending. */}
-                    <div className="deeper-analysis-suggestions" role="group" aria-label="Example questions">
-                      {deeperAnalysisStarterQuestions.map((question) => (
-                        <button
-                          key={question}
-                          type="button"
-                          className="practice-chip"
-                          disabled={isDeeperAiThinking}
-                          onClick={() => {
-                            setDeeperChatDraft(question)
-                            deeperChatInputRef.current?.focus()
-                          }}
-                        >
-                          {question}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="composer-box">
-                      <input
-                        ref={deeperChatInputRef}
-                        type="text"
-                        placeholder="Ask about these student responses..."
-                        value={deeperChatDraft}
-                        onChange={(event) => setDeeperChatDraft(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') askDeeperAnalysis(deeperChatDraft)
-                        }}
-                        disabled={isDeeperAiThinking}
-                      />
-                      <button
-                        type="button"
-                        className="send-button"
-                        aria-label="Send"
-                        onClick={() => askDeeperAnalysis(deeperChatDraft)}
-                        disabled={isDeeperAiThinking || !deeperChatDraft.trim()}
-                      >
-                        <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false">
-                          <path
-                            fill="currentColor"
-                            d="M3 10a1 1 0 0 1 1-1h9.09l-3.3-3.3a1 1 0 1 1 1.42-1.4l5 5a1 1 0 0 1 0 1.4l-5 5a1 1 0 0 1-1.42-1.4l3.3-3.3H4a1 1 0 0 1-1-1Z"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="empty-state-support">Select a pattern on the left to enable deeper AI analysis.</p>
-                )}
-              </div>
-            </div>
-          </section>
-        </div>
-      </div>
-
-      {/* Instructional actions for the gaps in Areas for Improvement — kept
-          apart from the questions to ask students below. */}
+      {/* Suggested Next Steps: Activities (instructional actions for the gaps
+          in Areas for Improvement), then Facilitation Questions to ask. */}
       <section className="questions-panel next-steps-panel" aria-labelledby="next-steps-heading">
         <div className="panel-header compact">
           <h3 id="next-steps-heading">Suggested Next Steps</h3>
         </div>
-        {nextSteps.length === 0 ? (
-          <p className="empty-state-support">
-            {classSummary
-              ? 'No next steps — the analysis didn’t find gaps to address.'
-              : 'Next steps will appear once this lesson’s student submissions are analyzed.'}
-          </p>
-        ) : (
-          <ol className="next-step-list">
-            {nextSteps.map((step) => (
-              <li key={step.objectiveIndex} className="next-step-item">
-                <p className="next-step-objective" title={lessonContext.objectives[step.objectiveIndex]}>
-                  {objectiveLabel(step.objectiveIndex)}
-                  {step.practices.length > 0 && <span className="next-step-practices"> · {step.practices.join(' · ')}</span>}
-                </p>
-                <p className="next-step-action">{step.action}</p>
-                <p className="next-step-addresses">
-                  Addresses {pluralize(step.ideas, 'student idea')} ({pluralize(step.students, 'response')}) in Areas for Improvement
-                </p>
-              </li>
-            ))}
-          </ol>
-        )}
-      </section>
+        <h4 className="next-steps-subheading">Activities</h4>
+        <div className="next-steps-activities">
+          {nextSteps.length === 0 ? (
+            <p className="empty-state-support">
+              {classSummary
+                ? 'No next steps — the analysis didn’t find gaps to address.'
+                : 'Next steps will appear once this lesson’s student submissions are analyzed.'}
+            </p>
+          ) : (
+            <ol className="next-step-list activity-list">
+              {nextSteps.map((step) => (
+                <li key={step.objectiveIndex} className="next-step-item">
+                  <p className="next-step-objective" title={lessonContext.objectives[step.objectiveIndex]}>
+                    {objectiveLabel(step.objectiveIndex)}
+                    {step.practices.length > 0 && <span className="next-step-practices"> · {step.practices.join(' · ')}</span>}
+                  </p>
+                  <p className="next-step-action">{step.action}</p>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
 
-      <section className="questions-panel">
-        <div className="panel-header compact">
-          <h3>Suggested Facilitation Questions</h3>
+        <div className="next-steps-subheader">
+          <h4 className="next-steps-subheading">Facilitation Questions</h4>
           <button
             type="button"
             className="regenerate-button"
@@ -17468,21 +18103,32 @@ function FeedbackDashboardPage({
 function SavedClassFeedbackPage({
   lesson,
   onOpenStudentReport,
+  selectedFindingId,
+  onSelectFinding: setSelectedFindingId,
 }: {
   lesson: LibraryLesson
-  // Opens a student's Individual Student Report (by class Student ID).
-  onOpenStudentReport: (studentCode: string) => void
+  // Opens Individual Student Reports: a student's report (by class Student
+  // ID), or (null) the student picker.
+  onOpenStudentReport: (studentCode: string | null) => void
+  // The summary the teacher picked (kept by App, so it lasts through a visit
+  // to a student's report); null: none yet.
+  selectedFindingId: string | null
+  onSelectFinding: (id: string | null) => void
 }) {
+  const [summaryTab, setSummaryTab] = useState<SummaryTab>('overlap')
   const [state, setState] = useState<
     { status: 'loading' } | { status: 'error'; message: string } | { status: 'no-page' } | { status: 'ready'; data: ClassFeedbackData }
   >({ status: 'loading' })
-  const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null)
+  const [evidencePage, setEvidencePage] = useEvidencePage(`${summaryTab}:${selectedFindingId ?? ''}`)
   const [isGenerating, setIsGenerating] = useState(false)
   const [generateError, setGenerateError] = useState<string | null>(null)
-  const [chatDraft, setChatDraft] = useState('')
-  const [isAiThinking, setIsAiThinking] = useState(false)
-  const [chatError, setChatError] = useState<string | null>(null)
-  const chatInputRef = useRef<HTMLInputElement>(null)
+  // The question the AI is answering (shown in its finding's conversation
+  // right away), and the last failed one's error, by finding.
+  const [asking, setAsking] = useState<{ findingId: string; text: string } | null>(null)
+  const [chatError, setChatError] = useState<{ findingId: string; message: string } | null>(null)
+  // Class Summary shown again (above Student Evidence and Deeper AI
+  // Analysis) after the teacher picked a summary.
+  const [summaryOpen, setSummaryOpen] = useState(false)
   const [isRegeneratingQuestions, setIsRegeneratingQuestions] = useState(false)
   const [questionsError, setQuestionsError] = useState<string | null>(null)
 
@@ -17560,11 +18206,11 @@ function SavedClassFeedbackPage({
     }
   }
 
-  const ask = async (question: string) => {
-    const text = question.trim()
-    if (!text || !selected || isAiThinking) return
+  // Asks about the selected summary; false if the question wasn't answered.
+  const ask = async (text: string) => {
+    if (!selected || asking) return false
     const findingId = selected.id
-    setIsAiThinking(true)
+    setAsking({ findingId, text })
     setChatError(null)
     try {
       const { reply } = await discussFinding(data.feedbackPageId, findingId, text)
@@ -17582,11 +18228,12 @@ function SavedClassFeedbackPage({
             }
           : prev,
       )
-      setChatDraft('')
+      return true
     } catch (error) {
-      setChatError(toApiError(error, 'Please try again.').message)
+      setChatError({ findingId, message: toApiError(error, 'Please try again.').message })
+      return false
     } finally {
-      setIsAiThinking(false)
+      setAsking(null)
     }
   }
 
@@ -17598,13 +18245,181 @@ function SavedClassFeedbackPage({
   ]
   const nextSteps = (summary?.areasForImprovement ?? []).filter((finding) => finding.nextStep)
 
+  const summaryPanel = (
+    <section className="report-panel class-summary-panel">
+      <div className="panel-header compact">
+        <h3 id="class-summary-heading" tabIndex={-1}>
+          Class Summary
+        </h3>
+        {/* Generate when there's no summary; Update only when students
+            have submitted since. An up-to-date summary has no button. */}
+        {(!summary || summary.studentsWithNewWork > 0) && (
+          <button
+            type="button"
+            className="regenerate-button"
+            onClick={() => void generate()}
+            disabled={isGenerating || !data.aiAvailable || statistics.studentsSubmitted === 0}
+            title={!data.aiAvailable ? 'AI class summaries aren’t available for this account yet.' : undefined}
+          >
+            {summary ? 'Update Summary' : 'Generate Summary'}
+          </button>
+        )}
+      </div>
+      {summary && summary.studentsWithNewWork > 0 && (
+        <p className="empty-state-support">
+          {pluralize(summary.studentsWithNewWork, 'student has', 'students have')} submitted new work since this summary. Update the summary to include it.
+        </p>
+      )}
+      {isGenerating && (
+        <p className="lesson-save-status saving" role="status">
+          Analyzing {pluralize(statistics.studentsSubmitted, 'student’s work', 'students’ work')}…
+        </p>
+      )}
+      {generateError && (
+        <p className="lesson-save-status error" role="alert">
+          The summary wasn’t generated: {generateError}
+        </p>
+      )}
+      {smallSample && summary && (
+        <p className="empty-state-support">
+          Based on {pluralize(summary.sampleSize, 'submission')} — too few to describe the whole class.
+        </p>
+      )}
+
+      <h4 className="practice-objectives-heading">Practice-Oriented Learning Objectives</h4>
+      {summary && <SummaryTabs value={summaryTab} onChange={setSummaryTab} />}
+      {summary ? (
+        ([
+          { key: 'overlap', title: 'Overlap with Practice-Oriented Learning Objectives', className: 'summary-section-objective', findings: summary.overlap },
+          { key: 'improvement', title: 'Areas for Improvement', className: 'summary-section-misconception', findings: summary.areasForImprovement },
+        ] as const)
+          .filter((section) => section.key === summaryTab)
+          .map((section) => (
+          <div key={section.key} className={`summary-section ${section.className}`}>
+            <p className="summary-section-title">{section.title}</p>
+            {section.findings.length === 0 ? (
+              <p className="empty-state-support">Nothing to report from the submitted work.</p>
+            ) : (
+              section.findings.map((finding) => (
+                <div key={finding.id} className="pattern-group">
+                  <p className="pattern-group-title" title={context.objectives[finding.objectiveIndex]}>
+                    {objectiveLabel(finding.objectiveIndex)}
+                  </p>
+                  {finding.practices.length > 0 && <p className="finding-practices">Practices: {finding.practices.join(' · ')}</p>}
+                  <p className="finding-summary">
+                    <span className="finding-field-label">Summary:</span> {finding.summary}
+                  </p>
+                  {/* Selecting the summary shows the student work behind it. */}
+                  <div className="pattern-row-list">
+                    <div
+                      className={`pattern-row${selectedFindingId === finding.id ? ' active' : ''}`}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={selectedFindingId === finding.id}
+                      onClick={() => {
+                        setSelectedFindingId(finding.id)
+                        setSummaryOpen(false)
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          setSelectedFindingId(finding.id)
+                          setSummaryOpen(false)
+                        }
+                      }}
+                    >
+                      <span className="pattern-row-label">Supporting student work</span>
+                      <span className="pattern-row-count">{finding.artifactIds.length}</span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        ))
+      ) : (
+        <p className="empty-state-support">
+          {statistics.studentsSubmitted === 0
+            ? 'No students have submitted work yet.'
+            : data.aiAvailable
+              ? 'Generate a summary to analyze the submitted work against the Assignment Prompt, learning objectives, and science practices.'
+              : 'AI class summaries aren’t available for this account yet.'}
+        </p>
+      )}
+    </section>
+  )
+  const evidencePanel = (
+    <section className={`report-panel right-panel evidence-workspace-panel${selected ? ` evidence-${selectedKind}` : ''}`}>
+      <div className="evidence-workspace-scroll">
+        <div className="panel-header">
+          <h3>Student Evidence</h3>
+          <button type="button" className="secondary-button student-report-link" onClick={() => onOpenStudentReport(null)}>
+            Access Individual Student Report
+          </button>
+        </div>
+        {selected && (
+          <p className={`evidence-context-row tag evidence-tag-${selectedKind}`}>
+            {objectiveLabel(selected.objectiveIndex)} · {pluralize(selected.artifactIds.length, 'student')}
+          </p>
+        )}
+        {selected ? (
+          <>
+          <div className="student-list">
+            {selected.artifactIds.slice((evidencePage - 1) * evidencePageSize, evidencePage * evidencePageSize).map((id) => {
+              const work = data.evidence[id]
+              if (!work) return null
+              return (
+                <div key={id} className="evidence-card">
+                  <div className="student-header">
+                    <h4>
+                      {work.studentName}
+                      {work.studentCode && ` (${work.studentCode})`}
+                    </h4>
+                    <span className="empty-state-support">
+                      Version {work.versionNumber}
+                      {work.submissionEvent === 'final' ? ' (final)' : work.submissionEvent === 'revised' ? ' (revised)' : ''}
+                    </span>
+                  </div>
+                  {work.modelName && (
+                    <p className="finding-practices">
+                      <strong>Model:</strong> {work.modelName}
+                    </p>
+                  )}
+                  {work.imageUrl && <img src={work.imageUrl} alt={`${work.studentName}'s model`} className="student-artifact-image" />}
+                  {work.explanation && <p className="student-quote">&ldquo;{work.explanation}&rdquo;</p>}
+                  {work.studentCode && (
+                    <div className="student-footer">
+                      <button
+                        type="button"
+                        className="secondary-button student-report-link"
+                        aria-label={`Access Individual Student Report for ${work.studentName}`}
+                        onClick={() => onOpenStudentReport(work.studentCode as string)}
+                      >
+                        Access Individual Student Report
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          <EvidencePagination page={evidencePage} total={selected.artifactIds.length} onPage={setEvidencePage} />
+          </>
+        ) : (
+          <p className="empty-state-support">Select a summary on the left to see the student work behind it.</p>
+        )}
+
+      </div>
+    </section>
+  )
+
   return (
     <div className="dashboard-page">
       <section className="dashboard-task-card">
         <div className="dashboard-task-header">
           <div>
             <p className="card-label">Assignment</p>
-            <h3>{context.title}</h3>
+            <h3>{libraryAssignmentTitle(lesson) ?? context.title}</h3>
           </div>
         </div>
         {context.assignmentPrompt.map((item) => (
@@ -17667,257 +18482,70 @@ function SavedClassFeedbackPage({
         ))}
       </div>
 
-      <div className="report-grid">
-        <section className="report-panel class-summary-panel">
-          <div className="panel-header compact">
-            <h3>Class Summary</h3>
-            {/* Generate when there's no summary; Update only when students
-                have submitted since. An up-to-date summary has no button. */}
-            {(!summary || summary.studentsWithNewWork > 0) && (
-              <button
-                type="button"
-                className="regenerate-button"
-                onClick={() => void generate()}
-                disabled={isGenerating || !data.aiAvailable || statistics.studentsSubmitted === 0}
-                title={!data.aiAvailable ? 'AI class summaries aren’t available for this account yet.' : undefined}
-              >
-                {summary ? 'Update Summary' : 'Generate Summary'}
-              </button>
-            )}
-          </div>
-          {summary && summary.studentsWithNewWork > 0 && (
-            <p className="empty-state-support">
-              {pluralize(summary.studentsWithNewWork, 'student has', 'students have')} submitted new work since this summary. Update the summary to include it.
-            </p>
-          )}
-          {isGenerating && (
-            <p className="lesson-save-status saving" role="status">
-              Analyzing {pluralize(statistics.studentsSubmitted, 'student’s work', 'students’ work')}…
-            </p>
-          )}
-          {generateError && (
-            <p className="lesson-save-status error" role="alert">
-              The summary wasn’t generated: {generateError}
-            </p>
-          )}
-          {smallSample && summary && (
-            <p className="empty-state-support">
-              Based on {pluralize(summary.sampleSize, 'submission')} — too few to describe the whole class.
-            </p>
-          )}
-
-          <h4 className="practice-objectives-heading">Practice-Oriented Learning Objectives</h4>
-          {summary ? (
-            ([
-              { key: 'overlap', title: 'Overlap with Practice-Oriented Learning Objectives', className: 'summary-section-objective', findings: summary.overlap },
-              { key: 'improvement', title: 'Areas for Improvement', className: 'summary-section-misconception', findings: summary.areasForImprovement },
-            ] as const).map((section) => (
-              <div key={section.key} className={`summary-section ${section.className}`}>
-                <p className="summary-section-title">{section.title}</p>
-                {section.findings.length === 0 ? (
-                  <p className="empty-state-support">Nothing to report from the submitted work.</p>
-                ) : (
-                  section.findings.map((finding) => (
-                    <div key={finding.id} className="pattern-group">
-                      <p className="pattern-group-title" title={context.objectives[finding.objectiveIndex]}>
-                        {objectiveLabel(finding.objectiveIndex)}
-                      </p>
-                      {finding.practices.length > 0 && <p className="finding-practices">Practices: {finding.practices.join(' · ')}</p>}
-                      <p className="finding-summary">
-                        <span className="finding-field-label">Summary:</span> {finding.summary}
-                      </p>
-                      {/* Selecting the summary shows the student work behind it. */}
-                      <div className="pattern-row-list">
-                        <div
-                          className={`pattern-row${selectedFindingId === finding.id ? ' active' : ''}`}
-                          role="button"
-                          tabIndex={0}
-                          aria-pressed={selectedFindingId === finding.id}
-                          onClick={() => {
-                            setSelectedFindingId(finding.id)
-                            setChatDraft('')
-                            setChatError(null)
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                              event.preventDefault()
-                              setSelectedFindingId(finding.id)
-                            }
-                          }}
-                        >
-                          <span className="pattern-row-label">Supporting student work</span>
-                          <span className="pattern-row-count">{finding.artifactIds.length}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            ))
-          ) : (
-            <p className="empty-state-support">
-              {statistics.studentsSubmitted === 0
-                ? 'No students have submitted work yet.'
-                : data.aiAvailable
-                  ? 'Generate a summary to analyze the submitted work against the Assignment Prompt, learning objectives, and science practices.'
-                  : 'AI class summaries aren’t available for this account yet.'}
-            </p>
-          )}
-        </section>
-
-        <div className="right-column">
-          <section className={`report-panel right-panel evidence-workspace-panel${selected ? ` evidence-${selectedKind}` : ''}`}>
-            <div className="evidence-workspace-scroll">
+      {selected && !summaryOpen ? (
+        <>
+          <div className="report-grid idea-focus-grid">
+            {evidencePanel}
+            <section className="report-panel deeper-analysis-panel" aria-labelledby="deeper-analysis-heading">
               <div className="panel-header">
-                <h3>Student Evidence</h3>
+                <h3 id="deeper-analysis-heading">Deeper AI Analysis</h3>
               </div>
-              {selected && (
-                <p className={`evidence-context-row tag evidence-tag-${selectedKind}`}>
-                  {objectiveLabel(selected.objectiveIndex)} · {pluralize(selected.artifactIds.length, 'student')}
-                </p>
-              )}
-              {selected ? (
-                <div className="student-list">
-                  {selected.artifactIds.map((id) => {
-                    const work = data.evidence[id]
-                    if (!work) return null
-                    return (
-                      <div key={id} className="evidence-card">
-                        <div className="student-header">
-                          <h4>{work.studentName}</h4>
-                          <span className="empty-state-support">
-                            Version {work.versionNumber}
-                            {work.submissionEvent === 'final' ? ' (final)' : work.submissionEvent === 'revised' ? ' (revised)' : ''}
-                          </span>
-                        </div>
-                        {work.modelName && (
-                          <p className="finding-practices">
-                            <strong>Model:</strong> {work.modelName}
-                          </p>
-                        )}
-                        {work.imageUrl && <img src={work.imageUrl} alt={`${work.studentName}'s model`} className="student-artifact-image" />}
-                        {work.explanation && <p className="student-quote">&ldquo;{work.explanation}&rdquo;</p>}
-                        {work.studentCode && (
-                          <div className="student-footer">
-                            <button
-                              type="button"
-                              className="secondary-button student-report-link"
-                              aria-label={`Access Individual Student Report for ${work.studentName}`}
-                              onClick={() => onOpenStudentReport(work.studentCode as string)}
-                            >
-                              Access Individual Student Report
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              ) : (
-                <p className="empty-state-support">Select a summary on the left to see the student work behind it.</p>
-              )}
+              <IdeaConversation
+                key={selected.id}
+                idea={`${objectiveLabel(selected.objectiveIndex)}: ${selected.summary}`}
+                kind={selectedKind}
+                messages={[
+                  ...discussion.map((message): ChatMessage => ({ role: message.sender === 'teacher' ? 'teacher' : 'ai', text: message.text })),
+                  ...(asking?.findingId === selected.id ? [{ role: 'teacher' as const, text: asking.text }] : []),
+                ]}
+                isThinking={asking?.findingId === selected.id}
+                thinkingText="AI is analyzing this student work…"
+                busy={!data.aiAvailable || (asking !== null && asking.findingId !== selected.id)}
+                error={chatError?.findingId === selected.id ? chatError.message : null}
+                placeholder={data.aiAvailable ? 'Ask about this summary and its student work...' : 'AI discussion isn’t available for this account yet.'}
+                onAsk={ask}
+              />
+            </section>
+          </div>
+          <div className="back-to-summary-row">
+            <BackToSummaryButton onClick={() => openClassSummary(setSummaryOpen)} />
+          </div>
+        </>
+      ) : (
+        summaryPanel
+      )}
 
-              <div className="deeper-analysis-section">
-                <div className="panel-header">
-                  <h3>Deeper AI Analysis</h3>
-                </div>
-                {selected ? (
-                  <div className="deeper-analysis-body">
-                    {(discussion.length > 0 || isAiThinking) && (
-                      <div className="deeper-analysis-chat">
-                        <ChatThread messages={discussion.map((message) => ({ role: message.sender === 'teacher' ? 'teacher' : 'ai', text: message.text }))} />
-                        {isAiThinking && <p className="empty-state-support">AI is analyzing this student work…</p>}
-                      </div>
-                    )}
-                    {chatError && (
-                      <p className="lesson-save-status error" role="alert">
-                        {chatError}
-                      </p>
-                    )}
-                    <div className="deeper-analysis-suggestions" role="group" aria-label="Example questions">
-                      {deeperAnalysisStarterQuestions.map((question) => (
-                        <button
-                          key={question}
-                          type="button"
-                          className="practice-chip"
-                          disabled={isAiThinking}
-                          onClick={() => {
-                            setChatDraft(question)
-                            chatInputRef.current?.focus()
-                          }}
-                        >
-                          {question}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="composer-box">
-                      <input
-                        ref={chatInputRef}
-                        type="text"
-                        placeholder={data.aiAvailable ? 'Ask about this summary and its student work...' : 'AI discussion isn’t available for this account yet.'}
-                        maxLength={1500}
-                        value={chatDraft}
-                        onChange={(event) => setChatDraft(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') void ask(chatDraft)
-                        }}
-                        disabled={isAiThinking || !data.aiAvailable}
-                      />
-                      <button
-                        type="button"
-                        className="send-button"
-                        aria-label="Send"
-                        onClick={() => void ask(chatDraft)}
-                        disabled={isAiThinking || !chatDraft.trim() || !data.aiAvailable}
-                      >
-                        <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false">
-                          <path
-                            fill="currentColor"
-                            d="M3 10a1 1 0 0 1 1-1h9.09l-3.3-3.3a1 1 0 1 1 1.42-1.4l5 5a1 1 0 0 1 0 1.4l-5 5a1 1 0 0 1-1.42-1.4l3.3-3.3H4a1 1 0 0 1-1-1Z"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="empty-state-support">Select a summary on the left to discuss it and its student work with AI.</p>
-                )}
-              </div>
-            </div>
-          </section>
-        </div>
-      </div>
-
-      {/* From the Areas for Improvement in the class summary. */}
+      {/* Suggested Next Steps: Activities (from the Areas for Improvement in
+          the class summary), then Facilitation Questions. */}
       <section className="questions-panel next-steps-panel" aria-labelledby="next-steps-heading">
         <div className="panel-header compact">
           <h3 id="next-steps-heading">Suggested Next Steps</h3>
         </div>
-        {nextSteps.length === 0 ? (
-          <p className="empty-state-support">
-            {summary ? 'No next steps — the analysis didn’t find gaps to address.' : 'Next steps will appear once the class summary is generated.'}
-          </p>
-        ) : (
-          <ol className="next-step-list">
-            {nextSteps.map((step) => (
-              <li key={step.id} className="next-step-item">
-                <p className="next-step-objective" title={context.objectives[step.objectiveIndex]}>
-                  {objectiveLabel(step.objectiveIndex)}
-                  {step.practices.length > 0 && <span className="next-step-practices"> · {step.practices.join(' · ')}</span>}
-                </p>
-                <p className="next-step-action">{step.nextStep}</p>
-                <p className="next-step-addresses">Addresses {pluralize(step.artifactIds.length, 'student’s work', 'students’ work')} in Areas for Improvement</p>
-              </li>
-            ))}
-          </ol>
-        )}
-      </section>
+        <h4 className="next-steps-subheading">Activities</h4>
+        <div className="next-steps-activities">
+          {nextSteps.length === 0 ? (
+            <p className="empty-state-support">
+              {summary ? 'No next steps — the analysis didn’t find gaps to address.' : 'Next steps will appear once the class summary is generated.'}
+            </p>
+          ) : (
+            <ol className="next-step-list activity-list">
+              {nextSteps.map((step) => (
+                <li key={step.id} className="next-step-item">
+                  <p className="next-step-objective" title={context.objectives[step.objectiveIndex]}>
+                    {objectiveLabel(step.objectiveIndex)}
+                    {step.practices.length > 0 && <span className="next-step-practices"> · {step.practices.join(' · ')}</span>}
+                  </p>
+                  <p className="next-step-action">{step.nextStep}</p>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
 
-      {/* Generated with the class summary; Regenerate Questions renews only
-          the questions, from the saved summary and its student work. */}
-      <section className="questions-panel">
-        <div className="panel-header compact">
-          <h3>Suggested Facilitation Questions</h3>
+        {/* Generated with the class summary; Regenerate Questions renews only
+            the questions, from the saved summary and its student work. */}
+        <div className="next-steps-subheader">
+          <h4 className="next-steps-subheading">Facilitation Questions</h4>
           <button
             type="button"
             className="regenerate-button"

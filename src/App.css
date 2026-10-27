@@ -20,38 +20,16 @@
   font-size: 0.82rem;
   font-weight: 500;
   line-height: 1.4;
-  color: var(--text-secondary);
+  /* A softer blue, below the dark navy .brand-name wordmark. */
+  color: #3b5f8a;
   max-width: 560px;
 }
 
 /* Spells "PARTNERS" — one letter per word — so only that letter stands out
-   against the rest of the (otherwise unstyled) subtitle text. Color comes
-   from one of the brand-color-* classes below. See the brand-subtitle spans
-   in App.tsx. */
+   (in bold) against the rest of the subtitle text. See the brand-subtitle
+   spans in App.tsx. */
 .brand-subtitle-highlight {
   font-weight: 700;
-}
-
-/* Accent colors for the subtitle's highlighted "PARTNERS" letters, split
-   into four letter-groups (the .brand-name wordmark itself is plain dark
-   blue): PAR = blue, TN = green, ER = purple, S = orange. Blue and green reuse the
-   app's existing primary/teal accents (same values as .card-label and the
-   Mechanistic Model badge); purple and orange are new but pitched at the
-   same moderate saturation and contrast level as those two. */
-.brand-color-blue {
-  color: #1d4ed8;
-}
-
-.brand-color-green {
-  color: #1f7a68;
-}
-
-.brand-color-purple {
-  color: #6d28d9;
-}
-
-.brand-color-orange {
-  color: #7a5412;
 }
 
 .eyebrow {
@@ -72,7 +50,7 @@
 .brand-name {
   font-weight: 700;
   font-size: 1.05rem;
-  color: #00005c;
+  color: #1e3a5f;
 }
 
 .menu-button {
@@ -86,7 +64,6 @@
   display: grid;
   place-items: center;
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(27, 40, 52, 0.08);
   transition: all 0.2s ease;
 }
 
@@ -244,7 +221,6 @@
   background: linear-gradient(135deg, #1976d2, #2f80ed);
   color: white;
   padding: 10px 16px;
-  box-shadow: 0 10px 18px rgba(47, 128, 237, 0.24);
 }
 
 .secondary-button,
@@ -319,6 +295,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  /* The actions move below the title when they don't fit beside it. */
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -326,6 +304,10 @@
 .canvas-header-actions {
   display: flex;
   gap: 10px;
+  /* On narrow screens the buttons wrap instead of overflowing. */
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .panel-header h3,
@@ -476,7 +458,21 @@ textarea {
 .planning-tab.active {
   background: #ffffff;
   color: #1a4f8d;
-  box-shadow: 0 6px 14px rgba(27, 40, 52, 0.08);
+}
+
+/* Class Summary's analysis tabs: a compact version of the tabs above. */
+.planning-tabs.summary-tabs {
+  gap: 4px;
+  padding: 3px;
+  border-radius: 9px;
+}
+
+.summary-tabs .planning-tab {
+  flex: 1 1 auto;
+  padding: 4px 8px;
+  font-size: 0.78rem;
+  line-height: 1.3;
+  border-radius: 7px;
 }
 
 /* Lesson Planning's three ways to start a lesson. They stay at the top of
@@ -510,7 +506,6 @@ textarea {
 .planning-method.active {
   background: #ffffff;
   border-color: #2f80ed;
-  box-shadow: 0 6px 14px rgba(27, 40, 52, 0.08);
 }
 
 .planning-method:focus-visible {
@@ -2005,7 +2000,6 @@ textarea {
   border-radius: 999px;
   cursor: pointer;
   white-space: nowrap;
-  box-shadow: 0 10px 20px rgba(47, 128, 237, 0.35);
   transition: transform 0.2s ease;
 }
 
@@ -2227,47 +2221,6 @@ textarea {
   min-width: 200px;
 }
 
-/* Model / Explanation: which student work in the assignment is reviewed. */
-.work-type-switch {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #355063;
-}
-
-.work-type-options {
-  display: inline-flex;
-  border: 1px solid #7b8ea3;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.work-type-option {
-  padding: 7px 16px;
-  border: 0;
-  background: #fff;
-  color: #1e293b;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.work-type-option + .work-type-option {
-  border-left: 1px solid #7b8ea3;
-}
-
-.work-type-option.active {
-  background: #1d4ed8;
-  color: #fff;
-}
-
-.work-type-option:focus-visible {
-  outline: 2px solid #1d4ed8;
-  outline-offset: -3px;
-}
-
 .work-view-select select:disabled {
   opacity: 0.75;
   cursor: not-allowed;
@@ -2330,22 +2283,6 @@ textarea {
 .report-panel,
 .questions-panel {
   padding: 18px 20px;
-}
-
-/* Desktop only (see the 900px breakpoint below, where the grid collapses
-   to one column): the right column is pinned to (and sized to) the
-   viewport while the teacher scrolls through the — potentially much
-   taller — Class Summary column beside it. It holds one unified Student
-   Evidence workspace (see .evidence-workspace-panel) rather than two
-   separate stacked cards, so there is exactly one internal scrollbar on
-   the right: Student Evidence and Deeper AI Analysis are sections within
-   that same scroll, not independently scrolling panes. */
-.right-column {
-  display: flex;
-  flex-direction: column;
-  position: sticky;
-  top: 20px;
-  height: calc(100vh - 40px);
 }
 
 /* The outer card is a fixed-height frame (so it stays pinned beside Class
@@ -2665,6 +2602,15 @@ textarea {
   font-size: 0.8rem;
 }
 
+/* Student Evidence's pages: Previous, 1 2 3…, Next under the cards. */
+.evidence-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 12px;
+}
+
 /* Which two versions the AI analysis compares. */
 .student-analysis-comparison {
   margin: -4px 0 10px;
@@ -2697,37 +2643,52 @@ textarea {
   cursor: default;
 }
 
-/* Deeper AI Analysis is the next section of the unified Student Evidence
-   workspace, not a separate card — a divider and top margin are all that
-   set it apart from the student list above it. */
-.deeper-analysis-section {
-  margin-top: 28px;
-  padding-top: 20px;
-  border-top: 1px solid #e5edf5;
+/* After the teacher picks an idea, Class Summary is hidden and Student
+   Evidence (left) and Deeper AI Analysis (right) share the row.
+   Back to Class Summary under the two panels: its own row, button-sized. */
+.back-to-summary-row {
+  display: flex;
+  justify-content: center;
 }
 
-.deeper-analysis-section .panel-header {
-  margin-bottom: 2px;
+.back-to-summary-row .back-to-summary {
+  padding: 12px 22px;
+}
+
+/* The two panels side by side are one height — the taller one's content, up
+   to the screen's height — with their tops and bottoms aligned; each
+   scrolls on its own beyond that (a single-line flex row clamps its line to
+   its max-height, and both panels stretch to it). */
+.report-grid.idea-focus-grid {
+  display: flex;
+  align-items: stretch;
+  max-height: calc(100vh - 40px);
+}
+
+.idea-focus-grid > .report-panel {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
 }
 
 .deeper-analysis-subtitle {
   margin: 0;
 }
 
-/* Within the unified workspace, Student Evidence and Deeper AI Analysis
-   share one scrollbar (.evidence-workspace-scroll) — so unlike the
-   standalone .deeper-analysis-body/.deeper-analysis-chat usage on the
-   Student Feedback page (a fixed-height panel with its own internal
-   scroll), the chat area here must NOT scroll independently. It just
-   grows with the conversation like any other content in the flow. */
-.evidence-workspace-panel .deeper-analysis-body {
-  flex: none;
+/* Deeper AI Analysis: the conversation scrolls within the panel; the
+   follow-up box stays at the bottom, always in reach. */
+.deeper-analysis-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.evidence-workspace-panel .deeper-analysis-chat {
-  flex: none;
+.deeper-analysis-panel .deeper-analysis-chat {
   min-height: 80px;
-  overflow-y: visible;
+}
+
+.deeper-analysis-panel .composer-box {
+  margin-top: auto;
 }
 
 /* Everything below the header/hint (the chat area and the composer) shares
@@ -2807,15 +2768,22 @@ textarea {
     grid-template-columns: 1fr;
   }
 
-  /* Stacked single-column layout — sticking the right column here would
-     pin it above content it's no longer positioned beside, and fixing its
-     height would clip the unified Student Evidence workspace on a short
-     mobile viewport, so it reverts to normal, height-driven-by-content
-     placement and the page itself scrolls (matching Class Summary, which
-     has never had its own internal scroll). */
-  .right-column {
-    position: static;
-    height: auto;
+  /* Stacked: each panel as tall as its content, and the page scrolls. */
+  .report-grid.idea-focus-grid {
+    flex-direction: column;
+    max-height: none;
+  }
+
+  .idea-focus-grid > .report-panel {
+    flex: none;
+  }
+
+  .deeper-analysis-panel {
+    overflow: visible;
+  }
+
+  .deeper-analysis-panel .deeper-analysis-chat {
+    overflow-y: visible;
   }
 
   .evidence-workspace-panel {
@@ -4911,6 +4879,8 @@ textarea {
 
 .feedback-activities {
   margin-top: 18px;
+  /* Room above it when Confirm Student Assignments scrolls here. */
+  scroll-margin-top: 16px;
   padding: 16px 18px;
   border: 1px solid #dfe7ee;
   border-radius: 16px;
@@ -5042,6 +5012,42 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* Confirm Student Assignments: a card's text (and, while it's edited, its
+   Title / Description / Prompt fields) uses the card's full width, with
+   room for a few lines in each text box. */
+.student-product-list .feedback-activity-text,
+.assignment-details .feedback-activity-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.feedback-activity-editor label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.feedback-activity-editor :is(input[type='text'], textarea) {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.feedback-activity-editor textarea {
+  min-height: 6.5em;
+  resize: vertical;
+}
+
+/* The assignment's title and description, above its student work cards. */
+.assignment-details {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f4f7fb;
 }
 
 .feedback-add-button {
@@ -5334,10 +5340,118 @@ textarea {
   color: var(--text-primary);
 }
 
-.next-step-addresses {
-  margin-top: 6px !important;
-  font-size: 0.76rem;
-  color: var(--text-secondary);
+/* Class Feedback's Suggested Next Steps: Activities, then Facilitation
+   Questions (with Regenerate Questions), in one container. */
+.next-steps-subheading {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.next-steps-subheader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 18px 0 10px;
+  padding-top: 16px;
+  border-top: 1px solid #e3e9ef;
+}
+
+.next-steps-subheader .next-steps-subheading {
+  margin: 0;
+}
+
+/* Activities as a plain list: one per row, divided by a thin line. */
+.next-step-list.activity-list {
+  display: block;
+}
+
+.activity-list .next-step-item {
+  padding: 10px 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+}
+
+.activity-list .next-step-item + .next-step-item {
+  border-top: 1px solid #eef2f6;
+}
+
+/* Compact sizing for the Suggested Next Steps container: 20px title, 16px
+   subheadings, 14px objectives, activities and questions, 12px supporting
+   text; about 12px between activities. */
+.questions-panel.next-steps-panel {
+  padding: 20px;
+}
+
+.next-steps-panel .panel-header {
+  margin-bottom: 10px;
+}
+
+.next-steps-panel .panel-header h3 {
+  font-size: 20px;
+}
+
+.next-steps-panel .next-steps-subheading {
+  font-size: 16px;
+}
+
+.next-steps-panel .next-step-objective {
+  font-size: 14px;
+}
+
+.next-steps-panel .next-step-action,
+.next-steps-panel .question-list li {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.next-steps-panel .question-category {
+  font-size: 12px;
+}
+
+.next-steps-panel .next-step-action {
+  margin-top: 3px !important;
+}
+
+.next-steps-panel .activity-list .next-step-item {
+  padding: 5px 0;
+}
+
+.next-steps-panel .activity-list .next-step-item:first-child {
+  padding-top: 0;
+}
+
+.next-steps-panel .next-steps-subheader {
+  margin: 8px 0 5px;
+  padding-top: 10px;
+}
+
+.next-steps-panel .question-list {
+  gap: 5px;
+}
+
+.next-steps-panel .question-group + .question-group {
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+/* Regenerate Questions here: a compact outlined secondary button. */
+.next-steps-panel .regenerate-button {
+  background: white;
+  border: 1px solid #d8e1ea;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  color: var(--text-primary);
+}
+
+.next-steps-panel .regenerate-button:hover:not(:disabled) {
+  background: #f4f7fb;
+  color: var(--text-primary);
 }
 
 /* ---- Class Feedback: example questions + facilitation question labels ---- */
@@ -5465,4 +5579,49 @@ textarea {
   font-size: 0.76rem;
   font-weight: 600;
   color: #1a4f8d;
+}
+
+/* ---- Class Setup type scale ----------------------------------------------
+   Page title 24px · section headings 20px · subheadings 16px · content
+   16px · form labels and fields 14px · buttons 14px · helper text 13px.
+   Scoped to Class Setup (its .class-setup container, and the page title via
+   the main area's data-page), and kept last so it wins ties with the
+   section's own rules. */
+.app-main[data-page='class-setup'] .page-heading h2 {
+  font-size: 24px;
+}
+
+.class-setup .setup-section-title {
+  font-size: 20px;
+}
+
+.class-setup h4,
+.class-setup .setup-subsection-title {
+  font-size: 16px;
+}
+
+.class-setup p {
+  font-size: 16px;
+}
+
+.class-setup label,
+.class-setup label span,
+.class-setup :is(input, select, textarea),
+.class-setup .class-mgmt-table :is(th, td) {
+  font-size: 14px;
+}
+
+.class-setup :is(button, .primary-button, .secondary-button, .ghost-button),
+.class-setup .class-mode-option strong {
+  font-size: 14px;
+}
+
+/* Check & Edit Student Roster is a button styled as a subheading. */
+.class-setup .setup-toggle {
+  font-size: 16px;
+}
+
+.class-setup :is(.library-class-note, .roster-download-note, .setup-toggle-summary, small),
+.class-setup .class-mgmt-table thead th {
+  font-size: 13px;
 }
