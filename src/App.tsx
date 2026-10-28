@@ -11,10 +11,18 @@ import {
   type RefObject,
   type SetStateAction,
 } from 'react'
-import { getTeacherSession, onTeacherSessionChange, signInTeacher, signOutTeacher, type TeacherSession } from './api/auth'
+import {
+  getTeacherSession,
+  onTeacherSessionChange,
+  signInTeacher,
+  signOutTeacher,
+  signUpTeacher,
+  type TeacherSession,
+  type TeacherSignUp,
+} from './api/auth'
 import {
   createClass as createRemoteClass,
-  getTeacherProfile,
+  ensureTeacherProfile,
   listMyClasses,
   listRosters,
   registerStudentRoster,
@@ -100,7 +108,13 @@ type MockLoginCredentials = {
   mode: 'login' | 'create'
   state?: TeacherState | ''
   district?: string
+  // Create Account with Supabase Auth: the teacher's name for their profile.
+  name?: string
 }
+
+// What the login form shows after submitting: an error, nothing (signed in),
+// or a notice (e.g. confirm your email, then log in).
+type LoginResult = string | null | { notice: string }
 
 // Where a teacher lands after logging in: always Class Setup. First-time
 // teachers get the onboarding guide there (class → roster → Lesson
@@ -2875,11 +2889,12 @@ type AppProps = {
   // Where to open after a session change (sign-in, Explore Demo, leaving the demo).
   entryPage: PageId | null
   onSignIn: (email: string, password: string) => Promise<string | null>
+  onSignUp: (details: TeacherSignUp) => Promise<LoginResult>
   onExploreDemo: () => Promise<string | null>
   onExitDemo: () => void
 }
 
-function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppProps) {
+function App({ session, entryPage, onSignIn, onSignUp, onExploreDemo, onExitDemo }: AppProps) {
   // A bare URL opens on the mock Login page; existing #page links still
   // jump straight to that page. Read once at init (not in an effect) so the
   // hash-writing effect below can't overwrite it first.
@@ -3121,7 +3136,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
     const email = session.teacher.email
     ;(async () => {
       authDebug('classes: loading')
-      const [profile, classRecords] = await Promise.all([getTeacherProfile(), listMyClasses()])
+      const [profile, classRecords] = await Promise.all([ensureTeacherProfile(), listMyClasses()])
       authDebug('classes: loaded', { hasProfile: profile !== null, classes: classRecords.length })
       const rosters = await listRosters(classRecords.map((record) => record.classId))
       if (!active) return
@@ -3782,11 +3797,15 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
   // Account does.
   // Signing in with Supabase is handled by AppRoot, which then opens a fresh
   // app for the teacher.
-  const handleLogin = async (credentials: MockLoginCredentials): Promise<string | null> => {
+  const handleLogin = async (credentials: MockLoginCredentials): Promise<LoginResult> => {
     if (!realAuth) return handleMockLogin(credentials)
-    // New accounts need a teacher profile row too, which isn't connected
-    // yet; existing test accounts log in normally.
-    if (credentials.mode === 'create') return 'Creating accounts isn’t connected to Supabase yet. Log in with an existing teacher account.'
+    if (credentials.mode === 'create') {
+      // The profile row is created from these on the first sign-in.
+      const { email, password, name = '', state, district = '' } = credentials
+      if (!name.trim()) return 'Enter your name.'
+      if (!state || !district.trim()) return 'Choose your state and enter your school district.'
+      return onSignUp({ email, password, name, state, district })
+    }
     return onSignIn(credentials.email, credentials.password)
   }
 
@@ -4548,6 +4567,7 @@ function App({ session, entryPage, onSignIn, onExploreDemo, onExitDemo }: AppPro
             students={students}
             setStudents={setStudents}
             ownerEmail={currentTeacherEmail}
+            teacherName={remoteTeacherName}
             startCreating={startCreatingClass}
             onboarding={!currentAccount.onboardingComplete}
             selectedClassId={selectedClassId}
@@ -8445,10 +8465,12 @@ function LoginPage({
 }: {
   // 'supabase': the form signs in with Supabase; 'mock': the prototype's mock login.
   authKind: 'supabase' | 'mock'
-  onLogin: (credentials: MockLoginCredentials) => Promise<string | null>
+  onLogin: (credentials: MockLoginCredentials) => Promise<LoginResult>
   onExploreDemo: () => Promise<string | null>
 }) {
   const [mode, setMode] = useState<MockLoginCredentials['mode']>('login')
+  const [name, setName] = useState('')
+  const [notice, setNotice] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -8467,7 +8489,17 @@ function LoginPage({
           setIsSubmitting(true)
           // The buttons always come back, even if signing in fails unexpectedly.
           try {
-            setError(await onLogin({ email, password, mode, state, district }))
+            const result = await onLogin({ email, password, mode, state, district, name })
+            if (result !== null && typeof result === 'object') {
+              // E.g. confirm your email: then log in with the same email.
+              setNotice(result.notice)
+              setError(null)
+              setMode('login')
+              setPassword('')
+            } else {
+              setError(result)
+              if (result) setNotice(null)
+            }
           } catch (failure) {
             setError(toApiError(failure, 'Couldn’t log in. Please try again.').message)
           } finally {
@@ -8507,6 +8539,21 @@ function LoginPage({
           </label>
           {isCreate && (
             <>
+              {authKind === 'supabase' && (
+                <label>
+                  <span>
+                    Your Name <RequiredMark />
+                  </span>
+                  <input
+                    type="text"
+                    autoComplete="name"
+                    placeholder="Your name"
+                    value={name}
+                    aria-required="true"
+                    onChange={(event) => setName(event.target.value)}
+                  />
+                </label>
+              )}
               <label>
                 <span>
                   State <RequiredMark />
@@ -8543,6 +8590,11 @@ function LoginPage({
             {error}
           </p>
         )}
+        {notice && !error && (
+          <p className="class-mgmt-notice" role="status">
+            {notice}
+          </p>
+        )}
         <button type="submit" className="primary-button login-submit" disabled={isSubmitting}>
           {isCreate ? 'Create Account' : 'Login'}
         </button>
@@ -8552,6 +8604,7 @@ function LoginPage({
           onClick={() => {
             setMode(isCreate ? 'login' : 'create')
             setError(null)
+            setNotice(null)
           }}
         >
           {isCreate ? 'Already have an account? Log in' : 'New to PARTNERS? Create an account'}
@@ -10991,6 +11044,7 @@ function ClassSetupPage({
   students,
   setStudents,
   ownerEmail,
+  teacherName = '',
   startCreating,
   onboarding,
   selectedClassId,
@@ -11003,6 +11057,8 @@ function ClassSetupPage({
   students: readonly Student[]
   setStudents: Dispatch<SetStateAction<Student[]>>
   ownerEmail: string
+  // The signed-in teacher's profile name (Supabase), for new classes' Teacher Name.
+  teacherName?: string
   startCreating: boolean
   onboarding: boolean
   // The app-wide selected class (see App); falls back to the first class.
@@ -11207,7 +11263,7 @@ function ClassSetupPage({
           <ClassSetupForm
             key={addFormKey}
             // Prefilled from the teacher's most recent class.
-            defaultTeacherName={classes.at(-1)?.teacherName ?? ''}
+            defaultTeacherName={teacherName || classes.at(-1)?.teacherName || ''}
             submitLabel="Create Class"
             autoFocus={startCreating || (onboarding && !hasClass)}
             onSave={createClass}
@@ -18689,6 +18745,24 @@ function AppRoot() {
     }
   }, [isDemo])
 
+  // Create Account: signs the new teacher in when Supabase returns a
+  // session (their profile is created as Class Setup loads); otherwise they
+  // confirm their email first and then log in.
+  const signUp = async (details: TeacherSignUp): Promise<LoginResult> => {
+    try {
+      const teacher = await withTimeout(signUpTeacher(details), authTimeoutMs, 'Creating your account is taking longer than expected. Check your connection and try again.')
+      if (!teacher) {
+        return { notice: `Check your email (${details.email.trim()}) for a link to confirm your account, then log in here.` }
+      }
+      setSessionDataMode('real')
+      setEntryPage(getPostLoginPage())
+      setSession({ kind: 'teacher', teacher })
+      return null
+    } catch (error) {
+      return toApiError(error, 'Couldn’t create your account. Please try again.').message
+    }
+  }
+
   const signIn = async (email: string, password: string): Promise<string | null> => {
     try {
       authDebug('signIn: calling signInWithPassword')
@@ -18750,7 +18824,9 @@ function AppRoot() {
 
   const appKey = supabaseBuild ? (session.kind === 'teacher' ? `teacher:${session.teacher.userId}` : session.kind) : 'demo-build'
   authDebug('AppRoot render', { session: session.kind, appKey: session.kind === 'teacher' ? `teacher:${shortId(session.teacher.userId)}` : appKey, entryPage })
-  return <App key={appKey} session={session} entryPage={entryPage} onSignIn={signIn} onExploreDemo={exploreDemo} onExitDemo={exitDemo} />
+  return (
+    <App key={appKey} session={session} entryPage={entryPage} onSignIn={signIn} onSignUp={signUp} onExploreDemo={exploreDemo} onExitDemo={exitDemo} />
+  )
 }
 
 export default AppRoot

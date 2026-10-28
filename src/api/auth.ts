@@ -24,6 +24,34 @@ export async function signInTeacher(email: string, password: string): Promise<Te
   return session
 }
 
+// What a new teacher enters on Create Account. The profile details travel
+// with the auth account (user metadata) until the teacher's profile row is
+// created on their first sign-in (see ensureTeacherProfile).
+export type TeacherSignUp = { email: string; password: string; name: string; state: string; district: string }
+
+// Creates the teacher's Supabase Auth account. Returns their session, or null
+// when Supabase needs them to confirm their email before signing in.
+export async function signUpTeacher(input: TeacherSignUp): Promise<TeacherSession | null> {
+  const email = input.email.trim()
+  if (!email || !input.password) throw new ApiError('Enter your email and password.', { code: 'missing_credentials' })
+  const { data, error } = await getSupabase().auth.signUp({
+    email,
+    password: input.password,
+    options: {
+      data: { user_name: input.name.trim(), state: input.state, school_district: input.district.trim() },
+      // The confirmation link comes back to this app.
+      emailRedirectTo: window.location.origin,
+    },
+  })
+  if (error) throw toApiError(error, 'Couldn’t create your account. Please try again.')
+  // With email confirmation on, Supabase answers an already-registered email
+  // with a user that has no identities (and sends no email).
+  if (data.user && data.user.identities?.length === 0) {
+    throw new ApiError('An account with this email already exists. Log in instead.', { code: 'email_taken' })
+  }
+  return toTeacherSession(data.session)
+}
+
 export async function signOutTeacher(): Promise<void> {
   const { error } = await getSupabase().auth.signOut()
   if (error) throw toApiError(error)

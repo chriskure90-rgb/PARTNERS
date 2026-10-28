@@ -61,6 +61,30 @@ export async function getTeacherProfile(): Promise<TeacherProfile | null> {
   return { userId: row.user_id, userName: row.user_name, email: row.email, state: row.state, schoolDistrict: row.school_district }
 }
 
+// The signed-in teacher's profile, created from the details they gave on
+// Create Account (kept on their auth account) when it doesn't exist yet —
+// on their first sign-in, right after sign-up or after confirming their
+// email. Classes need it (classes.user_id references users). Null when the
+// account has no such details (e.g. one made outside the app).
+export async function ensureTeacherProfile(): Promise<TeacherProfile | null> {
+  const existing = await getTeacherProfile()
+  if (existing) return existing
+  const { data, error } = await getSupabase().auth.getUser()
+  if (error) throw toApiError(error, 'Couldn’t load your teacher profile.')
+  const user = data.user
+  const details = (user?.user_metadata ?? {}) as { user_name?: unknown; state?: unknown; school_district?: unknown }
+  const userName = typeof details.user_name === 'string' ? details.user_name.trim() : ''
+  const state = details.state === 'NC' || details.state === 'MO' ? details.state : null
+  if (!user || !user.email || !userName || !state) return null
+  const district = typeof details.school_district === 'string' ? details.school_district.trim() : ''
+  const { error: insertError } = await getSupabase()
+    .from('users')
+    .insert({ user_id: user.id, user_name: userName, email: user.email.toLowerCase(), state, school_district: district || null })
+  // Another tab may have created it first.
+  if (insertError && insertError.code !== '23505') throw toApiError(insertError, 'Couldn’t create your teacher profile.')
+  return getTeacherProfile()
+}
+
 // The signed-in teacher's classes, oldest first (the order they were created).
 export async function listMyClasses(): Promise<ClassRecord[]> {
   const userId = await requireUserId()
