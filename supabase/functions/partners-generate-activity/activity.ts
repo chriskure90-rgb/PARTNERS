@@ -7,12 +7,15 @@
 // cap. One OpenAI request per Generate Activity Draft, never retried. The
 // app saves the activity once the teacher confirms it.
 
-import { sciencePracticeCatalog, type Config, type Usage } from '../partners-generate-lesson/generate.ts'
+import { aiAllowedFor, reserveTeacherAiRequest, sciencePracticeCatalog, type Config, type Usage, type UseAiRequest } from '../partners-generate-lesson/generate.ts'
+import { readSuggestedWorkProducts, workProductSuggestionInstructions, workProductSuggestionSchema, type SuggestedWorkProduct } from '../partners-generate-lesson/workProducts.ts'
 
 export type ActivityDependencies = {
   config: Config
   maxOutputTokens: number
   authenticate: (token: string) => Promise<string | null>
+  // Counts one of the teacher's daily AI requests (see reserveTeacherAiRequest).
+  useAiRequest: UseAiRequest
   fetch: typeof fetch
   log?: (event: string, details: Record<string, unknown>) => void
 }
@@ -82,7 +85,7 @@ export const activityInstructions = [
   'title: a short activity title. description: two sentences on what students do and why. goal: one sentence on what students figure out by using the chosen practices.',
   'sequence: 3 to 7 steps in order, each with a short name and one to three sentences of concrete student tasks and teacher moves for this grade. Every chosen practice must be something students do in at least one step (develop and use a model; construct an explanation from evidence; argue from evidence and respond to critique). Start from the phenomenon when there is one, and end with students revising their work.',
   'supports: one to two sentences of grade-appropriate scaffolds.',
-  'The activity collects two student products in one assignment: a Model and an Explanation. modelSubmission and explanationSubmission each say in one sentence what students submit for that product in this activity.',
+  workProductSuggestionInstructions.replaceAll("the lesson's", "the activity's").replaceAll('the lesson’s', 'the activity’s'),
   'incorporated: up to three short ideas from teacherMessages that shaped the activity, quoted or closely paraphrased; empty if none.',
   'Use the teacher’s ideas where they fit. Never include student names or other personal information.',
 ].join('\n')
@@ -90,7 +93,7 @@ export const activityInstructions = [
 export const activitySchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['title', 'description', 'goal', 'sequence', 'supports', 'modelSubmission', 'explanationSubmission', 'incorporated'],
+  required: ['title', 'description', 'goal', 'sequence', 'supports', 'workProducts', 'incorporated'],
   properties: {
     title: { type: 'string' },
     description: { type: 'string' },
@@ -100,8 +103,7 @@ export const activitySchema = {
       items: { type: 'object', additionalProperties: false, required: ['name', 'text'], properties: { name: { type: 'string' }, text: { type: 'string' } } },
     },
     supports: { type: 'string' },
-    modelSubmission: { type: 'string' },
-    explanationSubmission: { type: 'string' },
+    workProducts: workProductSuggestionSchema,
     incorporated: { type: 'array', items: { type: 'string' } },
   },
 } as const
@@ -112,8 +114,8 @@ export type ActivityOutput = {
   goal: string
   sequence: { name: string; text: string }[]
   supports: string
-  modelSubmission: string
-  explanationSubmission: string
+  // Suggested student work for the activity's assignment (empty: the app's default).
+  workProducts: SuggestedWorkProduct[]
   incorporated: string[]
 }
 
@@ -145,8 +147,7 @@ export function readActivityOutput(raw: string): ActivityOutput {
     goal: text('goal'),
     sequence: sequence.slice(0, 8),
     supports: text('supports'),
-    modelSubmission: text('modelSubmission'),
-    explanationSubmission: text('explanationSubmission'),
+    workProducts: readSuggestedWorkProducts(value.workProducts),
     incorporated: (Array.isArray(value.incorporated) ? value.incorporated : [])
       .filter((item): item is string => typeof item === 'string' && item.trim() !== '')
       .map((item) => item.trim())
@@ -179,7 +180,7 @@ export async function handleGenerateActivity(request: Request, deps: ActivityDep
   const userId = token ? await deps.authenticate(token).catch(() => null) : null
   if (!userId) return failure(401, 'unauthorized', 'Teacher login required.')
   if (!config.enabled) return failure(503, 'generation_disabled', 'AI activity drafts are turned off.')
-  if (!config.allowedUserIds.includes(userId)) return failure(403, 'not_authorized', 'AI activity drafts aren’t available for this account yet.')
+  if (!aiAllowedFor(config, userId)) return failure(403, 'not_authorized', 'AI activity drafts aren’t available for this account yet.')
   if (!config.apiKey) return failure(500, 'not_configured', 'AI activity drafts aren’t configured on the server.')
 
   let input: ActivityInput
@@ -190,6 +191,10 @@ export async function handleGenerateActivity(request: Request, deps: ActivityDep
   }
 
   // The one paid request. No retries.
+  // Every attempt from here on uses one of the teacher's daily AI requests.
+  const limited = await reserveTeacherAiRequest(deps.useAiRequest, userId, config.dailyTeacherLimit)
+  if (limited) return failure(limited.status, limited.code, limited.error)
+
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), config.timeoutMs)
   let reply: Response

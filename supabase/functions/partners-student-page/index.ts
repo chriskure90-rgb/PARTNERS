@@ -24,10 +24,10 @@ const db: StudentPageDb = {
   },
   findStudent: async (classId, code) => {
     const { data, error } = await supabase
-      .from('class_enrollments')
-      .select('student_id,students!inner(student_pseudonym)')
+      .from('students')
+      .select('student_id')
       .eq('class_id', classId)
-      .eq('students.student_pseudonym', code)
+      .eq('student_pseudonym', code)
       .limit(2)
     if (error) throw error
     return data?.length === 1 ? data[0].student_id : null
@@ -54,12 +54,13 @@ const db: StudentPageDb = {
       science_practices: lesson.science_practices,
     }
   },
-  recentArtifacts: async (pageId, studentId, limit) => {
-    const { data, error } = await supabase
+  recentArtifacts: async (pageId, studentId, limit, workProductId) => {
+    const query = supabase
       .from('student_artifacts')
       .select('artifact_id,version_number,submission_event,model_name,explanation_text,image_url,created_at')
       .eq('feedback_page_id', pageId)
       .eq('student_id', studentId)
+    const { data, error } = await (workProductId === null ? query.is('work_product_id', null) : query.eq('work_product_id', workProductId))
       .order('version_number', { ascending: false })
       .limit(limit)
     if (error) throw error
@@ -76,7 +77,7 @@ const db: StudentPageDb = {
   feedbackMessages: async (pageId, studentId) => {
     const { data, error } = await supabase
       .from('student_ai_messages')
-      .select('artifact_id,sender_type,message_content,created_at,student_ai_conversations!inner(student_id),student_artifacts!inner(feedback_page_id,version_number)')
+      .select('artifact_id,sender_type,message_content,created_at,student_ai_conversations!inner(student_id),student_artifacts!inner(feedback_page_id,version_number,work_product_id)')
       .eq('student_ai_conversations.student_id', studentId)
       .eq('student_artifacts.feedback_page_id', pageId)
       .order('created_at', { ascending: true })
@@ -85,6 +86,7 @@ const db: StudentPageDb = {
     return (data ?? []).map((m) => ({
       artifact_id: m.artifact_id,
       version_number: (m.student_artifacts as unknown as { version_number: number }).version_number,
+      work_product_id: (m.student_artifacts as unknown as { work_product_id: string | null }).work_product_id ?? null,
       sender_type: m.sender_type,
       message_content: m.message_content,
       created_at: m.created_at,
@@ -121,7 +123,7 @@ const db: StudentPageDb = {
   },
   isEnrolled: async (classId, studentId) => {
     const { data, error } = await supabase
-      .from('class_enrollments')
+      .from('students')
       .select('student_id')
       .eq('class_id', classId)
       .eq('student_id', studentId)

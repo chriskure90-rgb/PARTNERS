@@ -8,12 +8,18 @@ import { ApiError, invokeFunction } from './core'
 
 export type GeneratedObjective = { original: string; text: string; practices: string[] }
 
+// A student work product the AI suggests for the lesson's assignment (the
+// teacher reviews and edits it before confirming).
+export type SuggestedWorkProduct = { title: string; description: string; prompt: string; inputs: ('image' | 'name' | 'explanation')[] }
+
 export type GeneratedLesson = {
   title: string
   learningObjectives: GeneratedObjective[]
   activities: { sequenceStep: string; title: string; minutes: number; description: string; practiceMoves: string[]; objectives: number[] }[]
   customization: { field: string; howUsed: string }[]
   suggestions: { section: string; flaggedText: string; suggestion: string; addedText: string; summary: string }[]
+  // Empty or absent: the app's default student work.
+  workProducts?: SuggestedWorkProduct[]
 }
 
 export type GenerationUsage = { model: string; inputTokens: number | null; outputTokens: number | null; reasoningTokens: number | null }

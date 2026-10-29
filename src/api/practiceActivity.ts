@@ -1,5 +1,6 @@
 import { getSupabase } from '../lib/supabase'
 import { ApiError, invokeFunction, toApiError } from './core'
+import type { SuggestedWorkProduct } from './lessonGeneration'
 
 // Science Practice Activity: a real AI draft through the
 // partners-generate-activity Edge Function (one call, never retried here),
@@ -15,8 +16,8 @@ export type GeneratedActivity = {
   goal: string
   sequence: { name: string; text: string }[]
   supports: string
-  modelSubmission: string
-  explanationSubmission: string
+  // The student work for the activity's assignment (empty or absent: the app's default).
+  workProducts?: SuggestedWorkProduct[]
   incorporated: string[]
 }
 

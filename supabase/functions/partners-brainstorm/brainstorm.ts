@@ -7,12 +7,14 @@
 // app picks up form fields itself and saves the conversation once the
 // lesson is saved, so this function only writes the reply.
 
-import type { Config, Usage } from '../partners-generate-lesson/generate.ts'
+import { aiAllowedFor, reserveTeacherAiRequest, type Config, type Usage, type UseAiRequest } from '../partners-generate-lesson/generate.ts'
 
 export type BrainstormDependencies = {
   config: Config
   maxOutputTokens: number
   authenticate: (token: string) => Promise<string | null>
+  // Counts one of the teacher's daily AI requests (see reserveTeacherAiRequest).
+  useAiRequest: UseAiRequest
   fetch: typeof fetch
   log?: (event: string, details: Record<string, unknown>) => void
 }
@@ -152,7 +154,7 @@ export async function handleBrainstorm(request: Request, deps: BrainstormDepende
   const userId = token ? await deps.authenticate(token).catch(() => null) : null
   if (!userId) return failure(401, 'unauthorized', 'Teacher login required.')
   if (!config.enabled) return failure(503, 'generation_disabled', 'Brainstorm with AI is turned off.')
-  if (!config.allowedUserIds.includes(userId)) return failure(403, 'not_authorized', 'Brainstorm with AI isn’t available for this account yet.')
+  if (!aiAllowedFor(config, userId)) return failure(403, 'not_authorized', 'Brainstorm with AI isn’t available for this account yet.')
   if (!config.apiKey) return failure(500, 'not_configured', 'Brainstorm with AI isn’t configured on the server.')
 
   let input: BrainstormInput
@@ -163,6 +165,10 @@ export async function handleBrainstorm(request: Request, deps: BrainstormDepende
   }
 
   // The one paid request. No retries.
+  // Every attempt from here on uses one of the teacher's daily AI requests.
+  const limited = await reserveTeacherAiRequest(deps.useAiRequest, userId, config.dailyTeacherLimit)
+  if (limited) return failure(limited.status, limited.code, limited.error)
+
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), config.timeoutMs)
   let reply: Response

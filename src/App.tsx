@@ -31,7 +31,7 @@ import {
 } from './api/classes'
 import { ApiError, toApiError } from './api/core'
 import { listLessonsForClasses, saveLessonVersion, saveNewLesson, type LessonFields, type StoredLesson, type VersionCreatedBy } from './api/lessonPlanning'
-import { generateLesson, type GenerationUsage } from './api/lessonGeneration'
+import { generateLesson, type GenerationUsage, type SuggestedWorkProduct } from './api/lessonGeneration'
 import { reviseLessonSection, revisionSuggestionForConversation, saveRevisionAction, saveRevisionSuggestion } from './api/lessonRevision'
 import { brainstormReplyFromAi, saveBrainstormConversation, type BrainstormRequest } from './api/brainstorm'
 import { generateActivityDraft, latestStudentFeedbackPage, studentFeedbackPageFor, type GeneratedActivity } from './api/practiceActivity'
@@ -3613,6 +3613,8 @@ function App({ session, entryPage, onSignIn, onSignUp, onExploreDemo, onExitDemo
     generation?: LessonGenerationRecord,
     brainstorm?: readonly ChatMessage[],
     upload?: { fileName: string; text: string },
+    // The lesson's work products (absent: the prototype's Model and Explanation).
+    products?: FeedbackActivity[],
   ) => {
     if (lessonPersistence === 'off') {
       setLessonSaveStatus({ kind: 'error', message: 'This lesson isn’t saved: Lesson Planning isn’t connected to Supabase in this configuration. Add “lessonPlanning” to VITE_SUPABASE_INTEGRATIONS.' })
@@ -3634,7 +3636,7 @@ function App({ session, entryPage, onSignIn, onSignUp, onExploreDemo, onExitDemo
     }
     const { classId, savedLessonId } = planningTarget
     const existingId = savedLessonId && remoteLessonIdsRef.current.has(savedLessonId) ? savedLessonId : null
-    const studentProducts = identifyFeedbackActivities(existingId)
+    const studentProducts = products ?? identifyFeedbackActivities(existingId)
     // A newly generated lesson's assignment comes from its own text.
     const effectiveDocument = effectiveLessonDocument(document, {}, {})
     const assignment = defaultLessonAssignment(effectiveDocument)
@@ -3978,9 +3980,10 @@ function App({ session, entryPage, onSignIn, onSignUp, onExploreDemo, onExitDemo
       // Supabase Mode: shown now, saved (or the reason it isn't) right after.
       const document = generateLessonDocument(details)
       const keepId = planningTarget?.savedLessonId && remoteLessonIdsRef.current.has(planningTarget.savedLessonId) ? planningTarget.savedLessonId : null
-      showLessonDocument(document, keepId)
+      const products = lessonWorkProducts()
+      showLessonDocument(document, keepId, products)
       if (keepId) lastSavedLessonRef.current = { lessonId: keepId, snapshot: JSON.stringify(effectiveLessonDocument({ ...document, id: keepId }, {}, {})) }
-      void persistPlannedLesson(details, document, 'generated', undefined, undefined, brainstorm)
+      void persistPlannedLesson(details, document, 'generated', undefined, undefined, brainstorm, undefined, products)
     } else {
       const document = generateLessonDocument(details)
       showLessonDocument(document, saveLessonForPlanningTarget(details, document))
@@ -4016,15 +4019,17 @@ function App({ session, entryPage, onSignIn, onSignUp, onExploreDemo, onExitDemo
     setIsGeneratingLesson(true)
     setLessonSaveStatus({ kind: 'saving', message: 'Generating your lesson with AI…' })
     try {
-      const { document, generation } = await generateLessonDocumentWithAi(details)
+      const { document, generation, workProducts } = await generateLessonDocumentWithAi(details)
       const keepId = planningTarget?.savedLessonId && remoteLessonIdsRef.current.has(planningTarget.savedLessonId) ? planningTarget.savedLessonId : null
-      showLessonDocument(document, keepId)
+      // The AI's suggested student work, for the teacher to review.
+      const products = lessonWorkProducts(workProducts)
+      showLessonDocument(document, keepId, products)
       if (keepId) lastSavedLessonRef.current = { lessonId: keepId, snapshot: JSON.stringify(effectiveLessonDocument({ ...document, id: keepId }, {}, {})) }
       setLessonSource('ai-generated')
       setLessonGenerated(true)
       setLessonGeneratedWith(method)
       setIsGeneratingLesson(false)
-      await persistPlannedLesson(details, document, 'generated', undefined, generation, brainstorm)
+      await persistPlannedLesson(details, document, 'generated', undefined, generation, brainstorm, undefined, products)
     } catch (error) {
       setLessonSaveStatus({ kind: 'error', message: `The lesson wasn’t generated: ${toApiError(error, 'The AI service couldn’t generate the lesson.').message}` })
     } finally {
@@ -4063,7 +4068,8 @@ function App({ session, entryPage, onSignIn, onSignUp, onExploreDemo, onExitDemo
       const result = await callRemoteAiModel('lesson-review', { lessonText: text, fileName: file.name, gradeLevel }, reviewUploadedLesson)
       const document = buildUploadedLessonDocument(text, result.output, lessonTitleFrom(details, file.name))
       const keepId = planningTarget.savedLessonId && remoteLessonIdsRef.current.has(planningTarget.savedLessonId) ? planningTarget.savedLessonId : null
-      showLessonDocument(document, keepId)
+      const products = lessonWorkProducts(result.output.workProducts)
+      showLessonDocument(document, keepId, products)
       if (keepId) lastSavedLessonRef.current = { lessonId: keepId, snapshot: JSON.stringify(effectiveLessonDocument({ ...document, id: keepId }, {}, {})) }
       setLessonSource('uploaded')
       setLessonGenerated(true)
@@ -4077,6 +4083,7 @@ function App({ session, entryPage, onSignIn, onSignUp, onExploreDemo, onExitDemo
         { source: 'openai', model: result.usage.model, usage: result.usage, warnings: result.warnings, generatedAt: new Date().toISOString() },
         undefined,
         { fileName: file.name, text },
+        products,
       )
     } catch (error) {
       setLessonSaveStatus({ kind: 'error', message: `“${file.name}” wasn’t reviewed: ${toApiError(error, 'The AI service couldn’t review it.').message}` })
@@ -5917,7 +5924,63 @@ function isContextOnlyMessage(text: string, context: ActivityContext): boolean {
 // activity text is shown; see workTypeDescriptions). `title`: the card's
 // title as the teacher renamed it — `id` and `name` stay the work type
 // that Student Feedback and the AI go by.
-type CollectionOpportunity = { id: string; name: string; submission: string; description?: string; title?: string }
+type CollectionOpportunity = {
+  id: string
+  name: string
+  submission: string
+  description?: string
+  title?: string
+  // A work product's required inputs (see WorkInput); absent on the demo's
+  // and older versions' Model / Explanation.
+  inputs?: WorkInput[]
+  // Suggested by the AI and not yet reviewed (edited) by the teacher.
+  suggested?: boolean
+}
+
+// Student work products (see supabase/functions/partners-generate-lesson/
+// workProducts.ts): the separate pieces of student work in a lesson's or
+// activity's one assignment, each with its own title (`name`), description,
+// Prompt for Students (`submission`), and required inputs — submitted,
+// revised, and given AI feedback separately. A product list whose items have
+// `inputs` is one; the demo's lists and versions saved before work products
+// hold the Model and Explanation of one submission, shown and used as before.
+type WorkInput = 'image' | 'name' | 'explanation'
+const workInputs: readonly WorkInput[] = ['image', 'name', 'explanation']
+const maxWorkProducts = 4
+const workInputLabels: Record<WorkInput, string> = { image: 'Model / Drawing', name: 'Model Title / Name', explanation: 'Written Explanation' }
+
+function isWorkProductList(items: readonly { inputs?: readonly WorkInput[] }[]): boolean {
+  return items.some((item) => Array.isArray(item.inputs))
+}
+
+// A new lesson's or activity's work products: the AI's suggestions, else one
+// Model and Explanation.
+function workProductsFrom(suggested: readonly SuggestedWorkProduct[] = []): CollectionOpportunity[] {
+  const usable = suggested.filter((item) => item.title.trim() && item.prompt.trim() && (item.inputs.includes('image') || item.inputs.includes('explanation')))
+  if (usable.length === 0) {
+    return [
+      {
+        id: 'wp-1',
+        name: 'Model and Explanation',
+        submission: 'Develop a model of the phenomenon, then explain it in writing using your model and evidence.',
+        inputs: ['image', 'name', 'explanation'],
+      },
+    ]
+  }
+  return usable.slice(0, maxWorkProducts).map((item, index) => ({
+    id: `wp-${index + 1}`,
+    name: item.title.trim(),
+    ...(item.description.trim() ? { description: item.description.trim() } : {}),
+    submission: item.prompt.trim(),
+    inputs: workInputs.filter((input) => item.inputs.includes(input) && (input !== 'name' || item.inputs.includes('image'))),
+    suggested: true,
+  }))
+}
+
+// A lesson's work products, each still to be confirmed.
+function lessonWorkProducts(suggested?: readonly SuggestedWorkProduct[]): FeedbackActivity[] {
+  return workProductsFrom(suggested).map((product) => ({ ...product, confirmed: false }))
+}
 
 type ActivityDraft = {
   title: string
@@ -5977,10 +6040,7 @@ const activityContentFormat = 'partners-activity/v1'
 // A real AI draft in the app's ActivityDraft shape: the teaching context
 // and practices come from the request, the rest from the model.
 function activityDraftFromAi(request: ActivityDraftRequest, output: GeneratedActivity): ActivityDraft {
-  const products: CollectionOpportunity[] = [
-    { id: 'model', name: 'Model', submission: output.modelSubmission },
-    { id: 'explanation', name: 'Explanation', submission: output.explanationSubmission },
-  ]
+  const products = workProductsFrom(output.workProducts)
   return {
     title: output.title,
     gradeLabel: request.context.grade.label,
@@ -10757,9 +10817,12 @@ type LessonGenerationRecord = {
 // the planning form goes through the privacy gateway to
 // partners-generate-lesson, which owns the instructions, schema, model, and
 // cost limits. One request per Generate; a failure is thrown, never retried.
-async function generateLessonDocumentWithAi(details: PlanningLessonDetails): Promise<{ document: LessonDocument; generation: LessonGenerationRecord }> {
+async function generateLessonDocumentWithAi(
+  details: PlanningLessonDetails,
+): Promise<{ document: LessonDocument; generation: LessonGenerationRecord; workProducts: SuggestedWorkProduct[] }> {
   const result = await callRemoteAiModel('lesson-generation', { lesson: buildLessonGenerationInput(details) }, (request) => generateLesson(request.lesson))
   return {
+    workProducts: result.output.workProducts ?? [],
     document: buildGeneratedLessonDocument(details, readLessonGenerationOutput(result.output)),
     generation: { source: 'openai', model: result.usage.model, usage: result.usage, warnings: result.warnings, generatedAt: new Date().toISOString() },
   }
@@ -12861,7 +12924,6 @@ function PracticeActivityWorkspace({
       {confirmed && (
         <StudentProductCollection
           headingId="activity-collection-heading"
-          products={draft.products}
           items={collection}
           assignment={assignment ?? defaultActivityAssignment(draft)}
           workDescriptions={activityWorkDescriptions(draft)}
@@ -12905,6 +12967,11 @@ type FeedbackActivity = {
   name: string
   // What students submit, in a short sentence.
   submission: string
+  // A work product's own (see CollectionOpportunity).
+  title?: string
+  description?: string
+  inputs?: WorkInput[]
+  suggested?: boolean
   confirmed: boolean
   // The lesson section it was identified from; absent for teacher-added ones.
   sourceLabel?: string
@@ -12965,7 +13032,13 @@ type StudentAssignmentLink = {
   // The assignment's own title and description (shown above the student work).
   title?: string
   description?: string
+  // A saved page's work products, each on its own tab (absent: one
+  // submission of the Model and/or Explanation, as before).
+  workProducts?: StudentWorkProduct[]
 }
+
+// One work product on a saved Student Feedback Page.
+type StudentWorkProduct = { id: string; title: string; description: string; prompt: string; inputs: { image: boolean; name: boolean; explanation: boolean } }
 
 // The work products a saved Student Feedback Page asks for: by their ids,
 // else by name; neither found means both. The partners-student-page
@@ -13067,7 +13140,7 @@ function studentAssignmentUrl(link: StudentAssignmentLink): string {
 // need saving.
 function studentProductsKey(items: readonly FeedbackActivity[], assignment: LessonAssignment): string {
   return JSON.stringify({
-    products: items.map(({ id, name, submission }) => ({ id, name, submission })),
+    products: items.map(({ id, name, submission, title, description, inputs }) => ({ id, name, submission, title, description, inputs })),
     assignment: { title: assignment.title, description: assignment.description },
   })
 }
@@ -13281,11 +13354,6 @@ function SavedFeedbackPageLink({ url, classLabel }: { url: string; classLabel: s
   )
 }
 
-// The student work one assignment collects — for the prototype, a Model and
-// an Explanation (see studentProducts). Teachers review each, can edit its
-// description or remove it (and add it back), and confirm them together;
-// the assignment then gets one Student Feedback link (`children`). Initial
-// and revised submissions are versions of these products, not new items.
 // "Confirm Student Assignments" at the top of a workspace: scrolls to its
 // assignment section (instantly when the teacher prefers reduced motion) and
 // moves keyboard focus to the section's heading.
@@ -13411,71 +13479,133 @@ function activityWorkDescriptions(draft: ActivityDraft): Record<string, string> 
   ])
 }
 
-function StudentProductCollection({
-  headingId,
-  products,
-  items,
-  assignment,
-  workDescriptions,
-  confirmed,
-  onChange,
-  onConfirm,
-  children,
-}: {
+// Items saved before work products (the demo's, and lessons and activities
+// saved before) as work products, for Assignment Confirmation: each keeps its
+// id, title, prompt, and the description its card showed (the teacher's, else
+// the lesson's own text). A Model asks for a drawing and its name, an
+// Explanation for writing, and any other kind for all three, as its one
+// submission did. Only for display and editing — nothing is saved until the
+// teacher changes the student work, which then saves a new version.
+function legacyWorkProducts(items: readonly CollectionOpportunity[], workDescriptions: Record<string, string>): CollectionOpportunity[] {
+  return items.map((item) => {
+    const isExplanation = item.id === 'explanation' || (item.id !== 'model' && /explanation/i.test(item.name))
+    const isModel = item.id === 'model' || (!isExplanation && /model/i.test(item.name))
+    const description = item.description ?? workDescriptions[item.id] ?? workTypeFallback[item.id] ?? ''
+    const inputs: WorkInput[] = isExplanation ? ['explanation'] : isModel ? ['image', 'name'] : ['image', 'name', 'explanation']
+    return { id: item.id, name: item.title ?? item.name, ...(description ? { description } : {}), submission: item.submission, inputs }
+  })
+}
+
+type StudentProductCollectionProps = {
   headingId: string
-  // The lesson's two product types, in order (what a removed one comes back as).
-  products: readonly CollectionOpportunity[]
-  // The required student work, each with its Prompt for Students.
+  // The required student work: work products, or items saved before them
+  // (shown as work products, see legacyWorkProducts).
   items: readonly CollectionOpportunity[]
   assignment: LessonAssignment
-  // What each work type involves, by id (see workTypeDescriptions).
+  // An older item's description from the lesson, by work type (see workTypeDescriptions).
   workDescriptions: Record<string, string>
   confirmed: boolean
   onChange: (next: CollectionOpportunity[], assignment: LessonAssignment) => void
   onConfirm: () => void
   // The Student Feedback link, shown once confirmed.
   children: ReactNode
-}) {
-  // The assignment's title while its Edit is open (its description is kept
-  // as saved, not shown).
-  const [editingDetails, setEditingDetails] = useState<{ title: string } | null>(null)
-  // A work type's Prompt for Students while its Edit is open.
-  const [editing, setEditing] = useState<{ id: string; title: string; submission: string; description: string } | null>(null)
-  const descriptionOf = (item: CollectionOpportunity) => item.description ?? workDescriptions[item.id] ?? workTypeFallback[item.id] ?? ''
-  const removed = products.filter((product) => !items.some((item) => item.id === product.id))
-  const names = joinLabels(items.map((item) => item.name))
+}
 
-  const saveDetails = () => {
-    if (!editingDetails?.title.trim()) return
-    onChange([...items], { ...assignment, title: editingDetails.title.trim() })
-    setEditingDetails(null)
+// A work product while it's edited (or added).
+type WorkProductDraft = { id: string; isNew: boolean; title: string; description: string; submission: string; inputs: WorkInput[] }
+
+// Confirm Student Assignments, for every lesson and activity (the demo's
+// and older ones included): the assignment's title, then one card per work
+// product (title, description, Prompt for Students, and what students submit
+// as chips), which the teacher can edit, remove, or add (up to 4), then
+// confirm together for the assignment's one Student Feedback link. Each work
+// product is submitted, revised, and given AI feedback on its own tab of the
+// Student Feedback Page.
+function StudentProductCollection({ headingId, items: savedItems, assignment, workDescriptions, confirmed, onChange, onConfirm, children }: StudentProductCollectionProps) {
+  const [editingTitle, setEditingTitle] = useState<string | null>(null)
+  const [editing, setEditing] = useState<WorkProductDraft | null>(null)
+  // What the cards show and edit; an older list is converted here only.
+  const items = isWorkProductList(savedItems) ? savedItems : legacyWorkProducts(savedItems, workDescriptions)
+  const titleOf = (item: CollectionOpportunity) => item.title ?? item.name
+  const suggested = items.some((item) => item.suggested)
+
+  // A new title alone keeps the student work exactly as saved.
+  const saveTitle = () => {
+    if (!editingTitle?.trim()) return
+    onChange([...savedItems], { ...assignment, title: editingTitle.trim() })
+    setEditingTitle(null)
   }
+  const startAdding = () => {
+    let n = items.length + 1
+    while (items.some((item) => item.id === `wp-${n}`)) n += 1
+    setEditing({ id: `wp-${n}`, isNew: true, title: '', description: '', submission: '', inputs: ['image', 'name', 'explanation'] })
+  }
+  const toggleInput = (input: WorkInput) => {
+    if (!editing) return
+    const has = editing.inputs.includes(input)
+    // A model's title goes with its image.
+    const inputs = has ? editing.inputs.filter((item) => item !== input && !(input === 'image' && item === 'name')) : [...editing.inputs, input]
+    setEditing({ ...editing, inputs })
+  }
+  const canSave = Boolean(editing && editing.title.trim() && editing.submission.trim() && (editing.inputs.includes('image') || editing.inputs.includes('explanation')))
   const saveEdit = () => {
-    if (!editing?.submission.trim()) return
-    onChange(
-      items.map((item) => {
-        if (item.id !== editing.id) return item
-        // Saved only once the teacher changes it, so the card otherwise keeps
-        // following the lesson's text.
-        const description = editing.description.trim()
-        const edited = item.description !== undefined || description !== descriptionOf(item).trim()
-        const next: CollectionOpportunity = { ...item, submission: ensurePeriod(editing.submission.trim()), ...(edited ? { description } : {}) }
-        // A title left empty or set back to the work type's name is dropped.
-        const title = editing.title.trim()
-        if (title && title !== item.name) next.title = title
-        else delete next.title
-        return next
-      }),
-      assignment,
-    )
+    if (!editing || !canSave) return
+    const description = editing.description.trim()
+    // Reviewed by the teacher: no longer just the AI's suggestion.
+    const product: CollectionOpportunity = {
+      id: editing.id,
+      name: editing.title.trim(),
+      ...(description ? { description } : {}),
+      submission: ensurePeriod(editing.submission.trim()),
+      inputs: workInputs.filter((input) => editing.inputs.includes(input)),
+    }
+    onChange(editing.isNew ? [...items, product] : items.map((item) => (item.id === editing.id ? product : item)), assignment)
     setEditing(null)
   }
-  // Back in its usual place, in the lesson's product order.
-  const addBack = (product: CollectionOpportunity) =>
-    onChange(
-      products.flatMap((option) => (option.id === product.id ? [{ ...product }] : items.filter((item) => item.id === option.id))),
-      assignment,
-    )
+
+  const editor = editing && (
+    <div className="feedback-activity-editor">
+      <label>
+        <span>Title</span>
+        <input type="text" value={editing.title} autoFocus placeholder="e.g. Mechanistic Model" onChange={(event) => setEditing({ ...editing, title: event.target.value })} />
+      </label>
+      <label>
+        <span>Description</span>
+        <textarea rows={3} value={editing.description} onChange={(event) => setEditing({ ...editing, description: event.target.value })} />
+      </label>
+      <label>
+        <span>Prompt for Students</span>
+        <textarea rows={4} value={editing.submission} onChange={(event) => setEditing({ ...editing, submission: event.target.value })} />
+      </label>
+      <fieldset className="work-input-options">
+        <legend>Students submit</legend>
+        {workInputs.map((input) => (
+          <label key={input} className="work-input-option">
+            <input
+              type="checkbox"
+              checked={editing.inputs.includes(input)}
+              disabled={input === 'name' && !editing.inputs.includes('image')}
+              onChange={() => toggleInput(input)}
+            />
+            <span>{workInputLabels[input]}</span>
+          </label>
+        ))}
+        {!editing.inputs.includes('image') && !editing.inputs.includes('explanation') && (
+          <p className="work-input-hint" role="status">
+            Choose a Model / Drawing or a Written Explanation.
+          </p>
+        )}
+      </fieldset>
+      <div className="feedback-activity-actions">
+        <button type="button" className="primary-button" disabled={!canSave} onClick={saveEdit}>
+          {editing.isNew ? 'Add' : 'Save'}
+        </button>
+        <button type="button" className="secondary-button" onClick={() => setEditing(null)}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
 
   return (
     <section className="feedback-activities" aria-labelledby={headingId}>
@@ -13493,24 +13623,18 @@ function StudentProductCollection({
         )}
       </div>
 
-      {/* The assignment itself (one per lesson for now). */}
       <div className="assignment-details" aria-label="Assignment">
-        {editingDetails ? (
+        {editingTitle !== null ? (
           <div className="feedback-activity-editor">
             <label>
               <span>Assignment Title</span>
-              <input
-                type="text"
-                value={editingDetails.title}
-                autoFocus
-                onChange={(event) => setEditingDetails({ title: event.target.value })}
-              />
+              <input type="text" value={editingTitle} autoFocus onChange={(event) => setEditingTitle(event.target.value)} />
             </label>
             <div className="feedback-activity-actions">
-              <button type="button" className="primary-button" disabled={!editingDetails.title.trim()} onClick={saveDetails}>
+              <button type="button" className="primary-button" disabled={!editingTitle.trim()} onClick={saveTitle}>
                 Save
               </button>
-              <button type="button" className="secondary-button" onClick={() => setEditingDetails(null)}>
+              <button type="button" className="secondary-button" onClick={() => setEditingTitle(null)}>
                 Cancel
               </button>
             </div>
@@ -13521,12 +13645,7 @@ function StudentProductCollection({
               <p className="feedback-activity-name">{assignment.title || 'Untitled assignment'}</p>
             </div>
             <div className="feedback-activity-actions">
-              <button
-                type="button"
-                className="secondary-button"
-                aria-label="Edit assignment title"
-                onClick={() => setEditingDetails({ title: assignment.title })}
-              >
+              <button type="button" className="secondary-button" aria-label="Edit assignment title" onClick={() => setEditingTitle(assignment.title)}>
                 Edit
               </button>
             </div>
@@ -13534,90 +13653,86 @@ function StudentProductCollection({
         )}
       </div>
 
-      {items.length > 0 && (
-        <ul className="feedback-activity-list student-product-list">
-          {items.map((item) => (
-            <li key={item.id} data-work={item.id} className={`feedback-activity${confirmed ? ' confirmed' : ''}`}>
-              <div className="feedback-activity-text collection-opportunity-text">
-                {editing?.id !== item.id && <p className="feedback-activity-name">{item.title ?? item.name}</p>}
-                {editing?.id === item.id ? (
-                  <div className="feedback-activity-editor">
-                    <label>
-                      <span>Title</span>
-                      <input
-                        type="text"
-                        value={editing.title}
-                        autoFocus
-                        onChange={(event) => setEditing({ ...editing, title: event.target.value })}
-                      />
-                    </label>
-                    <label>
-                      <span>Description</span>
-                      <textarea rows={4} value={editing.description} onChange={(event) => setEditing({ ...editing, description: event.target.value })} />
-                    </label>
-                    <label>
-                      <span>Prompt for Students</span>
-                      <textarea rows={4} value={editing.submission} onChange={(event) => setEditing({ ...editing, submission: event.target.value })} />
-                    </label>
-                    <div className="feedback-activity-actions">
-                      <button type="button" className="primary-button" disabled={!editing.submission.trim()} onClick={saveEdit}>
-                        Save
-                      </button>
-                      <button type="button" className="secondary-button" onClick={() => setEditing(null)}>
-                        Cancel
-                      </button>
-                    </div>
+      <p className="empty-state-support work-products-note">
+        {suggested && !confirmed
+          ? 'Suggested by AI from your lesson — review and edit each work product before confirming.'
+          : 'Students submit, revise, and get AI feedback on each work product separately.'}
+      </p>
+
+      <ul className="feedback-activity-list student-product-list">
+        {items.map((item) => (
+          <li key={item.id} data-work={item.id} className={`feedback-activity work-product-card${confirmed ? ' confirmed' : ''}`}>
+            <div className="feedback-activity-text collection-opportunity-text">
+              {editing?.id === item.id ? (
+                editor
+              ) : (
+                <>
+                  <p className="feedback-activity-name">{titleOf(item)}</p>
+                  <p>
+                    <span className="collection-field-label">Description:</span>{' '}
+                    {item.description ? item.description : <span className="work-product-empty">None yet — add one with Edit.</span>}
+                  </p>
+                  <p>
+                    <span className="collection-field-label">Prompt for Students:</span> {item.submission}
+                  </p>
+                  {/* Only the inputs the teacher selected, each as a chip. */}
+                  <div className="work-product-inputs">
+                    <span className="collection-field-label">Students submit:</span>
+                    <span className="context-tags work-input-chips">
+                      {(item.inputs ?? []).map((input) => (
+                        <span key={input} className="tag work-input-chip">
+                          {workInputLabels[input]}
+                        </span>
+                      ))}
+                    </span>
                   </div>
-                ) : (
-                  <>
-                    <p>
-                      <span className="collection-field-label">Description:</span> {descriptionOf(item)}
-                    </p>
-                    <p>
-                      <span className="collection-field-label">Prompt for Students:</span> {item.submission}
-                    </p>
-                  </>
-                )}
-              </div>
-              {editing?.id !== item.id && (
-                <div className="feedback-activity-actions">
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    aria-label={`Edit ${item.name}`}
-                    onClick={() => setEditing({ id: item.id, title: item.title ?? item.name, submission: item.submission, description: descriptionOf(item) })}
-                  >
-                    Edit
-                  </button>
+                </>
+              )}
+            </div>
+            {editing?.id !== item.id && (
+              <div className="feedback-activity-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  aria-label={`Edit ${titleOf(item)}`}
+                  disabled={editing !== null}
+                  onClick={() =>
+                    setEditing({ id: item.id, isNew: false, title: titleOf(item), description: item.description ?? '', submission: item.submission, inputs: [...(item.inputs ?? [])] })
+                  }
+                >
+                  Edit
+                </button>
+                {items.length > 1 && (
                   <button
                     type="button"
                     className="ghost-button feedback-activity-remove"
-                    aria-label={`Remove ${item.name}`}
+                    aria-label={`Remove ${titleOf(item)}`}
+                    disabled={editing !== null}
                     onClick={() => onChange(items.filter((other) => other.id !== item.id), assignment)}
                   >
                     Remove
                   </button>
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
+                )}
+              </div>
+            )}
+          </li>
+        ))}
+        {editing?.isNew && (
+          <li className="feedback-activity work-product-card">
+            <div className="feedback-activity-text collection-opportunity-text">{editor}</div>
+          </li>
+        )}
+      </ul>
+
+      {!editing && items.length < maxWorkProducts && (
+        <button type="button" className="secondary-button feedback-add-button" onClick={startAdding}>
+          + Add Work Product
+        </button>
       )}
 
-      {removed.map((product) => (
-        <button key={product.id} type="button" className="secondary-button feedback-add-button" onClick={() => addBack(product)}>
-          + Add {product.name} back
-        </button>
-      ))}
-
       {!confirmed && items.length > 0 && (
-        <button
-          type="button"
-          className="primary-button activity-collection-confirm"
-          disabled={editing !== null || editingDetails !== null}
-          onClick={onConfirm}
-        >
-          Confirm {names}
+        <button type="button" className="primary-button activity-collection-confirm" disabled={editing !== null || editingTitle !== null} onClick={onConfirm}>
+          Confirm Student Work
         </button>
       )}
 
@@ -13627,9 +13742,7 @@ function StudentProductCollection({
           children
         ) : (
           <p className="feedback-link-pending" role="status">
-            {items.length === 0
-              ? `Pending — add the ${joinLabels(products.map((product) => product.name))} back to create the link.`
-              : `Pending — confirm the ${names} to create this assignment’s Student Feedback link.`}
+            Pending — confirm the student work to create this assignment’s Student Feedback link.
           </p>
         )}
       </div>
@@ -13661,7 +13774,6 @@ function StudentFeedbackActivities({
   return (
     <StudentProductCollection
       headingId="feedback-activities-heading"
-      products={studentProductsFor(lessonId)}
       items={activities}
       assignment={assignment}
       workDescriptions={workDescriptions}
@@ -14836,8 +14948,8 @@ function StudentLoginGate({
 function assignmentFromStudentPage(accessToken: string, lesson: StudentPageLesson): StudentAssignmentLink {
   const content = (lesson.content && typeof lesson.content === 'object' ? lesson.content : {}) as {
     format?: string
-    activity?: { title?: string; collection?: { id?: string; name?: string; submission?: string }[]; assignments?: unknown }
-    studentProducts?: { id?: string; name?: string; submission?: string }[]
+    activity?: { title?: string; collection?: SavedProductItem[]; assignments?: unknown }
+    studentProducts?: SavedProductItem[]
     assignments?: unknown
   }
   const isActivity = content.format === activityContentFormat
@@ -14847,12 +14959,36 @@ function assignmentFromStudentPage(accessToken: string, lesson: StudentPageLesso
   const activities = (Array.isArray(items) ? items : [])
     .filter((item) => item?.name && item.submission)
     .map((item) => ({ ...(item.id ? { id: item.id } : {}), name: item.name as string, submission: item.submission as string }))
+  const workProducts = savedWorkProducts(Array.isArray(items) ? items : [])
   return {
     lessonId: accessToken,
     lessonTitle: content.activity?.title || lesson.title,
     activities: activities.length > 0 ? activities : studentProducts.map(({ name, submission }) => ({ name, submission })),
     ...(saved.title ? { title: saved.title, description: saved.description } : {}),
+    ...(workProducts.length > 0 ? { workProducts } : {}),
   }
+}
+
+type SavedProductItem = { id?: string; name?: string; title?: string; description?: string; submission?: string; inputs?: unknown }
+
+// A saved version's work products, read as partners-student-page reads them
+// (workProductsOf): items with inputs, an id, and a prompt, at most 4.
+function savedWorkProducts(items: readonly SavedProductItem[]): StudentWorkProduct[] {
+  if (!items.some((item) => Array.isArray(item?.inputs))) return []
+  const seen = new Set<string>()
+  return items
+    .flatMap((item): StudentWorkProduct[] => {
+      const inputs = Array.isArray(item?.inputs) ? (item.inputs as unknown[]) : []
+      const image = inputs.includes('image')
+      const explanation = inputs.includes('explanation')
+      const id = typeof item.id === 'string' ? item.id.trim() : ''
+      const prompt = typeof item.submission === 'string' ? item.submission.trim() : ''
+      if (!id || seen.has(id) || !prompt || !(image || explanation)) return []
+      seen.add(id)
+      const title = (typeof item.title === 'string' && item.title.trim()) || (typeof item.name === 'string' && item.name.trim()) || 'Work product'
+      return [{ id, title, description: typeof item.description === 'string' ? item.description.trim() : '', prompt, inputs: { image, name: image && inputs.includes('name'), explanation } }]
+    })
+    .slice(0, maxWorkProducts)
 }
 
 // A student's sign-in on a saved page, kept for this browser tab only so a
@@ -14885,6 +15021,8 @@ function storeStudentSignIn(accessToken: string, signIn: SavedPageSignIn | null)
 // their model image with that session. Students have no account.
 function SavedStudentFeedbackPage({ accessToken }: { accessToken: string }) {
   const [signIn, setSignIn] = useState<SavedPageSignIn | null>(() => readStudentSignIn(accessToken))
+  // The work product tab shown (null: the first).
+  const [workProductId, setWorkProductId] = useState<string | null>(null)
   // The session from the sign-in being checked, used once the gate accepts it.
   const pendingSignInRef = useRef<SavedPageSignIn | null>(null)
   const [page, setPage] = useState<{ status: 'loading' } | { status: 'error' } | { status: 'ready'; assignment: StudentAssignmentLink }>({ status: 'loading' })
@@ -14940,21 +15078,74 @@ function SavedStudentFeedbackPage({ accessToken }: { accessToken: string }) {
         return result !== null
       }}
     >
-      <StudentFeedbackPage
-        key={`${accessToken}:${signIn?.studentId ?? 'preview'}`}
-        assignment={page.assignment}
-        saved
-        modelUpload={session ? (file) => uploadModelImage(accessToken, session, file) : undefined}
-        work={
-          session
-            ? {
-                submit: (input) => submitWork(accessToken, session, input),
-                load: () => loadMyWork(accessToken, session),
-                feedback: (message) => requestAiFeedback(accessToken, session, message),
-              }
-            : undefined
-        }
-      />
+      {page.assignment.workProducts ? (
+        // One tab per work product, each with its own submissions, AI
+        // feedback, and revisions. Every tab stays mounted (hidden when not
+        // shown), so switching never loses a draft.
+        <div className="work-product-workspace">
+          <div className="planning-tabs work-product-tabs" role="tablist" aria-label="Work products">
+            {page.assignment.workProducts.map((product, index) => {
+              const selected = product.id === (workProductId ?? page.assignment.workProducts![0].id)
+              return (
+                <button
+                  key={product.id}
+                  type="button"
+                  role="tab"
+                  id={`work-product-tab-${index}`}
+                  aria-selected={selected}
+                  aria-controls={`work-product-panel-${index}`}
+                  className={`planning-tab ${selected ? 'active' : ''}`}
+                  onClick={() => setWorkProductId(product.id)}
+                >
+                  {product.title}
+                </button>
+              )
+            })}
+          </div>
+          {page.assignment.workProducts.map((product, index) => (
+            <div
+              key={product.id}
+              id={`work-product-panel-${index}`}
+              role="tabpanel"
+              aria-labelledby={`work-product-tab-${index}`}
+              hidden={product.id !== (workProductId ?? page.assignment.workProducts![0].id)}
+            >
+              <StudentFeedbackPage
+                key={`${accessToken}:${signIn?.studentId ?? 'preview'}:${product.id}`}
+                assignment={page.assignment}
+                saved
+                workProduct={product}
+                modelUpload={session ? (file) => uploadModelImage(accessToken, session, file) : undefined}
+                work={
+                  session
+                    ? {
+                        submit: (input) => submitWork(accessToken, session, input, product.id),
+                        load: () => loadMyWork(accessToken, session, product.id),
+                        feedback: (message) => requestAiFeedback(accessToken, session, message, product.id),
+                      }
+                    : undefined
+                }
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <StudentFeedbackPage
+          key={`${accessToken}:${signIn?.studentId ?? 'preview'}`}
+          assignment={page.assignment}
+          saved
+          modelUpload={session ? (file) => uploadModelImage(accessToken, session, file) : undefined}
+          work={
+            session
+              ? {
+                  submit: (input) => submitWork(accessToken, session, input),
+                  load: () => loadMyWork(accessToken, session),
+                  feedback: (message) => requestAiFeedback(accessToken, session, message),
+                }
+              : undefined
+          }
+        />
+      )}
     </StudentLoginGate>
   )
 }
@@ -14965,6 +15156,7 @@ function StudentFeedbackPage({
   initialModelTab = 'descriptive',
   assignment = null,
   saved = false,
+  workProduct,
   modelUpload,
   work,
 }: {
@@ -14978,6 +15170,10 @@ function StudentFeedbackPage({
   // A Student Feedback Page saved in Supabase: the workspace starts empty and
   // its prompts are the teacher's confirmed ones (never mock content).
   saved?: boolean
+  // A saved page's work product shown here (one of the assignment's tabs):
+  // its prompt and the inputs it requires; absent: the Model and/or
+  // Explanation of one submission.
+  workProduct?: StudentWorkProduct
   // Saves the student's model image (signed-in student on a saved page);
   // returns its storage path.
   modelUpload?: (file: File) => Promise<string>
@@ -14993,9 +15189,23 @@ function StudentFeedbackPage({
 }) {
   // The work products students submit: on a saved page, only the ones the
   // teacher confirmed (each shown and required); the demo always has both.
-  const [products] = useState(() => (saved && assignment ? assignedProducts(assignment.activities) : { model: true, explanation: true }))
-  const productLabel = products.model && products.explanation ? 'Model and Explanation' : products.model ? 'Model' : 'Explanation'
+  const [products] = useState(() =>
+    workProduct
+      ? { model: workProduct.inputs.image, explanation: workProduct.inputs.explanation }
+      : saved && assignment
+        ? assignedProducts(assignment.activities)
+        : { model: true, explanation: true },
+  )
+  // A model is named unless its work product doesn't ask for a name.
+  const nameRequired = workProduct ? workProduct.inputs.name : true
+  const productLabel = workProduct ? workProduct.title : products.model && products.explanation ? 'Model and Explanation' : products.model ? 'Model' : 'Explanation'
   const [scenario] = useState(() => {
+    if (saved && workProduct) {
+      // The work product's one tab: its model (or its explanation) and its prompt.
+      const generic = genericFeedbackScenario(assignment?.lessonTitle ?? null)
+      const base = generic.tabs[workProduct.inputs.image ? 0 : 1]
+      return { ...generic, tabs: [{ ...base, id: workProduct.id, label: workProduct.title, prompt: workProduct.prompt }] }
+    }
     if (saved && assignment) {
       const generic = genericFeedbackScenario(assignment.lessonTitle)
       const promptFor = (id: string, label: string) =>
@@ -15165,7 +15375,7 @@ function StudentFeedbackPage({
           ? 'Add your model before submitting.'
           : upload === 'error'
             ? 'Your new model wasn’t saved. Add it again before submitting.'
-            : !modelName
+            : nameRequired && !modelName
               ? 'Name your model before submitting.'
               : null
     const missingText = products.explanation && !text ? 'Write your explanation before submitting.' : null
@@ -15173,14 +15383,17 @@ function StudentFeedbackPage({
       setSubmitStatus({ kind: 'error', message: (missing ?? missingText) as string })
       return
     }
-    if (event === 'final' && !window.confirm('Submit this as your final version? You won’t be able to revise it after this.')) return
+    const finalQuestion = workProduct
+      ? `Submit this as your final ${workProduct.title}? You won’t be able to revise it after this.`
+      : 'Submit this as your final version? You won’t be able to revise it after this.'
+    if (event === 'final' && !window.confirm(finalQuestion)) return
     setIsSubmitting(true)
     setSubmitStatus({ kind: 'saving', message: event === 'initial' ? `Submitting your ${productLabel.toLowerCase()}…` : 'Submitting your revision…' })
     try {
       const result = await work.submit({
         event,
         imagePath,
-        ...(modelTab ? { modelName } : {}),
+        ...(modelTab && nameRequired ? { modelName } : {}),
         ...(products.explanation ? { explanation: text } : {}),
       })
       setSubmitted({ versionNumber: result.versionNumber, event })
@@ -15285,6 +15498,8 @@ function StudentFeedbackPage({
   return (
     <div className="student-workspace-layout">
       <section className="student-model-panel">
+        {/* A work product is one tab of the page itself (no tabs here). */}
+        {!workProduct && (
         <div className="planning-tabs" role="tablist" aria-label="Model representation">
           {tabs.map((item) => (
             <button
@@ -15299,6 +15514,7 @@ function StudentFeedbackPage({
             </button>
           ))}
         </div>
+        )}
 
         <div className="model-representation-area">
           <div className="model-task-prompt">
@@ -15350,7 +15566,7 @@ function StudentFeedbackPage({
           )}
         </div>
 
-        {tab.kind === 'model' && (
+        {tab.kind === 'model' && nameRequired && (
           <label className="model-name-field">
             <span>Name Your Model</span>
             <input
@@ -15450,10 +15666,14 @@ function StudentFeedbackPage({
           <>
             <p className="empty-state-support deeper-analysis-subtitle">
               {!submitted
-                ? 'AI feedback is available after you submit your model and explanation.'
+                ? workProduct
+                  ? `AI feedback is available after you submit your ${workProduct.title}.`
+                  : 'AI feedback is available after you submit your model and explanation.'
                 : isFinalVersion
                   ? 'Your final version is submitted. Your feedback conversation is saved below.'
-                  : 'Answer the AI’s questions, revise your model or explanation, then submit your revision for new feedback.'}
+                  : workProduct
+                    ? 'Answer the AI’s questions, revise your work, then submit your revision for new feedback.'
+                    : 'Answer the AI’s questions, revise your model or explanation, then submit your revision for new feedback.'}
             </p>
             {submitted && (
               <div className="deeper-analysis-body">
@@ -16708,22 +16928,25 @@ function SavedStudentReports({
   >({ status: 'loading' })
   const [isGenerating, setIsGenerating] = useState(false)
   const [generateError, setGenerateError] = useState<string | null>(null)
+  // The work product reported on (null: the first, or a page made before
+  // work products).
+  const [workProductId, setWorkProductId] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
     const load = async () => {
       const pageId = await latestFeedbackPageId(lessonId)
       if (!pageId) return active && setState({ status: 'no-page' })
-      const page = await loadStudentReport(pageId, null)
+      const page = await loadStudentReport(pageId, null, workProductId)
       const student = studentCode ? page.students.find((item) => item.studentCode === studentCode) : undefined
-      const data = student ? await loadStudentReport(pageId, student.studentId) : page
+      const data = student ? await loadStudentReport(pageId, student.studentId, workProductId) : page
       if (active) setState({ status: 'ready', data })
     }
     load().catch((error) => active && setState({ status: 'error', message: toApiError(error).message }))
     return () => {
       active = false
     }
-  }, [lessonId, studentCode])
+  }, [lessonId, studentCode, workProductId])
 
   if (state.status === 'loading') return <p className="empty-state-support" role="status">Loading student reports…</p>
   if (state.status === 'no-page') {
@@ -16744,7 +16967,10 @@ function SavedStudentReports({
   const label = (student: { name: string; studentCode: string | null }) => (student.studentCode ? `${student.name} (${student.studentCode})` : student.name)
   const student = data.student
   const report = student?.report ?? null
-  const latestVersion = student ? student.versions[student.versions.length - 1].versionNumber : 0
+  const latestVersion = student && student.versions.length > 0 ? student.versions[student.versions.length - 1].versionNumber : 0
+  // Each work product has its own versions and report.
+  const workProducts = (data.context.workProducts ?? []).filter((product): product is { id: string; title: string; prompt: string } => product.id !== null)
+  const workProductTitle = workProducts.find((product) => product.id === data.workProductId)?.title ?? null
   const workView: WorkView = data.products.model && data.products.explanation ? 'both' : data.products.model ? 'model' : 'explanation'
   const objectives: ReportObjective[] = data.context.objectives.map((objective, index) => ({
     label: objectiveLabelFor(data.context.objectives, index),
@@ -16757,7 +16983,7 @@ function SavedStudentReports({
     setIsGenerating(true)
     setGenerateError(null)
     try {
-      const next = await generateStudentReport(data.feedbackPageId, student.studentId)
+      const next = await generateStudentReport(data.feedbackPageId, student.studentId, data.workProductId)
       setState({ status: 'ready', data: next })
     } catch (error) {
       setGenerateError(toApiError(error, 'Please try again.').message)
@@ -16785,12 +17011,38 @@ function SavedStudentReports({
           }}
         />
       </div>
+      {workProducts.length > 1 && (
+        <div className="planning-tabs work-product-tabs" role="tablist" aria-label="Work products">
+          {workProducts.map((product) => (
+            <button
+              key={product.id}
+              type="button"
+              role="tab"
+              aria-selected={product.id === data.workProductId}
+              className={`planning-tab ${product.id === data.workProductId ? 'active' : ''}`}
+              onClick={() => {
+                setGenerateError(null)
+                setWorkProductId(product.id)
+              }}
+            >
+              {product.title}
+            </button>
+          ))}
+        </div>
+      )}
       {!student ? (
         <p className="empty-state-support">Select a student to see their report.</p>
+      ) : student.versions.length === 0 ? (
+        <p className="empty-state-support">
+          {student.name} hasn’t submitted {workProductTitle ? `the ${workProductTitle}` : 'this work'} yet.
+        </p>
       ) : (
         <div className="student-report">
           <div className="student-report-heading">
-            <h4>{student.name}</h4>
+            <h4>
+              {student.name}
+              {workProductTitle && <span className="student-report-work-product"> · {workProductTitle}</span>}
+            </h4>
             {student.studentCode && <span className="roster-id">{student.studentCode}</span>}
             {/* Generate when there's no report; Update only when the student
                 has submitted since. An up-to-date report has no button. */}
@@ -16822,7 +17074,7 @@ function SavedStudentReports({
             </p>
           )}
           <StudentModelWorkView
-            key={student.studentId}
+            key={`${student.studentId}:${data.workProductId ?? ''}`}
             studentName={student.name}
             modelTab="descriptive"
             workType={workView}
@@ -18226,6 +18478,10 @@ function SavedClassFeedbackPage({
   const { data } = state
   const { context, statistics, summary } = data
   const objectiveLabel = (index: number) => objectiveLabelFor(context.objectives, index)
+  // The assignment's work products: findings, evidence, and next steps are
+  // each about one (none on a page made before work products).
+  const workProducts = (context.workProducts ?? []).filter((product): product is { id: string; title: string; prompt: string } => product.id !== null)
+  const workProductTitle = (id: string | null | undefined) => (id ? (workProducts.find((product) => product.id === id)?.title ?? null) : null)
   const findings = summary ? [...summary.overlap, ...summary.areasForImprovement] : []
   const selected = findings.find((finding) => finding.id === selectedFindingId) ?? null
   const selectedKind = selected && summary?.overlap.includes(selected) ? 'objective' : 'misconception'
@@ -18356,7 +18612,16 @@ function SavedClassFeedbackPage({
             {section.findings.length === 0 ? (
               <p className="empty-state-support">Nothing to report from the submitted work.</p>
             ) : (
-              section.findings.map((finding) => (
+              // With several work products, each one's findings are grouped under its title.
+              (workProducts.length > 1
+                ? workProducts.map((product) => ({ product, findings: section.findings.filter((finding) => finding.workProductId === product.id) }))
+                : [{ product: null, findings: section.findings }]
+              )
+                .filter((group) => group.findings.length > 0)
+                .map((group) => (
+                <div key={group.product?.id ?? 'all'} className={group.product ? 'summary-work-product' : undefined}>
+                  {group.product && <p className="summary-work-product-title">{group.product.title}</p>}
+                  {group.findings.map((finding) => (
                 <div key={finding.id} className="pattern-group">
                   <p className="pattern-group-title" title={context.objectives[finding.objectiveIndex]}>
                     {objectiveLabel(finding.objectiveIndex)}
@@ -18389,6 +18654,8 @@ function SavedClassFeedbackPage({
                     </div>
                   </div>
                 </div>
+                  ))}
+                </div>
               ))
             )}
           </div>
@@ -18415,6 +18682,7 @@ function SavedClassFeedbackPage({
         </div>
         {selected && (
           <p className={`evidence-context-row tag evidence-tag-${selectedKind}`}>
+            {workProductTitle(selected.workProductId) && `${workProductTitle(selected.workProductId)} · `}
             {objectiveLabel(selected.objectiveIndex)} · {pluralize(selected.artifactIds.length, 'student')}
           </p>
         )}
@@ -18548,7 +18816,7 @@ function SavedClassFeedbackPage({
               </div>
               <IdeaConversation
                 key={selected.id}
-                idea={`${objectiveLabel(selected.objectiveIndex)}: ${selected.summary}`}
+                idea={`${workProductTitle(selected.workProductId) ? `${workProductTitle(selected.workProductId)} · ` : ''}${objectiveLabel(selected.objectiveIndex)}: ${selected.summary}`}
                 kind={selectedKind}
                 messages={[
                   ...discussion.map((message): ChatMessage => ({ role: message.sender === 'teacher' ? 'teacher' : 'ai', text: message.text })),
@@ -18588,6 +18856,7 @@ function SavedClassFeedbackPage({
               {nextSteps.map((step) => (
                 <li key={step.id} className="next-step-item">
                   <p className="next-step-objective" title={context.objectives[step.objectiveIndex]}>
+                    {workProductTitle(step.workProductId) && <span className="next-step-work-product">{workProductTitle(step.workProductId)} · </span>}
                     {objectiveLabel(step.objectiveIndex)}
                     {step.practices.length > 0 && <span className="next-step-practices"> · {step.practices.join(' · ')}</span>}
                   </p>

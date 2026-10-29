@@ -7,6 +7,10 @@ import { ApiError, invokeFunction } from './core'
 // Student ID, a 2-hour signed session. Model images go straight to the
 // private student_artifacts bucket with a one-time signed upload URL the
 // function issues.
+//
+// A page whose assignment has work products (each submitted, revised, and
+// given AI feedback separately) names one with workProductId; a page made
+// before work products has none.
 
 export type StudentPageLesson = { title: string; grade_level: string; topic: string; content: unknown }
 
@@ -70,12 +74,12 @@ export type StudentWork = {
 
 export type StudentFeedbackMessage = { versionNumber: number; from: 'student' | 'ai'; text: string }
 
-export async function loadMyWork(accessToken: string, session: string): Promise<StudentWork | null> {
+export async function loadMyWork(accessToken: string, session: string, workProductId: string | null = null): Promise<StudentWork | null> {
   const result = await callStudentPage<{
     success?: boolean
     work?: { version_number: number; submission_event: StudentWork['submissionEvent']; model_name: string | null; explanation_text: string | null; image_view_url: string | null } | null
     feedback?: { version_number: number; sender_type: 'student' | 'ai'; message_content: string }[]
-  }>({ action: 'my_work', access_token: accessToken, session })
+  }>({ action: 'my_work', access_token: accessToken, session, ...(workProductId ? { work_product_id: workProductId } : {}) })
   if (result?.success !== true) throw new ApiError('Your work couldn’t be loaded.')
   const work = result.work
   return work
@@ -98,11 +102,13 @@ export async function submitWork(
   accessToken: string,
   session: string,
   work: { event: StudentWork['submissionEvent']; imagePath?: string; modelName?: string; explanation?: string },
+  workProductId: string | null = null,
 ): Promise<{ versionNumber: number }> {
   const result = await callStudentPage<{ success?: boolean; version_number?: number }>({
     action: 'submit_artifact',
     access_token: accessToken,
     session,
+    ...(workProductId ? { work_product_id: workProductId } : {}),
     submission_event: work.event,
     ...(work.imagePath ? { image_path: work.imagePath } : {}),
     ...(work.modelName ? { model_name: work.modelName } : {}),
@@ -114,11 +120,17 @@ export async function submitWork(
 
 // AI feedback on the student's newest version: the first feedback (no
 // message) or a reply to their message. The server saves both.
-export async function requestAiFeedback(accessToken: string, session: string, message: string | null): Promise<{ reply: string; versionNumber: number }> {
+export async function requestAiFeedback(
+  accessToken: string,
+  session: string,
+  message: string | null,
+  workProductId: string | null = null,
+): Promise<{ reply: string; versionNumber: number }> {
   const result = await callStudentPage<{ success?: boolean; reply?: string; version_number?: number }>({
     action: 'ai_feedback',
     access_token: accessToken,
     session,
+    ...(workProductId ? { work_product_id: workProductId } : {}),
     ...(message ? { message } : {}),
   })
   if (result?.success !== true || !result.reply || typeof result.version_number !== 'number') throw new ApiError('The AI couldn’t respond right now.')

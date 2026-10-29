@@ -8,12 +8,15 @@
 // section labels with the exact words each section starts with; the app
 // splits the teacher's own text there, so the lesson is never rewritten.
 
-import type { Config, Usage } from '../partners-generate-lesson/generate.ts'
+import { aiAllowedFor, reserveTeacherAiRequest, type Config, type Usage, type UseAiRequest } from '../partners-generate-lesson/generate.ts'
+import { readSuggestedWorkProducts, workProductSuggestionInstructions, workProductSuggestionSchema, type SuggestedWorkProduct } from '../partners-generate-lesson/workProducts.ts'
 
 export type ReviewDependencies = {
   config: Config
   maxOutputTokens: number
   authenticate: (token: string) => Promise<string | null>
+  // Counts one of the teacher's daily AI requests (see reserveTeacherAiRequest).
+  useAiRequest: UseAiRequest
   fetch: typeof fetch
   log?: (event: string, details: Record<string, unknown>) => void
 }
@@ -63,13 +66,14 @@ export const reviewInstructions = [
   'title: the lesson’s title as written in the lesson, or a short descriptive title if it has none. topic: the science topic in a few words. gradeLevel: the grade level the lesson states, else the given class grade level, else "".',
   'sections: the lesson’s parts in order (for example its objectives, materials, each activity or step, and assessment), 2 to 15 of them. label is a short name for the part (unique, no numbering prefixes needed). startsWith is the first 5 to 12 words of that part copied character for character from lessonText, so the app can find where it begins. The first section starts at the beginning of the lesson.',
   'suggestions: up to four improvements, ideally ones that strengthen how students use science practices (developing and using models, constructing explanations, arguing from evidence). section is the label of the section it is about; flaggedText is a short phrase or sentence copied character for character from that section; suggestion explains the idea in one or two sentences; addedText is one sentence to add to that section if the teacher accepts; summary is a short phrase describing the change.',
+  workProductSuggestionInstructions,
   'Never include student names or other personal information.',
 ].join('\n')
 
 export const reviewSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['title', 'topic', 'gradeLevel', 'sections', 'suggestions'],
+  required: ['title', 'topic', 'gradeLevel', 'sections', 'suggestions', 'workProducts'],
   properties: {
     title: { type: 'string' },
     topic: { type: 'string' },
@@ -94,6 +98,7 @@ export const reviewSchema = {
         },
       },
     },
+    workProducts: workProductSuggestionSchema,
   },
 } as const
 
@@ -103,6 +108,8 @@ export type ReviewOutput = {
   gradeLevel: string
   sections: { label: string; startsWith: string }[]
   suggestions: { section: string; flaggedText: string; suggestion: string; addedText: string; summary: string }[]
+  // Suggested student work for the lesson's assignment (empty: the app's default).
+  workProducts: SuggestedWorkProduct[]
 }
 
 class OutputError extends Error {}
@@ -147,7 +154,8 @@ export function readReviewOutput(raw: string, lessonText: string): { output: Rev
     .map((item) => ({ section: str(item.section), flaggedText: str(item.flaggedText), suggestion: str(item.suggestion), addedText: str(item.addedText), summary: str(item.summary) }))
     .filter((item) => item.section && item.suggestion && item.addedText && seen.has(item.section))
     .slice(0, 4)
-  return { output: { title: str(value.title), topic: str(value.topic), gradeLevel: str(value.gradeLevel), sections, suggestions }, warnings }
+  const workProducts = readSuggestedWorkProducts(value.workProducts)
+  return { output: { title: str(value.title), topic: str(value.topic), gradeLevel: str(value.gradeLevel), sections, suggestions, workProducts }, warnings }
 }
 
 // ---------------------------------------------------------------------------
@@ -175,7 +183,7 @@ export async function handleReviewLesson(request: Request, deps: ReviewDependenc
   const userId = token ? await deps.authenticate(token).catch(() => null) : null
   if (!userId) return failure(401, 'unauthorized', 'Teacher login required.')
   if (!config.enabled) return failure(503, 'generation_disabled', 'AI lesson review is turned off.')
-  if (!config.allowedUserIds.includes(userId)) return failure(403, 'not_authorized', 'AI lesson review isn’t available for this account yet.')
+  if (!aiAllowedFor(config, userId)) return failure(403, 'not_authorized', 'AI lesson review isn’t available for this account yet.')
   if (!config.apiKey) return failure(500, 'not_configured', 'AI lesson review isn’t configured on the server.')
 
   let input: ReviewInput
@@ -186,6 +194,10 @@ export async function handleReviewLesson(request: Request, deps: ReviewDependenc
   }
 
   // The one paid request. No retries.
+  // Every attempt from here on uses one of the teacher's daily AI requests.
+  const limited = await reserveTeacherAiRequest(deps.useAiRequest, userId, config.dailyTeacherLimit)
+  if (limited) return failure(limited.status, limited.code, limited.error)
+
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), config.timeoutMs)
   let reply: Response

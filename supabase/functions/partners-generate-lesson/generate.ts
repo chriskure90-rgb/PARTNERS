@@ -18,15 +18,21 @@
 // - The OpenAI key never leaves the server; responses aren't stored at
 //   OpenAI (store: false).
 
+import { readSuggestedWorkProducts, workProductSuggestionInstructions, workProductSuggestionSchema, type SuggestedWorkProduct } from './workProducts.ts'
+
 export type Config = {
   enabled: boolean
-  // Supabase Auth user ids allowed to generate; empty means nobody.
+  // Supabase Auth user ids allowed to use AI; "*" means every signed-in
+  // teacher, and empty means nobody.
   allowedUserIds: readonly string[]
   apiKey: string | null
   model: string
   maxOutputTokens: number
   reasoningEffort: string | null
   timeoutMs: number
+  // AI requests per teacher per day (UTC), shared by every teacher-facing AI
+  // function (TEACHER_AI_DAILY_LIMIT, default 30).
+  dailyTeacherLimit: number
 }
 
 export function readConfig(env: (name: string) => string | undefined): Config {
@@ -47,7 +53,49 @@ export function readConfig(env: (name: string) => string | undefined): Config {
     // "none" sends no reasoning setting (for a model that doesn't take one).
     reasoningEffort: effort === 'none' ? null : effort?.trim() || 'low',
     timeoutMs: number(env('OPENAI_REQUEST_TIMEOUT_MS'), 60_000, 5_000, 120_000),
+    dailyTeacherLimit: number(env('TEACHER_AI_DAILY_LIMIT'), 30, 1, 1000),
   }
+}
+
+// Whether this teacher may use AI: everyone signed in when the allowlist is
+// "*", else the listed accounts.
+export function aiAllowedFor(config: Config, userId: string): boolean {
+  return config.allowedUserIds.includes('*') || config.allowedUserIds.includes(userId)
+}
+
+// Counts one of the teacher's AI requests for today (UTC) if they're under
+// `limit`; false when today's are used up (nothing is counted then).
+export type UseAiRequest = (userId: string, limit: number) => Promise<boolean>
+
+// The use_teacher_ai_request database function (service role), as a
+// UseAiRequest.
+export function teacherAiCounter(
+  rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: unknown }>,
+): UseAiRequest {
+  return async (userId, limit) => {
+    const { data, error } = await rpc('use_teacher_ai_request', { p_user_id: userId, p_limit: limit })
+    if (error) throw error
+    return typeof data === 'number' && data >= 0
+  }
+}
+
+// Reserves one of the teacher's daily AI requests just before an AI call;
+// the failure to send back when it can't. Requests turned away before this
+// (not signed in, AI off, invalid input) never count.
+export async function reserveTeacherAiRequest(
+  useAiRequest: UseAiRequest,
+  userId: string,
+  limit: number,
+): Promise<{ status: number; code: string; error: string } | null> {
+  let allowed: boolean
+  try {
+    allowed = await useAiRequest(userId, limit)
+  } catch {
+    return { status: 503, code: 'ai_limit_unavailable', error: 'AI requests can’t be checked right now. Please try again later.' }
+  }
+  return allowed
+    ? null
+    : { status: 429, code: 'ai_daily_limit', error: `You’ve used today’s ${limit} AI requests. Try again tomorrow — the limit resets at midnight UTC.` }
 }
 
 // ---------------------------------------------------------------------------
@@ -210,6 +258,8 @@ export const lessonGenerationInstructions = [
   'Suggestions:',
   'suggestions: up to four short improvement ideas, ideally ones that strengthen how students use the selected practices. section is "Learning Objective N" or "Activity N" (1-based, matching your arrays). flaggedText is copied exactly from that section’s text; addedText is one sentence to add if the teacher accepts; summary is a short phrase describing the change.',
   '',
+  workProductSuggestionInstructions,
+  '',
   'Never include student names or other personal information.',
 ].join('\n')
 
@@ -228,7 +278,7 @@ export function lessonGenerationSchema(lesson: LessonInput) {
   return {
     type: 'object',
     additionalProperties: false,
-    required: ['title', 'learningObjectives', 'activities', 'customization', 'suggestions'],
+    required: ['title', 'learningObjectives', 'activities', 'customization', 'suggestions', 'workProducts'],
     properties: {
       title: { type: 'string' },
       learningObjectives: {
@@ -282,6 +332,7 @@ export function lessonGenerationSchema(lesson: LessonInput) {
           },
         },
       },
+      workProducts: workProductSuggestionSchema,
     },
   }
 }
@@ -297,6 +348,8 @@ export type LessonOutput = {
   activities: { sequenceStep: string; title: string; minutes: number; description: string; practiceMoves: string[]; objectives: number[] }[]
   customization: { field: CustomizationField; howUsed: string }[]
   suggestions: { section: string; flaggedText: string; suggestion: string; addedText: string; summary: string }[]
+  // Suggested student work for the lesson's assignment (empty: the app's default).
+  workProducts: SuggestedWorkProduct[]
 }
 
 class OutputError extends Error {}
@@ -384,7 +437,8 @@ export function readLessonOutput(raw: string, lesson: LessonInput): { output: Le
     }
   })
 
-  return { output: { title: text(data.title, 'title'), learningObjectives, activities, customization, suggestions }, warnings }
+  const workProducts = readSuggestedWorkProducts(data.workProducts)
+  return { output: { title: text(data.title, 'title'), learningObjectives, activities, customization, suggestions, workProducts }, warnings }
 }
 
 // ---------------------------------------------------------------------------
@@ -397,6 +451,8 @@ export type Dependencies = {
   config: Config
   // The signed-in user's id for a bearer token, or null.
   authenticate: (token: string) => Promise<string | null>
+  // Counts one of the teacher's daily AI requests (see reserveTeacherAiRequest).
+  useAiRequest: UseAiRequest
   fetch: typeof fetch
   log?: (event: string, details: Record<string, unknown>) => void
 }
@@ -423,7 +479,7 @@ export async function handleGenerateLesson(request: Request, deps: Dependencies)
   if (!userId) return failure(401, 'unauthorized', 'Teacher login required.')
 
   if (!config.enabled) return failure(503, 'generation_disabled', 'AI lesson generation is turned off.')
-  if (!config.allowedUserIds.includes(userId)) {
+  if (!aiAllowedFor(config, userId)) {
     return failure(403, 'not_authorized', 'AI lesson generation isn’t available for this account yet.')
   }
   if (!config.apiKey) return failure(500, 'not_configured', 'AI lesson generation isn’t configured on the server.')
@@ -436,6 +492,10 @@ export async function handleGenerateLesson(request: Request, deps: Dependencies)
   }
 
   // The one paid request. No retries: any failure goes back to the teacher.
+  // Every attempt from here on uses one of the teacher's daily AI requests.
+  const limited = await reserveTeacherAiRequest(deps.useAiRequest, userId, config.dailyTeacherLimit)
+  if (limited) return failure(limited.status, limited.code, limited.error)
+
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), config.timeoutMs)
   let reply: Response

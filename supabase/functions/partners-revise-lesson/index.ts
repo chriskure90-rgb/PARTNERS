@@ -6,8 +6,13 @@
 // History is written with the teacher's own token, so RLS applies.
 
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0'
-import { readConfig } from '../partners-generate-lesson/generate.ts'
+import { readConfig, teacherAiCounter } from '../partners-generate-lesson/generate.ts'
 import { handleReviseLesson, readRevisionMaxOutputTokens, type RevisionDb } from './revise.ts'
+
+// Counts teachers' daily AI requests (use_teacher_ai_request; service role only).
+const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
+  auth: { persistSession: false, autoRefreshToken: false },
+})
 
 const env = (name: string) => Deno.env.get(name)
 
@@ -65,6 +70,7 @@ Deno.serve((request) =>
       return error || !data.user ? null : data.user.id
     },
     db: revisionDb,
+    useAiRequest: teacherAiCounter((fn, args) => admin.rpc(fn, args)),
     fetch,
     // Usage and errors only — never lesson content or the API key.
     log: (event, details) => console.log(JSON.stringify({ event, ...details })),

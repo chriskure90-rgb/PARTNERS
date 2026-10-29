@@ -5039,6 +5039,95 @@ textarea {
   resize: vertical;
 }
 
+/* Work products: what students submit for each (checkboxes in its editor). */
+.work-input-options {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+}
+
+.work-input-options legend {
+  padding: 0;
+  margin-bottom: 4px;
+  width: 100%;
+}
+
+.feedback-activity-editor label.work-input-option {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.work-input-hint {
+  width: 100%;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9em;
+}
+
+.work-products-note {
+  margin: 0;
+}
+
+/* Each work product is its own rounded card, set apart from the next. */
+.student-product-list {
+  gap: 12px;
+}
+
+.feedback-activity.work-product-card {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #fbfcfe;
+  box-shadow: 0 1px 3px rgba(16, 42, 67, 0.08);
+}
+
+.work-product-card .feedback-activity-name {
+  font-size: 1rem;
+}
+
+.work-product-empty {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* Students submit: the selected inputs as chips. */
+.work-product-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-top: 8px;
+  font-size: 0.88rem;
+}
+
+.work-input-chips {
+  gap: 6px;
+}
+
+/* The Student Feedback Page's (and a student report's) work product tabs. */
+.work-product-tabs {
+  margin-bottom: 12px;
+}
+
+/* Class Summary: each work product's findings under its title. */
+.summary-work-product + .summary-work-product {
+  margin-top: 12px;
+}
+
+.summary-work-product-title {
+  margin: 0 0 6px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.next-step-work-product,
+.student-report-work-product {
+  font-weight: 600;
+}
+
 /* The assignment's title and description, above its student work cards. */
 .assignment-details {
   display: flex;

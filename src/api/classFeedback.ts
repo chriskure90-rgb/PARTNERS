@@ -16,6 +16,8 @@ export type ClassFinding = {
   nextStep?: string
   // The student work (artifact ids) behind the finding.
   artifactIds: string[]
+  // The work product it's about (null: a page made before work products).
+  workProductId?: string | null
 }
 
 export type ClassEvidence = {
@@ -29,11 +31,21 @@ export type ClassEvidence = {
   explanation: string | null
   // A short-lived link to view the model image.
   imageUrl: string | null
+  workProductId?: string | null
 }
 
 export type ClassFeedbackData = {
   feedbackPageId: string
-  context: { title: string; topic: string; gradeLevel: string; assignmentPrompt: { product: string; prompt: string }[]; objectives: string[]; practices: string[] }
+  context: {
+    title: string
+    topic: string
+    gradeLevel: string
+    assignmentPrompt: { product: string; prompt: string }[]
+    // The assignment's work products (one with id null: a page made before work products).
+    workProducts?: { id: string | null; title: string; prompt: string }[]
+    objectives: string[]
+    practices: string[]
+  }
   statistics: { enrolled: number; studentsSubmitted: number; averageVersions: number | null; resubmissions: number; finalSubmissions: number; aiFeedbackRequests: number }
   // studentsWithNewWork: students who submitted since the summary (0: up to date).
   summary: { generatedAt: string; sampleSize: number; overlap: ClassFinding[]; areasForImprovement: ClassFinding[]; studentsWithNewWork: number } | null
@@ -111,7 +123,9 @@ export type StudentReportData = {
 export type StudentReportPage = {
   feedbackPageId: string
   context: ClassFeedbackData['context']
-  // The work products the teacher confirmed for the assignment.
+  // The work product shown (null: a page made before work products), and
+  // what it requires.
+  workProductId: string | null
   products: { model: boolean; explanation: boolean }
   students: { studentId: string; name: string; studentCode: string | null; versions: number; latestEvent: string }[]
   aiAvailable: boolean
@@ -138,18 +152,31 @@ type StudentReportResponse = Omit<StudentReportPage, 'feedbackPageId' | 'aiAvail
 function readStudentReportPage(result: StudentReportResponse | null): StudentReportPage {
   if (result?.success !== true) throw new ApiError('Individual Student Reports couldn’t be loaded.')
   const { feedback_page_id: feedbackPageId, ai_available: aiAvailable, context, products, students, student } = result
-  return { feedbackPageId, aiAvailable, context, products, students, student }
+  return { feedbackPageId, aiAvailable, context, workProductId: result.workProductId ?? null, products, students, student }
 }
 
-// The students who submitted and, with a student, their versions, AI
+// The students who submitted and, with a student, their versions of a work
+// product (null: the first, or a page made before work products), AI
 // feedback conversations, and saved report.
-export async function loadStudentReport(feedbackPageId: string, studentId: string | null): Promise<StudentReportPage> {
+export async function loadStudentReport(feedbackPageId: string, studentId: string | null, workProductId: string | null = null): Promise<StudentReportPage> {
   return readStudentReportPage(
-    await callClassFeedback<StudentReportResponse>({ action: 'load_student_report', feedback_page_id: feedbackPageId, ...(studentId ? { student_id: studentId } : {}) }),
+    await callClassFeedback<StudentReportResponse>({
+      action: 'load_student_report',
+      feedback_page_id: feedbackPageId,
+      ...(studentId ? { student_id: studentId } : {}),
+      ...(workProductId ? { work_product_id: workProductId } : {}),
+    }),
   )
 }
 
-// Generates one student's report, or updates it after newer submissions.
-export async function generateStudentReport(feedbackPageId: string, studentId: string): Promise<StudentReportPage> {
-  return readStudentReportPage(await callClassFeedback<StudentReportResponse>({ action: 'generate_student_report', feedback_page_id: feedbackPageId, student_id: studentId }))
+// Generates one student's report on a work product, or updates it after newer submissions.
+export async function generateStudentReport(feedbackPageId: string, studentId: string, workProductId: string | null = null): Promise<StudentReportPage> {
+  return readStudentReportPage(
+    await callClassFeedback<StudentReportResponse>({
+      action: 'generate_student_report',
+      feedback_page_id: feedbackPageId,
+      student_id: studentId,
+      ...(workProductId ? { work_product_id: workProductId } : {}),
+    }),
+  )
 }

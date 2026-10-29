@@ -5,15 +5,17 @@
 // a service-role client. Actions:
 //   load_page        the confirmed lesson/activity version the page was made for
 //   verify_student   the Student ID is on the page's class roster
-//   my_work          the signed-in student's newest submission (read only)
+//   my_work          the signed-in student's newest submission of a work product (read only)
 //   model_upload_url a one-time signed upload URL for the student's model image
 //                    (private student_artifacts bucket, under the teacher's
 //                    folder: {teacher}/{page}/{student}/{random}.{ext})
-//   submit_artifact  a submission version (initial → revised… → final) with the
-//                    work products the teacher confirmed (model: image + name;
-//                    explanation: text); a revision without a new image or
-//                    model name keeps the previous version's
-//   ai_feedback      AI feedback on the student's newest version (feedback.ts):
+//   submit_artifact  a submission version (initial → revised… → final) of one
+//                    work product, with the inputs the teacher confirmed for
+//                    it (model image, model name, explanation); a revision
+//                    without a new image or model name keeps the previous
+//                    version's
+//   ai_feedback      AI feedback on the student's newest version of a work
+//                    product (feedback.ts), against that work product's prompt:
 //                    the first feedback, or a reply to the student's message;
 //                    the exchange is saved one message at a time in the
 //                    version's student_ai_conversations row
@@ -22,8 +24,16 @@
 // 2-hour signed session; the write actions require that session and take the
 // student from it, never from a typed ID. Writes also stay off unless
 // PARTNERS_PROTOTYPE_WRITES=true.
+//
+// Work products (see ../partners-generate-lesson/workProducts.ts): my_work,
+// submit_artifact, and ai_feedback name one with work_product_id, and each has
+// its own versions and AI conversations. A page made from a version saved
+// before work products has one, with no id (work_product_id null), as before.
+// The AI feedback limit is per student per page, across work products.
 
-import { assignmentContext, maxFeedbackPerDay, requestFeedback, requiredProducts, type FeedbackAi } from './feedback.ts'
+import { aiAllowedFor } from '../partners-generate-lesson/generate.ts'
+import { findWorkProduct, type WorkProduct } from '../partners-generate-lesson/workProducts.ts'
+import { assignmentContext, maxFeedbackPerDay, requestFeedback, type FeedbackAi } from './feedback.ts'
 
 export type Page = { feedback_page_id: string; class_id: string; lesson_id: string; lesson_version_id: string; user_id: string }
 
@@ -39,8 +49,9 @@ export type StudentPageDb = {
     learning_objectives?: string | null
     science_practices?: string[] | null
   } | null>
-  // The student's newest submissions on the page, newest first.
-  recentArtifacts: (pageId: string, studentId: string, limit: number) => Promise<Artifact[]>
+  // The student's newest submissions of one work product on the page (null:
+  // the pre-work-product one), newest first.
+  recentArtifacts: (pageId: string, studentId: string, limit: number, workProductId: string | null) => Promise<Artifact[]>
   // 'conflict' on a duplicate version number.
   insertArtifact: (row: {
     feedback_page_id: string
@@ -50,8 +61,9 @@ export type StudentPageDb = {
     model_name: string | null
     version_number: number
     submission_event: string
+    work_product_id: string | null
   }) => Promise<{ artifact_id: string; version_number: number; submission_event: string } | 'conflict'>
-  // The student's AI feedback messages on the page, oldest first.
+  // The student's AI feedback messages on the page (every work product), oldest first.
   feedbackMessages: (pageId: string, studentId: string) => Promise<FeedbackMessage[]>
   // The conversation for one submission version, and adding to it (one row
   // per message, so each gets its own created_at and the order is kept).
@@ -82,7 +94,15 @@ export type Artifact = {
   created_at: string
 }
 
-export type FeedbackMessage = { artifact_id: string; version_number: number; sender_type: 'student' | 'ai'; message_content: string; created_at: string }
+export type FeedbackMessage = {
+  artifact_id: string
+  version_number: number
+  // The work product of the version it's about (null: pre-work-product).
+  work_product_id: string | null
+  sender_type: 'student' | 'ai'
+  message_content: string
+  created_at: string
+}
 
 export type StudentPageDependencies = {
   db: StudentPageDb
@@ -198,6 +218,15 @@ async function verifyStudent(deps: StudentPageDependencies, req: Request, page: 
   return respond({ success: true, student_id_valid: true, session, expires_at: new Date(expiresAt).toISOString() })
 }
 
+// The page's lesson version and the work product a request names (none for
+// a page made before work products).
+async function pageWorkProduct(deps: StudentPageDependencies, page: Page, id: unknown) {
+  const lesson = await deps.db.loadLesson(page)
+  if (!lesson) throw new Error('Could not load lesson')
+  const product = findWorkProduct(lesson.content, id)
+  return product ? { lesson, product } : respond({ error: 'This work product isn’t part of the assignment.', code: 'unknown_work_product' }, 400)
+}
+
 // The signed-in student for a write: from the session, still on the roster.
 async function sessionStudent(deps: StudentPageDependencies, page: Page, token: unknown): Promise<string | Response> {
   if (!deps.sessionSecret) return respond({ error: 'Student sessions aren’t configured', code: 'not_configured' }, 503)
@@ -253,26 +282,27 @@ async function submitArtifact(deps: StudentPageDependencies, page: Page, body: R
     return respond({ error: 'Invalid model_name' }, 400)
   }
 
-  const [latest] = await deps.db.recentArtifacts(page.feedback_page_id, studentId, 1)
+  const found = await pageWorkProduct(deps, page, body.work_product_id)
+  if (found instanceof Response) return found
+  const { inputs } = found.product
+  // Each work product has its own versions: initial → revised… → final.
+  const [latest] = await deps.db.recentArtifacts(page.feedback_page_id, studentId, 1, found.product.id)
   if ((!latest && event !== 'initial') || (latest && event === 'initial') || latest?.submission_event === 'final') {
     return respond({ error: 'Invalid submission sequence' }, 409)
   }
 
-  // Every version (initial, revised, final) must have the work products the
-  // teacher confirmed for this page, and only those. A revision without a new
+  // Every version (initial, revised, final) must have the inputs the teacher
+  // confirmed for this work product, and only those. A revision without a new
   // model image or name keeps the previous version's.
-  const lesson = await deps.db.loadLesson(page)
-  if (!lesson) throw new Error('Could not load lesson')
-  const required = requiredProducts(lesson.content)
-  const imageUrl = required.model ? ((body.image_path as string | undefined) ?? latest?.image_url ?? null) : null
-  const name = required.model ? (typeof modelName === 'string' && modelName.trim() ? modelName.trim() : (latest?.model_name ?? null)) : null
-  const text = required.explanation && typeof explanation === 'string' && explanation.trim() ? explanation.trim() : null
+  const imageUrl = inputs.image ? ((body.image_path as string | undefined) ?? latest?.image_url ?? null) : null
+  const name = inputs.name ? (typeof modelName === 'string' && modelName.trim() ? modelName.trim() : (latest?.model_name ?? null)) : null
+  const text = inputs.explanation && typeof explanation === 'string' && explanation.trim() ? explanation.trim() : null
   const missing =
-    required.model && !imageUrl
+    inputs.image && !imageUrl
       ? { error: 'Add your model before submitting.', code: 'model_required' }
-      : required.model && !name
+      : inputs.name && !name
         ? { error: 'Name your model before submitting.', code: 'model_name_required' }
-        : required.explanation && !text
+        : inputs.explanation && !text
           ? { error: 'Write your explanation before submitting.', code: 'explanation_required' }
           : null
   if (missing) return respond(missing, 400)
@@ -285,6 +315,7 @@ async function submitArtifact(deps: StudentPageDependencies, page: Page, body: R
     model_name: name,
     version_number: latest ? latest.version_number + 1 : 1,
     submission_event: event,
+    work_product_id: found.product.id,
   })
   if (artifact === 'conflict') return respond({ error: 'Submission version conflict' }, 409)
   return respond(
@@ -293,14 +324,19 @@ async function submitArtifact(deps: StudentPageDependencies, page: Page, body: R
   )
 }
 
-// The signed-in student's newest submission on the page and their AI
-// feedback so far (read only), so a returning student continues from there.
+// A work product's messages (by the version they're about).
+const sameProduct = (messages: FeedbackMessage[], product: WorkProduct) => messages.filter((m) => (m.work_product_id ?? null) === product.id)
+
+// The signed-in student's newest submission of a work product and their AI
+// feedback on it so far (read only), so a returning student continues from there.
 async function myWork(deps: StudentPageDependencies, page: Page, body: Record<string, unknown>) {
   const studentId = await sessionStudent(deps, page, body.session)
   if (studentId instanceof Response) return studentId
-  const [work] = await deps.db.recentArtifacts(page.feedback_page_id, studentId, 1)
+  const found = await pageWorkProduct(deps, page, body.work_product_id)
+  if (found instanceof Response) return found
+  const [work] = await deps.db.recentArtifacts(page.feedback_page_id, studentId, 1, found.product.id)
   if (!work) return respond({ success: true, work: null, feedback: [] })
-  const messages = await deps.db.feedbackMessages(page.feedback_page_id, studentId)
+  const messages = sameProduct(await deps.db.feedbackMessages(page.feedback_page_id, studentId), found.product)
   return respond({
     success: true,
     work: {
@@ -327,14 +363,18 @@ async function aiFeedback(deps: StudentPageDependencies, page: Page, body: Recor
     return respond({ error: 'Write a message of at most 1000 characters.' }, 400)
   }
   const ai = deps.ai
-  if (!ai || !ai.config.enabled || !ai.config.apiKey || !ai.config.allowedUserIds.includes(page.user_id)) {
+  if (!ai || !ai.config.enabled || !ai.config.apiKey || !aiAllowedFor(ai.config, page.user_id)) {
     return respond({ error: 'AI feedback isn’t turned on for this page yet.', code: 'feedback_unavailable' }, 503)
   }
-  const [latest, previous] = await deps.db.recentArtifacts(page.feedback_page_id, studentId, 2)
-  if (!latest) return respond({ error: 'Submit your model and explanation first.', code: 'nothing_submitted' }, 409)
+  const found = await pageWorkProduct(deps, page, body.work_product_id)
+  if (found instanceof Response) return found
+  const { lesson, product } = found
+  const [latest, previous] = await deps.db.recentArtifacts(page.feedback_page_id, studentId, 2, product.id)
+  if (!latest) return respond({ error: product.id ? 'Submit your work first.' : 'Submit your model and explanation first.', code: 'nothing_submitted' }, 409)
   if (latest.submission_event === 'final') return respond({ error: 'Your final version is submitted.', code: 'final_submitted' }, 409)
 
   const now = deps.now?.() ?? Date.now()
+  // The daily limit counts replies on every work product of the page.
   const messages = await deps.db.feedbackMessages(page.feedback_page_id, studentId)
   const usedToday = messages.filter((m) => m.sender_type === 'ai' && Date.parse(m.created_at) > now - 24 * 60 * 60 * 1000).length
   if (usedToday >= maxFeedbackPerDay) {
@@ -343,13 +383,11 @@ async function aiFeedback(deps: StudentPageDependencies, page: Page, body: Recor
   const current = messages.filter((m) => m.artifact_id === latest.artifact_id)
   if (message === null && current.length > 0) return respond({ error: 'Write a message to the AI.' }, 400)
 
-  const lesson = await deps.db.loadLesson(page)
-  if (!lesson) throw new Error('Could not load lesson')
   const imageUrl = ai.imageInput && latest.image_url ? await deps.db.signedImageUrl(latest.image_url) : null
   const result = await requestFeedback(
     ai,
     {
-      assignment: assignmentContext(lesson),
+      assignment: assignmentContext(lesson, product),
       work: {
         version: latest.version_number,
         event: latest.submission_event,

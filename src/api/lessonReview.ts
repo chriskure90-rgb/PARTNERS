@@ -1,5 +1,5 @@
 import { ApiError, invokeFunction } from './core'
-import type { GenerationUsage } from './lessonGeneration'
+import type { GenerationUsage, SuggestedWorkProduct } from './lessonGeneration'
 
 // AI review of an uploaded lesson through the partners-review-lesson Edge
 // Function: where each section starts, and revision suggestions. The lesson
@@ -11,6 +11,8 @@ export type LessonReview = {
   gradeLevel: string
   sections: { label: string; startsWith: string }[]
   suggestions: { section: string; flaggedText: string; suggestion: string; addedText: string; summary: string }[]
+  // Empty or absent: the app's default student work.
+  workProducts?: SuggestedWorkProduct[]
 }
 
 export async function reviewUploadedLesson(input: { lessonText: string; fileName: string; gradeLevel: string }): Promise<{

@@ -2,7 +2,7 @@ import { getSupabase } from '../lib/supabase'
 import { ApiError, requireUserId, toApiError } from './core'
 
 // Class Setup against the deployed tables: users (the teacher's profile),
-// classes, and class_enrollments → students. Every request runs as the
+// classes, and students (each in one class: students.class_id). Every request runs as the
 // signed-in teacher, so RLS limits it to their own rows; reads also filter
 // by user_id explicitly. Rows are returned as stored; App maps them to its
 // own types.
@@ -29,6 +29,7 @@ export type RosterStudent = {
   studentName: string
   // The teacher-defined Student ID students sign in with.
   studentPseudonym: string
+  // When the student was added to the class.
   enrolledAt: string
 }
 
@@ -113,29 +114,24 @@ export async function createClass(input: { className: string; gradeLevel: string
   return toClassRecord(data as ClassRow)
 }
 
-// Each class's enrolled students, by class_id (classes with no students
-// are absent).
+// Each class's students, by class_id, in the order they were added (classes
+// with no students are absent). Each student belongs to one class.
 export async function listRosters(classIds: readonly string[]): Promise<Record<string, RosterStudent[]>> {
   if (classIds.length === 0) return {}
   await requireUserId()
   const { data, error } = await getSupabase()
-    .from('class_enrollments')
-    .select('class_id, created_at, students(student_id, student_name, student_pseudonym)')
+    .from('students')
+    .select('class_id, student_id, student_name, student_pseudonym, created_at')
     .in('class_id', [...classIds])
     .order('created_at')
   if (error) throw toApiError(error, 'Couldn’t load the class rosters.')
-  type EnrollmentRow = {
-    class_id: string
-    created_at: string
-    students: { student_id: string; student_name: string; student_pseudonym: string } | null
-  }
+  type StudentRow = { class_id: string; student_id: string; student_name: string; student_pseudonym: string; created_at: string }
   const rosters: Record<string, RosterStudent[]> = {}
-  for (const row of data as unknown as EnrollmentRow[]) {
-    if (!row.students) continue
+  for (const row of data as StudentRow[]) {
     ;(rosters[row.class_id] ??= []).push({
-      studentId: row.students.student_id,
-      studentName: row.students.student_name,
-      studentPseudonym: row.students.student_pseudonym,
+      studentId: row.student_id,
+      studentName: row.student_name,
+      studentPseudonym: row.student_pseudonym,
       enrolledAt: row.created_at,
     })
   }
@@ -144,8 +140,7 @@ export async function listRosters(classIds: readonly string[]): Promise<Record<s
 
 // Registers students in a class through the existing
 // register_student_roster(p_class_id uuid, p_students jsonb) function, which
-// writes students and class_enrollments. Each student needs a name and the
-// Student ID the app generated for them.
+// writes each new student with their class (students.class_id).
 // Adds students to the class. The server creates each new student's Student
 // ID (8 random characters); a student already in the class is matched by
 // their ID. Returns each student's record id and Student ID, in order.

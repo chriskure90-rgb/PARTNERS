@@ -12,7 +12,12 @@
 // SUPABASE_URL and SUPABASE_ANON_KEY are provided by the Edge runtime.
 
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0'
-import { handleGenerateLesson, readConfig } from './generate.ts'
+import { handleGenerateLesson, readConfig, teacherAiCounter } from './generate.ts'
+
+// Counts teachers' daily AI requests (use_teacher_ai_request; service role only).
+const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
+  auth: { persistSession: false, autoRefreshToken: false },
+})
 
 Deno.serve((request) =>
   handleGenerateLesson(request, {
@@ -24,6 +29,7 @@ Deno.serve((request) =>
       const { data, error } = await supabase.auth.getUser(token)
       return error || !data.user ? null : data.user.id
     },
+    useAiRequest: teacherAiCounter((fn, args) => admin.rpc(fn, args)),
     fetch,
     // Usage and errors only — never lesson content or the API key.
     log: (event, details) => console.log(JSON.stringify({ event, ...details })),

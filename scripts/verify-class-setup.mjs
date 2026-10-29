@@ -67,14 +67,13 @@ const { data: unfiltered, error: unfilteredError } = await a.client.from('classe
 check(!unfilteredError && unfiltered.every((row) => row.user_id === a.userId), 'RLS: an unfiltered query still returns only Teacher A’s classes')
 
 if (classes.length > 0) {
-  const { data: enrollments, error } = await a.client
-    .from('class_enrollments')
-    .select('class_id, students(student_id, student_name, student_pseudonym)')
+  const { data: students, error } = await a.client
+    .from('students')
+    .select('class_id, student_id, student_name, student_pseudonym')
     .in('class_id', classes.map((row) => row.class_id))
   check(!error, `roster query works${error ? ` (${error.message})` : ''}`)
   if (!error) {
-    const withStudent = enrollments.filter((row) => row.students)
-    check(withStudent.every((row) => row.students.student_pseudonym), `${enrollments.length} enrollment(s); every enrolled student has a Student ID`)
+    check(students.every((row) => row.student_pseudonym), `${students.length} student(s); every student has a Student ID`)
   }
 }
 
@@ -97,11 +96,13 @@ if (write) {
       p_students: [{ student_name: 'Test Student', student_pseudonym: 'XP-001' }],
     })
     check(!rpcError && registered?.success === true, `register_student_roster added a test student${rpcError ? ` (${rpcError.message})` : ''}`)
+    // The server creates each new student's Student ID.
+    const newId = registered?.students?.[0]?.student_pseudonym
     const { data: roster } = await a.client
-      .from('class_enrollments')
-      .select('students(student_name, student_pseudonym)')
+      .from('students')
+      .select('student_name, student_pseudonym')
       .eq('class_id', created.class_id)
-    check((roster ?? []).some((row) => row.students?.student_pseudonym === 'XP-001'), 'the registered student is on the roster with Student ID XP-001')
+    check(Boolean(newId) && (roster ?? []).some((row) => row.student_pseudonym === newId), `the registered student is on the roster with their new Student ID (${newId})`)
   }
 }
 
@@ -113,7 +114,7 @@ if (b) {
   if (target) {
     const { data, error } = await b.client.from('classes').select('class_id').eq('class_id', target.class_id)
     check(!error && data.length === 0, 'Teacher B cannot read Teacher A’s class by its class_id')
-    const { data: roster } = await b.client.from('class_enrollments').select('class_id').eq('class_id', target.class_id)
+    const { data: roster } = await b.client.from('students').select('class_id').eq('class_id', target.class_id)
     check((roster ?? []).length === 0, 'Teacher B cannot read Teacher A’s roster')
   }
   // Write attempts (rejected if RLS / the function's checks are right), so only with --write.

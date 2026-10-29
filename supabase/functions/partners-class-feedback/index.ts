@@ -11,7 +11,7 @@
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2'
-import { readConfig } from '../partners-generate-lesson/generate.ts'
+import { readConfig, teacherAiCounter } from '../partners-generate-lesson/generate.ts'
 import { handleClassFeedback, readClassFeedbackSettings, type ClassDb } from './classFeedback.ts'
 
 const env = (name: string) => Deno.env.get(name)
@@ -57,14 +57,14 @@ const classDb: ClassDb = {
     }
   },
   enrolledCount: async (classId) => {
-    const { count, error } = await db.from('class_enrollments').select('enrollment_id', { count: 'exact', head: true }).eq('class_id', classId)
+    const { count, error } = await db.from('students').select('student_id', { count: 'exact', head: true }).eq('class_id', classId)
     if (error) throw error
     return count ?? 0
   },
   artifacts: async (pageId) => {
     const { data, error } = await db
       .from('student_artifacts')
-      .select('artifact_id,student_id,version_number,submission_event,model_name,explanation_text,image_url,created_at,students(student_name,student_pseudonym)')
+      .select('artifact_id,student_id,version_number,submission_event,model_name,explanation_text,image_url,created_at,work_product_id,students(student_name,student_pseudonym)')
       .eq('feedback_page_id', pageId)
       .order('created_at', { ascending: true })
       .limit(2000)
@@ -198,6 +198,7 @@ Deno.serve((req: Request) =>
   handleClassFeedback(req, {
     db: classDb,
     ai: { config: readConfig(env), ...settings, fetch },
+    useAiRequest: teacherAiCounter((fn, args) => db.rpc(fn, args)),
     // Usage and errors only — never student work or the API key.
     log: (event, details) => console.log(JSON.stringify({ event, ...details })),
   }),

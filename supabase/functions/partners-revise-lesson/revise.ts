@@ -13,7 +13,7 @@
 // every later message are added to that conversation one row at a time, so
 // each gets its own created_at and the order is kept.
 
-import type { Config, Usage } from '../partners-generate-lesson/generate.ts'
+import { aiAllowedFor, reserveTeacherAiRequest, type Config, type Usage, type UseAiRequest } from '../partners-generate-lesson/generate.ts'
 
 export type RevisionDb = {
   // The lesson's current version id, or null when it isn't the caller's lesson.
@@ -30,6 +30,8 @@ export type RevisionDependencies = {
   config: Config
   maxOutputTokens: number
   authenticate: (token: string) => Promise<string | null>
+  // Counts one of the teacher's daily AI requests (see reserveTeacherAiRequest).
+  useAiRequest: UseAiRequest
   // Database access as the signed-in teacher (their token, RLS enforced).
   db: (token: string) => RevisionDb
   fetch: typeof fetch
@@ -167,7 +169,7 @@ export async function handleReviseLesson(request: Request, deps: RevisionDepende
   const userId = token ? await deps.authenticate(token).catch(() => null) : null
   if (!userId) return failure(401, 'unauthorized', 'Teacher login required.')
   if (!config.enabled) return failure(503, 'generation_disabled', 'AI lesson revision is turned off.')
-  if (!config.allowedUserIds.includes(userId)) return failure(403, 'not_authorized', 'AI lesson revision isn’t available for this account yet.')
+  if (!aiAllowedFor(config, userId)) return failure(403, 'not_authorized', 'AI lesson revision isn’t available for this account yet.')
   if (!config.apiKey) return failure(500, 'not_configured', 'AI lesson revision isn’t configured on the server.')
 
   let input: RevisionInput
@@ -183,6 +185,10 @@ export async function handleReviseLesson(request: Request, deps: RevisionDepende
   if (!sourceVersionId) return failure(404, 'lesson_not_found', 'This lesson isn’t saved to your Library, so it can’t be revised with AI.')
 
   // The one paid request. No retries.
+  // Every attempt from here on uses one of the teacher's daily AI requests.
+  const limited = await reserveTeacherAiRequest(deps.useAiRequest, userId, config.dailyTeacherLimit)
+  if (limited) return failure(limited.status, limited.code, limited.error)
+
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), config.timeoutMs)
   let reply: Response
