@@ -34,7 +34,7 @@ import { listLessonsForClasses, saveLessonVersion, saveNewLesson, type LessonFie
 import { generateLesson, type GenerationUsage, type SuggestedWorkProduct } from './api/lessonGeneration'
 import { reviseLessonSection, revisionSuggestionForConversation, saveRevisionAction, saveRevisionSuggestion } from './api/lessonRevision'
 import { brainstormReplyFromAi, saveBrainstormConversation, type BrainstormRequest } from './api/brainstorm'
-import { generateActivityDraft, latestStudentFeedbackPage, studentFeedbackPageFor, type GeneratedActivity } from './api/practiceActivity'
+import { generateActivityDraft, latestStudentFeedbackPage, newestStudentFeedbackPage, studentFeedbackPageFor, type GeneratedActivity } from './api/practiceActivity'
 import { reviewUploadedLesson, type LessonReview } from './api/lessonReview'
 import { LessonFileError, lessonFileAccept, readLessonFile } from './lib/lessonFile'
 import {
@@ -3150,15 +3150,19 @@ function App({ session, entryPage, onSignIn, onSignUp, onExploreDemo, onExitDemo
           if (!active) return
           const framework = (currentAccount.state ?? 'NGSS') as StandardsFrameworkId
           // Each lesson's newest Student Feedback Page (a failed lookup just
-          // leaves that lesson without one).
-          const pageTokens = usesSupabase('studentFeedback')
-            ? await Promise.all(stored.map((item) => latestStudentFeedbackPage(item.lessonId).catch(() => null)))
+          // leaves that lesson without one). A page for the current version
+          // means the teacher confirmed it: the lesson opens confirmed.
+          const pages = usesSupabase('studentFeedback')
+            ? await Promise.all(stored.map((item) => newestStudentFeedbackPage(item.lessonId).catch(() => null)))
             : stored.map(() => null)
           if (!active) return
-          const lessons = stored.map((item, index) => ({
-            ...libraryLessonFromStored(item, index, email, framework),
-            studentFeedback: savedPageAssignments(item.lessonId, pageTokens[index]),
-          }))
+          const lessons = stored.map((item, index) =>
+            withSavedConfirmation(
+              { ...libraryLessonFromStored(item, index, email, framework), studentFeedback: savedPageAssignments(item.lessonId, pages[index]?.accessUrl ?? null) },
+              pages[index],
+              item.currentVersion?.lessonVersionId,
+            ),
+          )
           remoteLessonIdsRef.current = new Set(stored.map((item) => item.lessonId))
           for (const item of stored) {
             const content = readSavedLessonContent(item.currentVersion?.content)
@@ -4329,7 +4333,16 @@ function App({ session, entryPage, onSignIn, onSignUp, onExploreDemo, onExitDemo
           pageUrl: async (lessonId, lessonVersionId) => {
             const pageToken = await studentFeedbackPageFor(lessonId, lessonVersionId)
             rememberStudentFeedbackPage(lessonId, pageToken)
-            return savedStudentPageUrl(pageToken)
+            const url = savedStudentPageUrl(pageToken)
+            // Reopening the activity from the Library shows it confirmed.
+            setLibraryLessons((prev) =>
+              prev.map((lesson) =>
+                lesson.id === lessonId && lesson.lessonPlan.activity?.lessonVersionId === lessonVersionId
+                  ? { ...lesson, lessonPlan: { ...lesson.lessonPlan, activity: { ...lesson.lessonPlan.activity, confirmed: true, pageUrl: url } } }
+                  : lesson,
+              ),
+            )
+            return url
           },
         }
       : null
@@ -9093,6 +9106,9 @@ type SavedActivityOpen = {
   draft: ActivityDraft
   collection: CollectionOpportunity[]
   assignment: LessonAssignment
+  // The current version has a Student Feedback Page (it was confirmed), at this URL.
+  confirmed?: boolean
+  pageUrl?: string
 }
 
 // A Science Practice Activity's assignment before the teacher edits it: the
@@ -9121,6 +9137,26 @@ function readSavedActivity(stored: StoredLesson): SavedActivityOpen | undefined 
     draft,
     collection: activity.collection,
     assignment: readAssignment(activity.assignments, () => defaultActivityAssignment(draft)),
+  }
+}
+
+// A lesson whose current version has a Student Feedback Page was confirmed —
+// pages are only made by confirming — so it opens confirmed, with that page
+// (nothing is saved). Without one, it opens as its saved version says.
+function withSavedConfirmation(
+  lesson: LibraryLesson,
+  page: { accessUrl: string; lessonVersionId: string } | null,
+  currentVersionId: string | undefined,
+): LibraryLesson {
+  if (!page || !currentVersionId || page.lessonVersionId !== currentVersionId) return lesson
+  const { feedbackActivities, activity } = lesson.lessonPlan
+  return {
+    ...lesson,
+    lessonPlan: {
+      ...lesson.lessonPlan,
+      ...(feedbackActivities && feedbackActivities.length > 0 ? { feedbackActivities: feedbackActivities.map((item) => ({ ...item, confirmed: true })) } : {}),
+      ...(activity ? { activity: { ...activity, confirmed: true, pageUrl: savedStudentPageUrl(page.accessUrl) } } : {}),
+    },
   }
 }
 
@@ -12509,7 +12545,8 @@ function LessonPlanningPage({
   // The activity's assignment (title and description); null: the draft's own.
   const [activityAssignment, setActivityAssignment] = useState<LessonAssignment | null>(openedActivity?.assignment ?? null)
   const assignment = activityAssignment ?? (activityDraft ? defaultActivityAssignment(activityDraft) : null)
-  const [collectionConfirmed, setCollectionConfirmed] = useState(false)
+  // A saved activity whose current version has its Student Feedback Page opens confirmed.
+  const [collectionConfirmed, setCollectionConfirmed] = useState(Boolean(openedActivity?.confirmed))
   // Identifies this activity in its Student Feedback link.
   const [activityLinkId] = useState(() => `activity-${Date.now()}`)
   const activityTimeoutRef = useRef<number | null>(null)
@@ -12542,7 +12579,9 @@ function LessonPlanningPage({
       : null,
   )
   const savedConversationCountRef = useRef(0)
-  const [activityPageUrl, setActivityPageUrl] = useState<string | null>(null)
+  const [activityPageUrl, setActivityPageUrl] = useState<string | null>(openedActivity?.pageUrl ?? null)
+  // The confirmed student work's page, restored when the teacher cancels an edit.
+  const confirmedPageUrlRef = useRef<string | null>(openedActivity?.pageUrl ?? null)
   const [activityStatus, setActivityStatus] = useState<LessonWorkspaceCanvasProps['saveStatus']>(
     openedActivity ? { kind: 'saved', message: `Opened your saved activity (version ${openedActivity.versionNumber}).` } : null,
   )
@@ -12644,7 +12683,9 @@ function LessonPlanningPage({
         version = { lessonId: saved.lessonId, lessonVersionId: saved.lessonVersionId, collectionJson: activityWorkKey(collection, assignment) }
         setSavedActivity(version)
       }
-      setActivityPageUrl(await activityRemote.pageUrl(version.lessonId, version.lessonVersionId))
+      const url = await activityRemote.pageUrl(version.lessonId, version.lessonVersionId)
+      confirmedPageUrlRef.current = url
+      setActivityPageUrl(url)
       setCollectionConfirmed(true)
       setActivityStatus({ kind: 'saved', message: 'Student Feedback Page ready. Share the link below with the class.' })
     } catch (error) {
@@ -12690,6 +12731,12 @@ function LessonPlanningPage({
             setCollectionConfirmed(false)
             setActivityPageUrl(null)
           }}
+          onCollectionRestore={(saved, savedAssignment) => {
+            setCollection(saved)
+            setActivityAssignment(savedAssignment)
+            setCollectionConfirmed(true)
+            setActivityPageUrl(confirmedPageUrlRef.current)
+          }}
           collectionConfirmed={collectionConfirmed}
           onConfirmCollection={() => void confirmCollection()}
           classes={activityClasses}
@@ -12726,6 +12773,7 @@ function PracticeActivityWorkspace({
   collection,
   assignment,
   onCollectionChange,
+  onCollectionRestore,
   collectionConfirmed,
   onConfirmCollection,
   classes,
@@ -12752,6 +12800,8 @@ function PracticeActivityWorkspace({
   // The activity’s assignment (title and description); null before there’s a draft.
   assignment: LessonAssignment | null
   onCollectionChange: (next: CollectionOpportunity[], assignment: LessonAssignment) => void
+  // Cancel in Edit Assignment: the confirmed student work, confirmed again.
+  onCollectionRestore: (saved: CollectionOpportunity[], assignment: LessonAssignment) => void
   collectionConfirmed: boolean
   onConfirmCollection: () => void
   // The classes the activity belongs to (from where it was planned).
@@ -12929,6 +12979,7 @@ function PracticeActivityWorkspace({
           workDescriptions={activityWorkDescriptions(draft)}
           confirmed={collectionConfirmed}
           onChange={onCollectionChange}
+          onRestore={onCollectionRestore}
           onConfirm={onConfirmCollection}
         >
           {pageUrl === undefined ? (
@@ -13506,6 +13557,9 @@ type StudentProductCollectionProps = {
   workDescriptions: Record<string, string>
   confirmed: boolean
   onChange: (next: CollectionOpportunity[], assignment: LessonAssignment) => void
+  // Cancel in Edit Assignment after changes: the confirmed student work and
+  // assignment as they were, to be confirmed again (nothing new is saved).
+  onRestore: (saved: CollectionOpportunity[], assignment: LessonAssignment) => void
   onConfirm: () => void
   // The Student Feedback link, shown once confirmed.
   children: ReactNode
@@ -13521,9 +13575,41 @@ type WorkProductDraft = { id: string; isNew: boolean; title: string; description
 // confirm together for the assignment's one Student Feedback link. Each work
 // product is submitted, revised, and given AI feedback on its own tab of the
 // Student Feedback Page.
-function StudentProductCollection({ headingId, items: savedItems, assignment, workDescriptions, confirmed, onChange, onConfirm, children }: StudentProductCollectionProps) {
+//
+// A confirmed assignment is shown as confirmed, with its link, and can't be
+// changed by accident: Edit Assignment opens it for editing, any change then
+// needs Confirm Student Work (which saves a new version and page only when
+// the student work changed), and Cancel puts the confirmed assignment back.
+function StudentProductCollection({
+  headingId,
+  items: savedItems,
+  assignment,
+  workDescriptions,
+  confirmed,
+  onChange: applyChange,
+  onRestore,
+  onConfirm,
+  children,
+}: StudentProductCollectionProps) {
   const [editingTitle, setEditingTitle] = useState<string | null>(null)
   const [editing, setEditing] = useState<WorkProductDraft | null>(null)
+  // Edit Assignment on a confirmed assignment: what it was, and whether it changed.
+  const [reopened, setReopened] = useState<{ items: CollectionOpportunity[]; assignment: LessonAssignment; changed: boolean } | null>(null)
+  const locked = confirmed && reopened === null
+  const onChange = (next: CollectionOpportunity[], nextAssignment: LessonAssignment) => {
+    if (reopened && !reopened.changed) setReopened({ ...reopened, changed: true })
+    applyChange(next, nextAssignment)
+  }
+  const cancelEditing = () => {
+    if (reopened?.changed) onRestore(reopened.items, reopened.assignment)
+    setReopened(null)
+    setEditing(null)
+    setEditingTitle(null)
+  }
+  const confirmWork = () => {
+    setReopened(null)
+    onConfirm()
+  }
   // What the cards show and edit; an older list is converted here only.
   const items = isWorkProductList(savedItems) ? savedItems : legacyWorkProducts(savedItems, workDescriptions)
   const titleOf = (item: CollectionOpportunity) => item.title ?? item.name
@@ -13644,19 +13730,25 @@ function StudentProductCollection({ headingId, items: savedItems, assignment, wo
             <div className="feedback-activity-text collection-opportunity-text">
               <p className="feedback-activity-name">{assignment.title || 'Untitled assignment'}</p>
             </div>
-            <div className="feedback-activity-actions">
-              <button type="button" className="secondary-button" aria-label="Edit assignment title" onClick={() => setEditingTitle(assignment.title)}>
-                Edit
-              </button>
-            </div>
+            {!locked && (
+              <div className="feedback-activity-actions">
+                <button type="button" className="secondary-button" aria-label="Edit assignment title" onClick={() => setEditingTitle(assignment.title)}>
+                  Edit
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>
 
       <p className="empty-state-support work-products-note">
-        {suggested && !confirmed
-          ? 'Suggested by AI from your lesson — review and edit each work product before confirming.'
-          : 'Students submit, revise, and get AI feedback on each work product separately.'}
+        {locked
+          ? 'Confirmed. Students submit, revise, and get AI feedback on each work product separately. To change it, use Edit Assignment.'
+          : reopened
+            ? 'Editing the confirmed assignment. Changes are saved as a new version with a new Student Feedback Page only when you confirm them; Cancel keeps the confirmed assignment.'
+            : suggested
+              ? 'Suggested by AI from your lesson — review and edit each work product before confirming.'
+              : 'Students submit, revise, and get AI feedback on each work product separately.'}
       </p>
 
       <ul className="feedback-activity-list student-product-list">
@@ -13689,7 +13781,7 @@ function StudentProductCollection({ headingId, items: savedItems, assignment, wo
                 </>
               )}
             </div>
-            {editing?.id !== item.id && (
+            {editing?.id !== item.id && !locked && (
               <div className="feedback-activity-actions">
                 <button
                   type="button"
@@ -13724,16 +13816,33 @@ function StudentProductCollection({ headingId, items: savedItems, assignment, wo
         )}
       </ul>
 
-      {!editing && items.length < maxWorkProducts && (
+      {!locked && !editing && items.length < maxWorkProducts && (
         <button type="button" className="secondary-button feedback-add-button" onClick={startAdding}>
           + Add Work Product
         </button>
       )}
 
-      {!confirmed && items.length > 0 && (
-        <button type="button" className="primary-button activity-collection-confirm" disabled={editing !== null || editingTitle !== null} onClick={onConfirm}>
-          Confirm Student Work
-        </button>
+      {locked ? (
+        <div className="feedback-activity-actions assignment-edit-actions">
+          <button type="button" className="secondary-button" onClick={() => setReopened({ items: [...savedItems], assignment, changed: false })}>
+            Edit Assignment
+          </button>
+        </div>
+      ) : (
+        (!confirmed || reopened) && (
+          <div className="feedback-activity-actions assignment-edit-actions">
+            {!confirmed && items.length > 0 && (
+              <button type="button" className="primary-button activity-collection-confirm" disabled={editing !== null || editingTitle !== null} onClick={confirmWork}>
+                Confirm Student Work
+              </button>
+            )}
+            {reopened && (
+              <button type="button" className="secondary-button" onClick={cancelEditing}>
+                Cancel
+              </button>
+            )}
+          </div>
+        )
       )}
 
       <div className="feedback-link" aria-live="polite">
@@ -13778,14 +13887,10 @@ function StudentFeedbackActivities({
       assignment={assignment}
       workDescriptions={workDescriptions}
       confirmed={link !== null}
-      // An edited product or assignment keeps its confirmation; a product
-      // added back needs it.
-      onChange={(next, nextAssignment) =>
-        onChange(
-          next.map((item) => ({ ...item, confirmed: activities.find((activity) => activity.id === item.id)?.confirmed ?? false })),
-          nextAssignment,
-        )
-      }
+      // Any change needs confirming again (nothing is saved or published
+      // until then); Cancel restores the confirmed student work.
+      onChange={(next, nextAssignment) => onChange(next.map((item) => ({ ...item, confirmed: false })), nextAssignment)}
+      onRestore={(saved, savedAssignment) => onChange(saved.map((item) => ({ ...item, confirmed: true })), savedAssignment)}
       onConfirm={() => onChange(activities.map((activity) => ({ ...activity, confirmed: true })), assignment)}
     >
       {link && savedPage === undefined && <ClassFeedbackLinks link={link} classes={linkClasses} kind="lesson" />}
