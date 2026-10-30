@@ -33,7 +33,16 @@ import { ApiError, toApiError } from './api/core'
 import { listLessonsForClasses, saveLessonVersion, saveNewLesson, type LessonFields, type StoredLesson, type VersionCreatedBy } from './api/lessonPlanning'
 import { generateLesson, type GenerationUsage, type SuggestedWorkProduct } from './api/lessonGeneration'
 import { reviseLessonSection, revisionSuggestionForConversation, saveRevisionAction, saveRevisionSuggestion } from './api/lessonRevision'
-import { brainstormReplyFromAi, saveBrainstormConversation, type BrainstormRequest } from './api/brainstorm'
+import {
+  addBrainstormMessage,
+  brainstormReplyFromAi,
+  linkBrainstormConversation,
+  loadBrainstormConversation,
+  startBrainstormConversation,
+  type BrainstormMessage,
+  type BrainstormPlace,
+  type BrainstormRequest,
+} from './api/brainstorm'
 import { generateActivityDraft, latestStudentFeedbackPage, newestStudentFeedbackPage, studentFeedbackPageFor, type GeneratedActivity } from './api/practiceActivity'
 import { reviewUploadedLesson, type LessonReview } from './api/lessonReview'
 import { LessonFileError, lessonFileAccept, readLessonFile } from './lib/lessonFile'
@@ -3352,11 +3361,107 @@ function App({ session, entryPage, onSignIn, onSignUp, onExploreDemo, onExitDemo
         setLessonSaveStatus({ kind: 'error', message: `The dismissal wasn’t recorded in the revision history: ${toApiError(error).message}` }),
       )
   }
-  // How many of this planning session's brainstorm messages are saved.
-  const savedBrainstormCountRef = useRef(0)
+  // Brainstorm with AI's conversations (Supabase Mode, lessonBrainstorm on),
+  // saved as they happen: one per focus (whole lesson / practice activity),
+  // kept separate, for the class until a lesson or activity is created and
+  // then linked to it. Messages are saved in order through one queue; one
+  // that couldn't be saved stays queued, is saved with the next message, and
+  // the teacher is told. `resolved`: the conversation to continue is known
+  // (the latest one, a new one, or none yet).
+  type BrainstormThread = { conversationId: string | null; lessonId: string | null; resolved: boolean; unsaved: BrainstormMessage[] }
+  const brainstormThreadsRef = useRef<Partial<Record<BrainstormFocus, BrainstormThread>>>({})
+  const brainstormQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const [brainstormSaveError, setBrainstormSaveError] = useState<string | null>(null)
   useEffect(() => {
-    savedBrainstormCountRef.current = 0
+    brainstormThreadsRef.current = {}
+    setBrainstormSaveError(null)
   }, [planningSessionKey])
+  const savesBrainstorm = lessonPersistence === 'supabase' && usesSupabase('lessonBrainstorm')
+  // Where this session's conversation for a focus belongs: the class, and the
+  // saved lesson or activity when one is open (null: no class to save under).
+  const brainstormPlace = (focus: BrainstormFocus): BrainstormPlace | null => {
+    if (!planningTarget) return null
+    const lessonId = planningTarget.savedLessonId && remoteLessonIdsRef.current.has(planningTarget.savedLessonId) ? planningTarget.savedLessonId : null
+    return { classId: planningTarget.classId, lessonId, focus }
+  }
+  const queueBrainstormSave = (task: () => Promise<void>) => {
+    brainstormQueueRef.current = brainstormQueueRef.current.then(async () => {
+      try {
+        await task()
+        setBrainstormSaveError(null)
+      } catch (error) {
+        setBrainstormSaveError(`This conversation isn’t being saved right now: ${toApiError(error).message} What you write is kept here and saved with your next message.`)
+      }
+    })
+  }
+  const brainstormThread = (focus: BrainstormFocus, place: BrainstormPlace) =>
+    (brainstormThreadsRef.current[focus] ??= { conversationId: null, lessonId: place.lessonId, resolved: false, unsaved: [] })
+  // The conversation to continue (its saved messages), for the panel to show.
+  const resumeBrainstorm = async (focus: BrainstormFocus): Promise<ChatMessage[] | null> => {
+    const place = brainstormPlace(focus)
+    if (!place) {
+      setBrainstormSaveError('This conversation isn’t being saved: open Lesson Planning from a class to save it.')
+      return null
+    }
+    const thread = brainstormThread(focus, place)
+    try {
+      // After the saves already under way (a message is either saved or still queued).
+      await brainstormQueueRef.current
+      const saved = await loadBrainstormConversation({ ...place, lessonId: thread.lessonId })
+      if (saved && !thread.conversationId) thread.conversationId = saved.conversationId
+      thread.resolved = true
+      // Messages still waiting to be saved are shown too.
+      return [...(saved?.messages ?? []), ...thread.unsaved].map((message) => ({
+        role: message.sender_type,
+        text: message.message_content,
+        ...(message.sender_type === 'ai' ? { fromModel: true } : {}),
+      }))
+    } catch (error) {
+      setBrainstormSaveError(`Your earlier conversation couldn’t be loaded: ${toApiError(error).message}`)
+      return null
+    }
+  }
+  // Saves one teacher message or AI reply, after everything before it.
+  const recordBrainstorm = (focus: BrainstormFocus, message: ChatMessage) => {
+    const place = brainstormPlace(focus)
+    if (!place) {
+      setBrainstormSaveError('This conversation isn’t being saved: open Lesson Planning from a class to save it.')
+      return
+    }
+    const thread = brainstormThread(focus, place)
+    thread.unsaved.push({ sender_type: message.role, message_content: message.text })
+    queueBrainstormSave(async () => {
+      if (!thread.resolved) {
+        thread.conversationId = (await loadBrainstormConversation({ ...place, lessonId: thread.lessonId }))?.conversationId ?? null
+        thread.resolved = true
+      }
+      thread.conversationId ??= await startBrainstormConversation({ ...place, lessonId: thread.lessonId })
+      while (thread.unsaved.length > 0) {
+        await addBrainstormMessage(thread.conversationId, thread.unsaved[0])
+        thread.unsaved.shift()
+      }
+    })
+  }
+  // New Conversation: a fresh thread, saved now so it's the one resumed next
+  // time; the earlier conversation stays saved.
+  const startNewBrainstorm = (focus: BrainstormFocus) => {
+    const place = brainstormPlace(focus)
+    if (!place) return
+    const thread: BrainstormThread = { conversationId: null, lessonId: place.lessonId, resolved: true, unsaved: [] }
+    brainstormThreadsRef.current[focus] = thread
+    queueBrainstormSave(async () => {
+      thread.conversationId ??= await startBrainstormConversation(place)
+    })
+  }
+  // The lesson (or activity) a focus's conversation produced, and its version.
+  const linkBrainstorm = (focus: BrainstormFocus, lessonId: string, versionId: string) => {
+    const thread = brainstormThreadsRef.current[focus]
+    if (!thread) return
+    queueBrainstormSave(async () => {
+      if (thread.conversationId) await linkBrainstormConversation(thread.conversationId, lessonId, versionId)
+      thread.lessonId = lessonId
+    })
+  }
 
   // Revise Lesson with the real AI (Supabase Mode, lessonRevision on): the
   // section, its current proposal, the recent chat, and brief lesson context
@@ -3684,25 +3789,12 @@ function App({ session, entryPage, onSignIn, onSignUp, onExploreDemo, onExitDemo
         setPlanningTarget({ classId, savedLessonId: lessonId })
       }
       setWorkspaceLessonId(lessonId)
-      // Brainstorm with AI: the messages not saved with an earlier version of
-      // this planning session go with this one.
-      let brainstormNote = ''
-      const unsavedBrainstorm = brainstorm?.slice(savedBrainstormCountRef.current) ?? []
-      if (brainstorm && unsavedBrainstorm.length > 0) {
-        try {
-          await saveBrainstormConversation(
-            lessonId,
-            saved.lessonVersionId,
-            unsavedBrainstorm.map((message) => ({ sender_type: message.role, message_content: message.text })),
-          )
-          savedBrainstormCountRef.current = brainstorm.length
-        } catch (error) {
-          brainstormNote = ` The brainstorm conversation wasn’t saved: ${toApiError(error).message}`
-        }
-      }
+      // Brainstorm with AI: its conversation (saved as it happened) is linked
+      // to this lesson and version.
+      if (brainstorm) linkBrainstorm('lesson', lessonId, saved.lessonVersionId)
       const savedMessage = existingId ? `Saved as version ${saved.versionNumber}.` : `Saved to your Library for ${classDisplayName(planningTargetClass)}.`
       const review = generation?.warnings.length ? ` Please review: ${generation.warnings.join(' ')}` : ''
-      setLessonSaveStatus({ kind: brainstormNote ? 'error' : 'saved', message: `${savedMessage}${review}${brainstormNote}` })
+      setLessonSaveStatus({ kind: 'saved', message: `${savedMessage}${review}` })
     } catch (error) {
       setLessonSaveStatus({ kind: 'error', message: `This lesson wasn’t saved: ${toApiError(error, 'Couldn’t save the lesson.').message}` })
     } finally {
@@ -4316,19 +4408,9 @@ function App({ session, entryPage, onSignIn, onSignUp, onExploreDemo, onExitDemo
                 prev.map((classroom) => (classroom.id === classId ? { ...classroom, lessonIds: [...classroom.lessonIds, saved.lessonId] } : classroom)),
               )
             }
-            let conversationError: string | null = null
-            if (conversation.length > 0) {
-              try {
-                await saveBrainstormConversation(
-                  saved.lessonId,
-                  saved.lessonVersionId,
-                  conversation.map((message) => ({ sender_type: message.role, message_content: message.text })),
-                )
-              } catch (error) {
-                conversationError = toApiError(error).message
-              }
-            }
-            return { ...saved, conversationError }
+            // The activity's brainstorm (saved as it happened) is linked to it.
+            if (conversation.length > 0) linkBrainstorm('practice', saved.lessonId, saved.lessonVersionId)
+            return { ...saved, conversationError: null }
           },
           pageUrl: async (lessonId, lessonVersionId) => {
             const pageToken = await studentFeedbackPageFor(lessonId, lessonVersionId)
@@ -4359,6 +4441,10 @@ function App({ session, entryPage, onSignIn, onSignUp, onExploreDemo, onExitDemo
       lessonPersistence === 'supabase' && usesSupabase('lessonBrainstorm')
         ? (request: BrainstormRequest) => callRemoteAiModel('lesson-brainstorm', request, brainstormReplyFromAi)
         : null,
+    // Saving the conversation as it happens (null: not saved, e.g. the demo).
+    brainstormLog: savesBrainstorm
+      ? { resume: resumeBrainstorm, record: recordBrainstorm, startNew: startNewBrainstorm, error: brainstormSaveError }
+      : null,
     // A teacher's own state framework comes first; NGSS otherwise.
     defaultFramework: (currentAccount.state ?? 'NGSS') as StandardsFrameworkId,
     formSeed: planningFormSeed,
@@ -6801,6 +6887,15 @@ const classActivityGrade = (gradeLevel: string | null): ActivityGrade | null =>
 // Whether a teacher message names a science practice.
 const namesPractice = (text: string) => Object.values(practiceCoaching).some((coaching) => coaching.mentions.test(text.toLowerCase()))
 
+// Brainstorm with AI's saved conversation (see App): the latest one to
+// continue, each message as it happens, a fresh one, and why saving failed.
+type BrainstormLog = {
+  resume: (focus: BrainstormFocus) => Promise<ChatMessage[] | null>
+  record: (focus: BrainstormFocus, message: ChatMessage) => void
+  startNew: (focus: BrainstormFocus) => void
+  error: string | null
+}
+
 function LessonPlanningPanel({
   planningTab,
   setPlanningTab,
@@ -6808,6 +6903,7 @@ function LessonPlanningPanel({
   isSavingVersion,
   isGeneratingLesson,
   brainstormRemote,
+  brainstormLog = null,
   defaultFramework,
   formSeed,
   savedLessonOpen,
@@ -6833,6 +6929,8 @@ function LessonPlanningPanel({
   isGeneratingLesson: boolean
   // Real AI brainstorm replies; null uses the mock.
   brainstormRemote: ((request: BrainstormRequest) => Promise<string>) | null
+  // Saves the conversation as it happens (null: not saved, e.g. the demo).
+  brainstormLog?: BrainstormLog | null
   // The teacher's state framework (from their profile), or NGSS.
   defaultFramework: StandardsFrameworkId
   // A saved demo lesson's form to start from (null: a blank form). Read once;
@@ -7147,6 +7245,21 @@ function LessonPlanningPanel({
     setShowPracticeBubbles(Boolean(teaching) && focusPracticeIds.length === 0)
     setSuggestedPracticeIds(teaching ? suggestedPracticesFor(teaching) : [])
     setPracticeSelection([])
+    if (brainstormLog) {
+      // Saved conversations: each focus shows its own conversation — its
+      // opening message, then its saved history — and new messages are saved
+      // to the conversation shown.
+      setPracticeStartIndex(0)
+      setPracticeChosenAt(-1)
+      setBrainstormError(null)
+      setBrainstormMessages([createBrainstormIntro(formSnapshot, focus, activityContext)])
+      void brainstormLog.resume(focus).then((restored) => {
+        if (restored && restored.length > 0 && viewFocusRef.current === focus) {
+          setBrainstormMessages((prev) => (prev.length === 1 ? [prev[0], ...restored] : prev))
+        }
+      })
+      return
+    }
     if (focus === 'practice') setPracticeStartIndex(brainstormMessages.length)
     setBrainstormMessages((prev) =>
       prev.length === 0
@@ -7159,6 +7272,31 @@ function LessonPlanningPanel({
             },
           ],
     )
+  }
+
+  // The focus whose conversation is shown (for replies and restores that
+  // arrive after the teacher switched).
+  const viewFocusRef = useRef(brainstormFocus)
+  useEffect(() => {
+    viewFocusRef.current = brainstormFocus
+  }, [brainstormFocus])
+
+  // New Conversation: a fresh conversation for this focus (the earlier one
+  // stays saved), starting again from the focus's opening message.
+  const startNewConversation = () => {
+    if (!brainstormFocus || !brainstormLog || isBrainstormThinking) return
+    brainstormLog.startNew(brainstormFocus)
+    const teaching = brainstormFocus === 'practice' ? activityTeaching(activityContext) : null
+    setShowPracticeBubbles(Boolean(teaching) && focusPracticeIds.length === 0)
+    setSuggestedPracticeIds(teaching ? suggestedPracticesFor(teaching) : [])
+    setPracticeSelection([])
+    setPracticeStartIndex(0)
+    setPracticeChosenAt(-1)
+    setBrainstormSuggestions({})
+    setActivityNotes({})
+    setBrainstormError(null)
+    setBrainstormDraft('')
+    setBrainstormMessages([createBrainstormIntro(formSnapshot, brainstormFocus, activityContext)])
   }
 
   // Which upload is open under the Lesson Planning Notes (opened from the
@@ -7324,6 +7462,7 @@ function LessonPlanningPanel({
       if (found.length > 0) setSuggestionStatus(null)
     }
     setBrainstormMessages((prev) => [...prev, { role: 'teacher', text: message }])
+    brainstormLog?.record(brainstormFocus, { role: 'teacher', text: message })
 
     const request = brainstormReplyRequest(brainstormFocus, message, found, formSnapshot, merged, {
       focusPracticeIds: practiceFocus,
@@ -7366,7 +7505,9 @@ function LessonPlanningPanel({
           : {}),
       })
         .then((reply) => {
-          setBrainstormMessages((prev) => [...prev, { role: 'ai', text: reply, fromModel: true }])
+          // Shown only in the conversation it belongs to (saved there either way).
+          if (!brainstormLog || viewFocusRef.current === request.focus) setBrainstormMessages((prev) => [...prev, { role: 'ai', text: reply, fromModel: true }])
+          brainstormLog?.record(request.focus, { role: 'ai', text: reply, fromModel: true })
           if (offerPractices && teaching) {
             setSuggestedPracticeIds(suggestedPracticesFor(teaching))
             setPracticeSelection([])
@@ -8026,9 +8167,19 @@ function LessonPlanningPanel({
                   <span className="card-label">Planning focus</span>
                   <strong>{brainstormFocusOption.label}</strong>
                 </span>
-                <button type="button" className="ghost-button brainstorm-focus-change" onClick={() => setIsChoosingFocus(true)}>
+                <button
+                  type="button"
+                  className="ghost-button brainstorm-focus-change"
+                  disabled={Boolean(brainstormLog) && isBrainstormThinking}
+                  onClick={() => setIsChoosingFocus(true)}
+                >
                   Change Focus
                 </button>
+                {brainstormLog && brainstormFocus && (
+                  <button type="button" className="ghost-button brainstorm-new-conversation" disabled={isBrainstormThinking} onClick={startNewConversation}>
+                    New Conversation
+                  </button>
+                )}
               </div>
             )}
 
@@ -8046,6 +8197,11 @@ function LessonPlanningPanel({
                 {brainstormError && !isBrainstormThinking && (
                   <p className="lesson-save-status error" role="alert">
                     {brainstormError}
+                  </p>
+                )}
+                {brainstormLog?.error && (
+                  <p className="lesson-save-status error brainstorm-save-error" role="alert">
+                    {brainstormLog.error}
                   </p>
                 )}
                 {!isBrainstormThinking && brainstormFocus === 'practice' && showPracticeBubbles && (
