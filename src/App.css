@@ -1802,6 +1802,21 @@ textarea {
   color: #7a5412;
 }
 
+/* The AI Review’s result for the lesson version, and Run AI Review. */
+.lesson-ai-review-status {
+  margin: 0 0 6px;
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+}
+
+.lesson-ai-review-status.is-not_completed {
+  color: #8a5a00;
+}
+
+.lesson-ai-review-run {
+  margin-left: 4px;
+}
+
 /* Supabase Mode: whether the lesson in the workspace is saved. */
 .lesson-save-status {
   margin: 0 0 8px;

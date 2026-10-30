@@ -44,7 +44,7 @@ import {
   type BrainstormRequest,
 } from './api/brainstorm'
 import { generateActivityDraft, latestStudentFeedbackPage, newestStudentFeedbackPage, studentFeedbackPageFor, type GeneratedActivity } from './api/practiceActivity'
-import { reviewUploadedLesson, type LessonReview } from './api/lessonReview'
+import { evaluateLesson, reviewUploadedLesson, type AiReviewInput, type AiReviewSuggestion, type LessonReview } from './api/lessonReview'
 import { LessonFileError, lessonFileAccept, readLessonFile } from './lib/lessonFile'
 import {
   discussFinding,
@@ -1628,7 +1628,15 @@ type LessonDocument = {
   suggestionSummaries: Record<string, string>
   revisionSegments: Record<string, readonly LessonSegment[]>
   workflows: Record<string, { teacherFollowUp: string; aiProposal: string }>
+  // The AI Review of this version (Supabase Mode); absent: none was run.
+  review?: LessonReviewStatus
 }
+
+// The AI Review's result: completed (with or without suggestions), or not
+// completed and why (the lesson was saved either way).
+type LessonReviewStatus =
+  | { status: 'completed'; reviewedAt: string; suggestionCount: number }
+  | { status: 'not_completed'; reason: string; attemptedAt: string }
 
 // The prototype's demo lesson (Zombie Fires) — shown for uploaded lessons
 // and the Library's demo lesson.
@@ -3324,13 +3332,16 @@ function App({ session, entryPage, onSignIn, onSignUp, onExploreDemo, onExitDemo
     if (known) return known
     const id = entry.conversationId
       ? await revisionSuggestionForConversation(entry.conversationId)
-      : await saveRevisionSuggestion({
-          lessonId: entry.lessonId,
-          sourceVersionId: entry.sourceVersionId,
-          targetSection: entry.label,
-          suggestionContent: entry.suggestion,
-          suggestedChange: entry.change,
-        })
+      : await saveRevisionSuggestion(
+          {
+            lessonId: entry.lessonId,
+            sourceVersionId: entry.sourceVersionId,
+            targetSection: entry.label,
+            suggestionContent: entry.suggestion,
+            suggestedChange: entry.change,
+          },
+          { anyVersion: true },
+        )
     revisionSuggestionIdsRef.current.set(key, id)
     return id
   }
@@ -3710,6 +3721,89 @@ function App({ session, entryPage, onSignIn, onSignUp, onExploreDemo, onExitDemo
     navigateTo('library')
   }
 
+  // The AI Review (Supabase Mode, AI on). Never throws: a failed review is
+  // recorded on the lesson as not completed, and the lesson is saved anyway.
+  const aiReviewAvailable = lessonPersistence === 'supabase' && usesSupabase('lessonGeneration')
+  const reviewLessonWithAi = async (
+    document: LessonDocument,
+    details: PlanningLessonDetails,
+    products: readonly FeedbackActivity[],
+  ): Promise<{ document: LessonDocument; attached: string[] }> => {
+    try {
+      const { suggestions } = await callRemoteAiModel('lesson-ai-review', aiReviewInputFrom(document, details, products), evaluateLesson)
+      return attachAiReview(document, suggestions)
+    } catch (error) {
+      const reason = toApiError(error, 'The AI service couldn’t review the lesson.').message
+      return { document: { ...document, review: { status: 'not_completed', reason, attemptedAt: new Date().toISOString() } }, attached: [] }
+    }
+  }
+  // Each of the review's suggestions becomes a lesson_revision_suggestions
+  // row for the version it was saved with (reused if already saved), so
+  // Revise Lesson, Apply, and Dismiss attach to it. Returns why saving
+  // failed, if it did.
+  const saveAiReviewSuggestions = async (lessonId: string, versionId: string, document: LessonDocument, labels: readonly string[]): Promise<string | null> => {
+    if (labels.length === 0 || !usesSupabase('lessonRevision')) return null
+    for (const label of labels) revisionSuggestionIdsRef.current.delete(`${lessonId}:${label}:`)
+    try {
+      for (const label of labels) {
+        const proposal = document.revisionSegments[label]
+        const id = await saveRevisionSuggestion({
+          lessonId,
+          sourceVersionId: versionId,
+          targetSection: label,
+          suggestionContent: document.suggestions[label] ?? null,
+          suggestedChange: proposal ? segmentsToText(proposal) : null,
+        })
+        revisionSuggestionIdsRef.current.set(`${lessonId}:${label}:`, id)
+      }
+      return null
+    } catch (error) {
+      return toApiError(error).message
+    }
+  }
+  // Run AI Review on the saved lesson open in the workspace: the lesson as
+  // shown (edits and applied revisions included, dismissed suggestions
+  // dropped) is reviewed, and the result is saved as a new version (by the
+  // AI) with its suggestions. A failed review changes nothing but the
+  // status shown. If the lesson changed meanwhile, the review is discarded.
+  const [isRunningAiReview, setIsRunningAiReview] = useState(false)
+  const pendingAiReviewRef = useRef<{ lessonId: string; labels: string[] } | null>(null)
+  const latestVersionRequestIdRef = useRef(0)
+  latestVersionRequestIdRef.current = versionRequest?.id ?? 0
+  const workspaceLessonIdRef = useRef(workspaceLessonId)
+  workspaceLessonIdRef.current = workspaceLessonId
+  const runAiReviewOnLesson = async () => {
+    const lessonId = workspaceLessonId
+    if (!aiReviewAvailable || !lessonId || !remoteLessonIdsRef.current.has(lessonId) || isRunningAiReview || isSavingVersion || isEditingLesson) return
+    const form = lessonFormsRef.current.get(lessonId)
+    if (!form) {
+      setLessonSaveStatus({ kind: 'error', message: 'The AI Review didn’t run: this lesson’s saved form couldn’t be found. Reload the page and try again.' })
+      return
+    }
+    const startedWith = latestVersionRequestIdRef.current
+    const activities = feedbackActivities
+    const assignment = lessonAssignment
+    const current = withoutSuggestions(effectiveLessonDocument({ ...lessonDocument, id: lessonId }, manualEdits, revisionEditor.revisedLesson), dismissedSuggestions)
+    setIsRunningAiReview(true)
+    setLessonSaveStatus(null)
+    try {
+      const { document, attached } = await reviewLessonWithAi(current, form, activities)
+      if (workspaceLessonIdRef.current !== lessonId || latestVersionRequestIdRef.current !== startedWith) {
+        if (workspaceLessonIdRef.current === lessonId) setLessonSaveStatus({ kind: 'info', message: 'The lesson changed during the AI Review, so its result wasn’t used. Run the AI Review again.' })
+        return
+      }
+      if (document.review?.status !== 'completed') {
+        setLessonDocument((prev) => ({ ...prev, review: document.review }))
+        return
+      }
+      showLessonDocument(document, lessonId, activities, assignment)
+      pendingAiReviewRef.current = { lessonId, labels: attached }
+      requestLessonVersion('ai')
+    } finally {
+      setIsRunningAiReview(false)
+    }
+  }
+
   // Supabase Mode: saves a generated or uploaded lesson for the class
   // Lesson Planning was opened for — a new lesson, or a new version when
   // re-generating one that's already saved. The lesson joins the Library
@@ -3724,7 +3818,9 @@ function App({ session, entryPage, onSignIn, onSignUp, onExploreDemo, onExitDemo
     upload?: { fileName: string; text: string },
     // The lesson's work products (absent: the prototype's Model and Explanation).
     products?: FeedbackActivity[],
-  ) => {
+    // The AI Review's suggestions (sections) to save with the new version.
+    reviewed: readonly string[] = [],
+  ): Promise<void> => {
     if (lessonPersistence === 'off') {
       setLessonSaveStatus({ kind: 'error', message: 'This lesson isn’t saved: Lesson Planning isn’t connected to Supabase in this configuration. Add “lessonPlanning” to VITE_SUPABASE_INTEGRATIONS.' })
       return
@@ -3794,7 +3890,13 @@ function App({ session, entryPage, onSignIn, onSignUp, onExploreDemo, onExitDemo
       if (brainstorm) linkBrainstorm('lesson', lessonId, saved.lessonVersionId)
       const savedMessage = existingId ? `Saved as version ${saved.versionNumber}.` : `Saved to your Library for ${classDisplayName(planningTargetClass)}.`
       const review = generation?.warnings.length ? ` Please review: ${generation.warnings.join(' ')}` : ''
-      setLessonSaveStatus({ kind: 'saved', message: `${savedMessage}${review}` })
+      // The AI Review's suggestions, saved against this version.
+      const reviewError = await saveAiReviewSuggestions(lessonId, saved.lessonVersionId, savedDocument, reviewed)
+      setLessonSaveStatus(
+        reviewError
+          ? { kind: 'error', message: `${savedMessage} The AI Review’s suggestions weren’t saved to the revision history: ${reviewError}` }
+          : { kind: 'saved', message: `${savedMessage}${review}` },
+      )
     } catch (error) {
       setLessonSaveStatus({ kind: 'error', message: `This lesson wasn’t saved: ${toApiError(error, 'Couldn’t save the lesson.').message}` })
     } finally {
@@ -4115,17 +4217,20 @@ function App({ session, entryPage, onSignIn, onSignUp, onExploreDemo, onExitDemo
     setIsGeneratingLesson(true)
     setLessonSaveStatus({ kind: 'saving', message: 'Generating your lesson with AI…' })
     try {
-      const { document, generation, workProducts } = await generateLessonDocumentWithAi(details)
+      const { document: generated, generation, workProducts } = await generateLessonDocumentWithAi(details)
       const keepId = planningTarget?.savedLessonId && remoteLessonIdsRef.current.has(planningTarget.savedLessonId) ? planningTarget.savedLessonId : null
       // The AI's suggested student work, for the teacher to review.
       const products = lessonWorkProducts(workProducts)
+      // The separate AI Review (its failure never stops the save).
+      setLessonSaveStatus({ kind: 'saving', message: 'Running the AI Review…' })
+      const { document, attached } = await reviewLessonWithAi(generated, details, products)
       showLessonDocument(document, keepId, products)
       if (keepId) lastSavedLessonRef.current = { lessonId: keepId, snapshot: JSON.stringify(effectiveLessonDocument({ ...document, id: keepId }, {}, {})) }
       setLessonSource('ai-generated')
       setLessonGenerated(true)
       setLessonGeneratedWith(method)
       setIsGeneratingLesson(false)
-      await persistPlannedLesson(details, document, 'generated', undefined, generation, brainstorm, undefined, products)
+      await persistPlannedLesson(details, document, 'generated', undefined, generation, brainstorm, undefined, products, attached)
     } catch (error) {
       setLessonSaveStatus({ kind: 'error', message: `The lesson wasn’t generated: ${toApiError(error, 'The AI service couldn’t generate the lesson.').message}` })
     } finally {
@@ -4134,8 +4239,8 @@ function App({ session, entryPage, onSignIn, onSignUp, onExploreDemo, onExitDemo
   }
 
   // Upload Existing Lesson with the real AI: the file's text is read in the
-  // browser, reviewed by partners-review-lesson (section starts and
-  // suggestions only), shown as the teacher wrote it, and saved like any
+  // browser, reviewed by partners-review-lesson (section starts only), then
+  // by the AI Review (suggestions), shown as the teacher wrote it, and saved like any
   // uploaded lesson (version 1 by the teacher) with the text it came from. A
   // failure shows why and saves nothing.
   const uploadWithAi = async (file: File, details: PlanningLessonDetails) => {
@@ -4162,9 +4267,13 @@ function App({ session, entryPage, onSignIn, onSignUp, onExploreDemo, onExitDemo
     try {
       const gradeLevel = details.gradeLevel ? formatLessonGrade(details.gradeLevel) : planningTargetClass.gradeLevel
       const result = await callRemoteAiModel('lesson-review', { lessonText: text, fileName: file.name, gradeLevel }, reviewUploadedLesson)
-      const document = buildUploadedLessonDocument(text, result.output, lessonTitleFrom(details, file.name))
+      const uploaded = buildUploadedLessonDocument(text, result.output, lessonTitleFrom(details, file.name))
       const keepId = planningTarget.savedLessonId && remoteLessonIdsRef.current.has(planningTarget.savedLessonId) ? planningTarget.savedLessonId : null
       const products = lessonWorkProducts(result.output.workProducts)
+      const reviewedDetails = { ...details, topic: details.topic.trim() || result.output.topic }
+      // The separate AI Review (its failure never stops the save).
+      setLessonSaveStatus({ kind: 'saving', message: 'Running the AI Review…' })
+      const { document, attached } = await reviewLessonWithAi(uploaded, reviewedDetails, products)
       showLessonDocument(document, keepId, products)
       if (keepId) lastSavedLessonRef.current = { lessonId: keepId, snapshot: JSON.stringify(effectiveLessonDocument({ ...document, id: keepId }, {}, {})) }
       setLessonSource('uploaded')
@@ -4172,7 +4281,7 @@ function App({ session, entryPage, onSignIn, onSignUp, onExploreDemo, onExitDemo
       setLessonGeneratedWith('upload')
       setIsGeneratingLesson(false)
       await persistPlannedLesson(
-        { ...details, topic: details.topic.trim() || result.output.topic },
+        reviewedDetails,
         document,
         'uploaded',
         file.name,
@@ -4180,6 +4289,7 @@ function App({ session, entryPage, onSignIn, onSignUp, onExploreDemo, onExitDemo
         undefined,
         { fileName: file.name, text },
         products,
+        attached,
       )
     } catch (error) {
       setLessonSaveStatus({ kind: 'error', message: `“${file.name}” wasn’t reviewed: ${toApiError(error, 'The AI service couldn’t review it.').message}` })
@@ -4269,10 +4379,16 @@ function App({ session, entryPage, onSignIn, onSignUp, onExploreDemo, onExitDemo
         )
         // An applied AI revision's version: record its Apply action(s).
         const actionError = createdBy === 'ai_teacher' ? await recordAppliedRevisions(lessonId, saved.lessonVersionId) : null
+        // An AI Review's version: save its suggestions against it.
+        const review = createdBy === 'ai' && pendingAiReviewRef.current?.lessonId === lessonId ? pendingAiReviewRef.current : null
+        if (review) pendingAiReviewRef.current = null
+        const reviewError = review ? await saveAiReviewSuggestions(lessonId, saved.lessonVersionId, effective, review.labels) : null
         setLessonSaveStatus(
           actionError
             ? { kind: 'error', message: `Changes saved as version ${saved.versionNumber}. The Apply action wasn’t recorded in the revision history: ${actionError}` }
-            : { kind: 'saved', message: `Changes saved as version ${saved.versionNumber}.` },
+            : reviewError
+              ? { kind: 'error', message: `AI Review saved as version ${saved.versionNumber}. Its suggestions weren’t saved to the revision history: ${reviewError}` }
+              : { kind: 'saved', message: review ? `AI Review saved as version ${saved.versionNumber}.` : `Changes saved as version ${saved.versionNumber}.` },
         )
       } catch (error) {
         setLessonSaveStatus({
@@ -4294,6 +4410,9 @@ function App({ session, entryPage, onSignIn, onSignUp, onExploreDemo, onExitDemo
     onEditsSaved: () => requestLessonVersion('teacher'),
     onRetrySave: requestLessonVersion,
     onSuggestionDismissed: recordDismissedSuggestion,
+    ...(aiReviewAvailable && workspaceLessonId && remoteLessonIdsRef.current.has(workspaceLessonId)
+      ? { aiReview: isRunningAiReview ? ('running' as const) : (lessonDocument.review ?? null), onRunAiReview: () => void runAiReviewOnLesson() }
+      : {}),
     savedPage:
       lessonPersistence === 'supabase' && workspaceLessonId && remoteLessonIdsRef.current.has(workspaceLessonId)
         ? lessonPage?.lessonId === workspaceLessonId
@@ -10144,6 +10263,7 @@ type AiPurpose =
   | 'lesson-brainstorm'
   | 'practice-activity'
   | 'lesson-review'
+  | 'lesson-ai-review'
   | 'student-feedback'
   | 'class-feedback-analysis'
   | 'class-feedback-summary'
@@ -10994,6 +11114,107 @@ function buildUploadedLessonDocument(text: string, review: LessonReview, fallbac
     revisionSegments,
     workflows: {},
   }
+}
+
+// ---------------------------------------------------------------------------
+// The AI Review: a separate evaluation of a saved lesson (after Generate or
+// Upload, or Run AI Review) against its objectives, science practices,
+// standards, instructional sequence, and expected student work. It returns
+// at most one suggestion per section (five in all), possibly none; each is
+// attached like any AI suggestion (flagged phrase, proposed sentence), so
+// Revise Lesson, Apply, and Dismiss work as before.
+// ---------------------------------------------------------------------------
+
+// The lesson's own sections — not its overview facts or bullet lists.
+const aiReviewSkippedSections = new Set(['Topic', 'Grade Level', 'Lesson Duration'])
+
+function aiReviewInputFrom(document: LessonDocument, details: PlanningLessonDetails, products: readonly FeedbackActivity[]): AiReviewInput {
+  const sections = document.steps
+    .filter((step) => step.listStyle !== 'bullet' && !aiReviewSkippedSections.has(step.label))
+    .map((step) => {
+      const text = segmentsToText(step.segments).trim()
+      return { label: step.label, text: (step.duration ? `(${step.duration} min) ${text}` : text).slice(0, 8000) }
+    })
+    .filter((section) => section.text)
+    .slice(0, 30)
+  const objectiveSteps = document.steps.filter((step) => step.label.startsWith('Learning Objective '))
+  return {
+    title: document.title.slice(0, 300),
+    gradeLevel: details.gradeLevel.slice(0, 40),
+    topic: details.topic.trim().slice(0, 300),
+    objectives: (objectiveSteps.length > 0 ? objectiveSteps.map((step) => segmentsToText(step.segments)) : splitTeacherList(details.learningObjectives))
+      .map((text) => text.trim().slice(0, 2000))
+      .filter(Boolean)
+      .slice(0, 20),
+    sciencePractices: (document.practices.length > 0
+      ? [...document.practices]
+      : practiceOptions.filter((practice) => details.sciencePractices.includes(practice.id)).map((practice) => practice.label)
+    ).slice(0, 12),
+    standards: details.standards.slice(0, 20).map((standard) => {
+      const description = standard.custom ? undefined : scienceStandardsBank.find((item) => item.code === standard.code)?.description
+      return (description ? `${standard.code} — ${description}` : standard.code).slice(0, 1000)
+    }),
+    sections,
+    workProducts: products.slice(0, 8).map((product) => ({
+      title: (product.title || product.name).slice(0, 200),
+      prompt: (product.description || product.submission || '').slice(0, 4000),
+      inputs: (product.inputs ?? []).slice(0, 8).map(String),
+    })),
+  }
+}
+
+// The review's suggestions on the lesson: each on its section (one per
+// section; a section that already has a pending suggestion keeps it), its
+// flagged phrase highlighted and the proposed sentence added to the
+// section's text. Science-practice bold is kept. Returns the sections that
+// got one.
+function attachAiReview(document: LessonDocument, suggestions: readonly AiReviewSuggestion[]): { document: LessonDocument; attached: string[] } {
+  const steps = [...document.steps]
+  const next = { suggestions: { ...document.suggestions }, suggestionSummaries: { ...document.suggestionSummaries }, revisionSegments: { ...document.revisionSegments } }
+  const attached: string[] = []
+  for (const item of suggestions) {
+    if (attached.length >= 5) break
+    const index = steps.findIndex((step) => step.label === item.section && step.listStyle !== 'bullet')
+    if (index < 0 || next.suggestions[item.section] || !item.suggestion || !item.addedText) continue
+    const step = steps[index]
+    const text = segmentsToText(step.segments)
+    const bold = step.segments.filter((segment) => segment.bold).map((segment) => segment.text)
+    const phrase = item.flaggedText ? findLoosely(text, item.flaggedText) : null
+    steps[index] = { ...step, segments: buildSegments(text, bold, phrase ? text.slice(phrase.index, phrase.index + phrase.length) : text) }
+    next.suggestions[item.section] = item.suggestion
+    next.suggestionSummaries[item.section] = item.summary || item.suggestion
+    next.revisionSegments[item.section] = [...buildSegments(text, bold), { text: ` ${ensurePeriod(item.addedText)}`, added: true }]
+    attached.push(item.section)
+  }
+  return {
+    document: { ...document, steps, ...next, review: { status: 'completed', reviewedAt: new Date().toISOString(), suggestionCount: attached.length } },
+    attached,
+  }
+}
+
+// A lesson without its dismissed suggestions (before a new review).
+function withoutSuggestions(document: LessonDocument, labels: readonly string[]): LessonDocument {
+  if (labels.length === 0) return document
+  const drop = <T,>(record: Record<string, T>) => Object.fromEntries(Object.entries(record).filter(([label]) => !labels.includes(label)))
+  return {
+    ...document,
+    steps: document.steps.map((step) =>
+      labels.includes(step.label) ? { ...step, segments: step.segments.map((segment) => ({ text: segment.text, ...(segment.bold ? { bold: true } : {}) })) } : step,
+    ),
+    suggestions: drop(document.suggestions),
+    suggestionSummaries: drop(document.suggestionSummaries),
+    revisionSegments: drop(document.revisionSegments),
+    workflows: drop(document.workflows),
+  }
+}
+
+function aiReviewStatusText(review: LessonReviewStatus | 'running' | null): string {
+  if (review === 'running') return 'AI Review in progress…'
+  if (!review) return 'AI Review not completed for this version.'
+  if (review.status === 'not_completed') return `AI Review not completed: ${review.reason.replace(/[.!?]?$/, '.')}`
+  return review.suggestionCount > 0
+    ? `AI Review completed with ${pluralize(review.suggestionCount, 'suggestion')}.`
+    : 'AI Review completed with no suggestions.'
 }
 
 // How a saved lesson version was generated (kept in its lesson_content).
@@ -14076,6 +14297,10 @@ type LessonWorkspaceCanvasProps = {
   onRetrySave?: (createdBy: VersionCreatedBy) => void
   // The teacher dismissed the AI suggestion on this section.
   onSuggestionDismissed?: (label: string) => void
+  // A saved lesson's AI Review (Supabase Mode, AI on): its result for this
+  // version ('running' while one runs; null: none completed), and Run AI Review.
+  aiReview?: LessonReviewStatus | 'running' | null
+  onRunAiReview?: () => void
   // A saved lesson's Student Feedback Page (null until its student work is
   // confirmed); undefined: the prototype's link.
   savedPage?: { status: 'saving' | 'ready' | 'error'; url?: string; message?: string } | null
@@ -14114,6 +14339,8 @@ function LessonWorkspaceCanvas({
   onEditsSaved,
   onRetrySave,
   onSuggestionDismissed,
+  aiReview,
+  onRunAiReview,
   savedPage,
   editor,
   lesson,
@@ -14485,7 +14712,7 @@ function LessonWorkspaceCanvas({
               type="button"
               className="secondary-button"
               onClick={() => (isEditing ? saveEditing() : startEditing())}
-              disabled={isSavingVersion}
+              disabled={isSavingVersion || aiReview === 'running'}
             >
               {isEditing ? 'Save Edits' : 'Edit Lesson'}
             </button>
@@ -14524,6 +14751,24 @@ function LessonWorkspaceCanvas({
             </>
           )}
         </p>
+        {aiReview !== undefined && (
+          <p className={`lesson-ai-review-status${aiReview && aiReview !== 'running' ? ` is-${aiReview.status}` : ''}`} aria-live="polite">
+            {aiReviewStatusText(aiReview)}
+            {onRunAiReview && (
+              <>
+                {' '}
+                <button
+                  type="button"
+                  className="ghost-button lesson-ai-review-run"
+                  onClick={onRunAiReview}
+                  disabled={aiReview === 'running' || isSavingVersion || isEditing}
+                >
+                  {aiReview && aiReview !== 'running' && aiReview.status === 'completed' ? 'Run AI Review Again' : 'Run AI Review'}
+                </button>
+              </>
+            )}
+          </p>
+        )}
         <p className="lesson-source">Source: {lessonSourceLabels[lessonSource]}</p>
 
         <p className="content-legend">

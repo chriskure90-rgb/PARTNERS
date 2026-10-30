@@ -36,6 +36,21 @@ const revisionDb = (token: string): RevisionDb => {
       return data?.lesson_version_id ?? null
     },
     saveSuggestion: async (input) => {
+      // The same suggestion already saved for this lesson and section (by the
+      // AI Review, or an earlier Apply/Dismiss) is reused, not saved again.
+      // Compared trimmed, as save_lesson_revision_suggestion stores them.
+      if (input.suggestionContent?.trim()) {
+        const { data: found } = await supabase
+          .from('lesson_revision_suggestions')
+          .select('revision_suggestion_id')
+          .eq('lesson_id', input.lessonId)
+          .eq('target_section', input.targetSection.trim())
+          .eq('suggestion_content', input.suggestionContent.trim())
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (found?.revision_suggestion_id) return found.revision_suggestion_id as string
+      }
       const { data, error } = await supabase.rpc('save_lesson_revision_suggestion', {
         p_lesson_id: input.lessonId,
         p_source_version_id: input.sourceVersionId,

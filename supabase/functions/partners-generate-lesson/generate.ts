@@ -255,9 +255,6 @@ export const lessonGenerationInstructions = [
   'customization: one entry for each field provided in lesson.additionalCustomization, saying in one sentence how the lesson uses it. Weave prior instruction, subsequent instruction, and differentiation into the activities. Never invent content for fields that are missing.',
   'A rubric is for evaluating student work: refer to it in an evaluation activity.',
   '',
-  'Suggestions:',
-  'suggestions: up to four short improvement ideas, ideally ones that strengthen how students use the selected practices. section is "Learning Objective N" or "Activity N" (1-based, matching your arrays). flaggedText is copied exactly from that section’s text; addedText is one sentence to add if the teacher accepts; summary is a short phrase describing the change.',
-  '',
   workProductSuggestionInstructions,
   '',
   'Never include student names or other personal information.',
@@ -278,7 +275,7 @@ export function lessonGenerationSchema(lesson: LessonInput) {
   return {
     type: 'object',
     additionalProperties: false,
-    required: ['title', 'learningObjectives', 'activities', 'customization', 'suggestions', 'workProducts'],
+    required: ['title', 'learningObjectives', 'activities', 'customization', 'workProducts'],
     properties: {
       title: { type: 'string' },
       learningObjectives: {
@@ -316,22 +313,6 @@ export function lessonGenerationSchema(lesson: LessonInput) {
           properties: { field: fields.length > 0 ? { type: 'string', enum: fields } : { type: 'string' }, howUsed: { type: 'string' } },
         },
       },
-      suggestions: {
-        type: 'array',
-        maxItems: 4,
-        items: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['section', 'flaggedText', 'suggestion', 'addedText', 'summary'],
-          properties: {
-            section: { type: 'string' },
-            flaggedText: { type: 'string' },
-            suggestion: { type: 'string' },
-            addedText: { type: 'string' },
-            summary: { type: 'string' },
-          },
-        },
-      },
       workProducts: workProductSuggestionSchema,
     },
   }
@@ -347,6 +328,8 @@ export type LessonOutput = {
   learningObjectives: { original: string; text: string; practices: PracticeLabel[] }[]
   activities: { sequenceStep: string; title: string; minutes: number; description: string; practiceMoves: string[]; objectives: number[] }[]
   customization: { field: CustomizationField; howUsed: string }[]
+  // Always empty: revision suggestions come from the separate AI Review
+  // (partners-review-lesson, action "evaluate").
   suggestions: { section: string; flaggedText: string; suggestion: string; addedText: string; summary: string }[]
   // Suggested student work for the lesson's assignment (empty: the app's default).
   workProducts: SuggestedWorkProduct[]
@@ -408,17 +391,6 @@ export function readLessonOutput(raw: string, lesson: LessonInput): { output: Le
     .filter((item) => typeof item.field === 'string' && provided.has(item.field))
     .map((item) => ({ field: item.field as CustomizationField, howUsed: text(item.howUsed, `customization ${String(item.field)}`) }))
 
-  const suggestions = list(data.suggestions, 'suggestions')
-    .filter(isObject)
-    .slice(0, 4)
-    .map((item, index) => ({
-      section: text(item.section, `suggestion ${index + 1} section`),
-      flaggedText: typeof item.flaggedText === 'string' ? item.flaggedText.trim() : '',
-      suggestion: text(item.suggestion, `suggestion ${index + 1}`),
-      addedText: text(item.addedText, `suggestion ${index + 1} addedText`),
-      summary: typeof item.summary === 'string' ? item.summary.trim() : '',
-    }))
-
   const warnings: string[] = []
   const totalMinutes = activities.reduce((sum, activity) => sum + activity.minutes, 0)
   if (totalMinutes !== lesson.durationMinutes) warnings.push(`Activity minutes add up to ${totalMinutes}, not ${lesson.durationMinutes}; the app re-divides the time.`)
@@ -438,7 +410,7 @@ export function readLessonOutput(raw: string, lesson: LessonInput): { output: Le
   })
 
   const workProducts = readSuggestedWorkProducts(data.workProducts)
-  return { output: { title: text(data.title, 'title'), learningObjectives, activities, customization, suggestions, workProducts }, warnings }
+  return { output: { title: text(data.title, 'title'), learningObjectives, activities, customization, suggestions: [], workProducts }, warnings }
 }
 
 // ---------------------------------------------------------------------------

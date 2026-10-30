@@ -51,14 +51,33 @@ export async function revisionSuggestionForConversation(revisionConversationId: 
   return data.revision_suggestion_id as string
 }
 
-// A suggestion row for an AI suggestion acted on without a chat.
-export async function saveRevisionSuggestion(input: {
-  lessonId: string
-  sourceVersionId: string
-  targetSection: string
-  suggestionContent: string | null
-  suggestedChange: string | null
-}): Promise<string> {
+// A suggestion row: one saved by the AI Review, or for an AI suggestion
+// acted on without a chat. The same suggestion already saved for the lesson
+// and section is reused, never saved twice — for the same version, or (with
+// anyVersion: an Apply or Dismiss on a later version) any version.
+export async function saveRevisionSuggestion(
+  input: {
+    lessonId: string
+    sourceVersionId: string
+    targetSection: string
+    suggestionContent: string | null
+    suggestedChange: string | null
+  },
+  options: { anyVersion?: boolean } = {},
+): Promise<string> {
+  // Compared trimmed, as save_lesson_revision_suggestion stores them.
+  if (input.suggestionContent?.trim()) {
+    let query = getSupabase()
+      .from('lesson_revision_suggestions')
+      .select('revision_suggestion_id')
+      .eq('lesson_id', input.lessonId)
+      .eq('target_section', input.targetSection.trim())
+      .eq('suggestion_content', input.suggestionContent.trim())
+    if (!options.anyVersion) query = query.eq('source_version_id', input.sourceVersionId)
+    const { data: found, error: findError } = await query.order('created_at', { ascending: false }).limit(1).maybeSingle()
+    if (findError) throw toApiError(findError, 'Couldn’t save the revision suggestion.')
+    if (found?.revision_suggestion_id) return found.revision_suggestion_id as string
+  }
   const { data, error } = await getSupabase().rpc('save_lesson_revision_suggestion', {
     p_lesson_id: input.lessonId,
     p_source_version_id: input.sourceVersionId,
