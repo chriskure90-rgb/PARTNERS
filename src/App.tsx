@@ -5306,6 +5306,8 @@ const sentenceFieldPatterns: { field: BrainstormTextField; pattern: RegExp }[] =
 ]
 
 const topicPatterns = [
+  // A labeled answer ("Topic: forces, Grade: 10"), up to the next label.
+  /\b(?:topic|unit)\s*[:=]\s*(.+?)(?=\s*\b(?:science\s+practices?|practices?|grade(?:\s+level)?|standards?|objectives?|phenomenon|concept|mechanism|focus)\s*[:=]|[.;!?\n]|$)/i,
   /\b(?:topic|phenomenon|unit|lesson|focus) (?:is|will be|is about|is on|focuses on)\s+([^.;!?\n]+)/i,
   /\b(?:lesson|unit) (?:on|about)\s+([^.;!?\n]+)/i,
   /\b(?:teach(?:ing)?|cover(?:ing)?|explor(?:e|ing)|investigat(?:e|ing)|study(?:ing)?)\s+(?:about\s+)?([^.;!?\n]+)/i,
@@ -5342,8 +5344,8 @@ function extractLessonSuggestions(
   const found: BrainstormSuggestion[] = []
 
   let gradeLevel: string | null = null
-  if (/\b(6|7|8)(th)?[\s-]*grade|grades?\s*(6|7|8)\b|middle[\s-]school/.test(lower)) gradeLevel = '6-8'
-  else if (/\b(9|10|11|12)(th)?[\s-]*grade|grades?\s*(9|10|11|12)\b|high[\s-]school|freshm[ae]n|sophomores?/.test(lower)) gradeLevel = '9-12'
+  if (/\b(6|7|8)(th)?[\s-]*grade|grades?(?:\s+level)?\s*[:=-]?\s*(6|7|8)\b|middle[\s-]school/.test(lower)) gradeLevel = '6-8'
+  else if (/\b(9|10|11|12)(th)?[\s-]*grade|grades?(?:\s+level)?\s*[:=-]?\s*(9|10|11|12)\b|high[\s-]school|freshm[ae]n|sophomores?/.test(lower)) gradeLevel = '9-12'
   if (gradeLevel) found.push({ field: 'gradeLevel', value: gradeLevel })
 
   const minutes = /\b(\d{2,3})[\s-]*(?:min(?:ute)?s?)\b/.exec(lower)?.[1]
@@ -5620,7 +5622,7 @@ const gradeWords: Record<string, number> = {
 
 // Matches any grade phrase, so it can be stripped from a message.
 const gradePhrasePattern =
-  /\b(?:(?:1[0-2]|[1-9])(?:st|nd|rd|th)?|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth)[\s-]*grade(?:rs?)?\b|\bgrades?\s*(?:1[0-2]|[1-9])\b|\b(?:middle|high|elementary)[\s-]school(?:ers?)?\b|\bkindergarten(?:ers?)?\b|\b(?:freshm[ae]n|sophomores?|juniors|seniors)\b/gi
+  /\b(?:(?:1[0-2]|[1-9])(?:st|nd|rd|th)?|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth)[\s-]*grade(?:rs?)?\b|\bgrades?(?:\s+level)?\s*[:=-]?\s*(?:1[0-2]|[1-9])\b|\b(?:middle|high|elementary)[\s-]school(?:ers?)?\b|\bkindergarten(?:ers?)?\b|\b(?:freshm[ae]n|sophomores?|juniors|seniors)\b/gi
 
 // "8th-grade students", "grade 8", "eighth graders", "middle school" → a grade.
 function extractActivityGrade(text: string): ActivityGrade | null {
@@ -5628,7 +5630,7 @@ function extractActivityGrade(text: string): ActivityGrade | null {
   if (/\bkindergarten/.test(lower)) return { label: 'Kindergarten', band: 'K-2' }
   const numbered =
     /\b(1[0-2]|[1-9])(?:st|nd|rd|th)?[\s-]*grade/.exec(lower)?.[1] ??
-    /\bgrades?\s*(1[0-2]|[1-9])\b/.exec(lower)?.[1] ??
+    /\bgrades?(?:\s+level)?\s*[:=-]?\s*(1[0-2]|[1-9])\b/.exec(lower)?.[1] ??
     String(gradeWords[/\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth)[\s-]*grade/.exec(lower)?.[1] ?? ''] ?? '')
   const grade = Number(numbered) || ({ freshman: 9, freshmen: 9, sophomore: 10, sophomores: 10, juniors: 11, seniors: 12 } as Record<string, number>)[
     /\b(freshm[ae]n|sophomores?|juniors|seniors)\b/.exec(lower)?.[1] ?? ''
@@ -5656,7 +5658,7 @@ function extractActivityTopic(message: string, answeringContext: boolean): { top
   // A phenomenon is often a question ("the phenomenon is why ice melts…"),
   // which the lesson topic patterns skip.
   const phenomenon = /\bphenomenon is\s+([^.;!?\n]+)/i.exec(text)?.[1].trim() ?? null
-  const changed = /\b(?:change|switch)\w* (?:the |our )?(?:topic|unit) to\s+([^.;!?\n]+)/i.exec(text)?.[1]
+  const changed = /\b(?:change|switch)\w* (?:the |our )?(?:topic|unit) to\s+([^.;!?\n]+)/i.exec(text)?.[1] ?? topicPatterns[0].exec(text)?.[1]
   let topic = changed ? cleanTopic(changed) : null
   if (!topic && !phenomenon) {
     for (const pattern of topicPatterns) {
@@ -5669,18 +5671,60 @@ function extractActivityTopic(message: string, answeringContext: boolean): { top
     const about = /\babout\s+([^.;!?\n]+)/i.exec(text)?.[1]
     const rest = (about ?? text)
       .replace(gradePhrasePattern, ' ')
+      // Practices named in the same answer aren't part of the topic.
       .replace(
-        /\b(i'?m|i’m|i am|i|we'?re|we’re|we are|we|they'?re|they’re|they|them|are|is|am|be|in|at|of|on|a|an|the|this|that|year|now|currently|right|both|so|yes|ok|okay|teaching|teach|my|our|students?|kids|class(es)?|graders?|level|science|it'?s|it’s|the topic is|topic)\b/gi,
+        /\b(?:science\s+)?practices?\b|\b(?:develop(?:ing)?\s+and\s+us(?:e|ing)\s+)?model(?:s|ing|ling)?\b|\b(?:construct(?:ing)?\s+)?explanations?\b|\b(?:engag(?:e|ing)\s+in\s+)?argument(?:ation)?(?:\s+from\s+evidence)?\b/gi,
+        ' ',
+      )
+      .replace(
+        /\b(i'?m|i’m|i am|i|we'?re|we’re|we are|we|they'?re|they’re|they|them|are|is|am|be|in|at|of|on|a|an|the|this|that|year|now|currently|right|both|so|yes|ok|okay|teaching|teach|my|our|students?|kids|class(es)?|graders?|level|science|it'?s|it’s|the topic is|topic|want|need|would|like|for|to|me|help|please|thanks|lessons?|activit(y|ies))\b/gi,
         ' ',
       )
       .replace(/[,.;:!-]+/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
+      .replace(/(?:^|\s)(?:and|&|\/)$/i, '')
     // A topic needs at least one real word, not leftover letters.
     if (rest && rest.split(' ').length <= 6 && /[a-z]{3,}/i.test(rest)) topic = cleanTopic(rest)
   }
   return { topic: topic ? titleCaseTopic(topic) : null, phenomenon }
 }
+
+// The teaching context after a teacher message: the newest mention wins, so
+// the teacher can change either. A bare answer counts only right after the
+// assistant (the app's wording or the real AI's own) asked for it. With
+// `trackFocus` (the real AI), the concept, mechanism, or phenomenon students
+// investigate is picked up too, kept in `phenomenon`.
+function nextActivityContext(context: ActivityContext, message: string, lastAiText: string, trackFocus: boolean): ActivityContext {
+  const bareGrade = /grade/i.test(lastAiText) && /\?/.test(lastAiText) ? /^\s*(1[0-2]|[1-9])(?:st|nd|rd|th)?\s*(?=$|[,.;:])/.exec(message) : null
+  const grade = extractActivityGrade(message) ?? (bareGrade ? extractActivityGrade(`grade ${bareGrade[1]}`) : null)
+  const askedFocus = trackFocus && /\b(?:concept|mechanism|phenomenon|aspect)\b[^.!?]*\?/i.test(lastAiText)
+  const askedTopic = !askedFocus && /(\bare you teaching\b|\b(?:what|which)\b[^.!?]*\b(?:topic|subject|unit)\b)[^.!?]*\?/i.test(lastAiText)
+  const { topic: newTopic, phenomenon } = extractActivityTopic(bareGrade ? message.replace(bareGrade[0], ' ') : message, askedTopic)
+  const topicValue = newTopic ?? (phenomenon && !context.topic ? titleCaseTopic(phenomenon) : null)
+  const known = topicValue ?? context.topic
+  let focus = phenomenon
+  if (!focus && trackFocus && !/\?\s*$/.test(message)) {
+    const stated = focusPattern.exec(message)
+    focus = (stated?.[1] ?? stated?.[2])?.trim() ?? null
+    // "You choose" answers the question too: the AI picks within the topic.
+    if (!focus && askedFocus) focus = /\b(not sure|no preference|you (choose|pick|decide)|up to you)\b/i.test(message) ? known : message.trim().slice(0, 300)
+  }
+  return {
+    grade: grade ?? context.grade,
+    topic: known,
+    phenomenon: focus ?? (newTopic && newTopic !== context.topic ? null : context.phenomenon),
+  }
+}
+
+const focusQuestion = 'what specific concept, mechanism, or phenomenon do you want students to investigate?'
+// The sequence a lesson generated from the conversation starts from when the
+// teacher hasn't written one: the AI turns each step into an activity.
+const defaultBrainstormSequence = 'Launch the phenomenon and elicit initial ideas\nInvestigate and gather evidence\nMake sense of the evidence\nShare, critique, and revise ideas'
+
+// A stated focus: labeled ("Phenomenon: why cars skid") or "explain why cars skid".
+const focusPattern =
+  /\b(?:phenomenon|concept|mechanism|focus)\s*[:=]\s*(.+?)(?=\s*\b(?:science\s+practices?|practices?|grade(?:\s+level)?|standards?|objectives?|topic)\s*[:=]|[.;!?\n]|$)|\b(?:investigat\w*|explor\w*|explain\w*|figur\w* out|understand\w*|model\w*)\s+((?:why|how)\s[^.;!?\n]{5,})/i
 
 // Built-in notes for common topics: what students could model, predict,
 // explain, and argue about. Matched by keyword only — a topic outside these
@@ -6544,8 +6588,8 @@ const brainstormReplyInstructions = [
   'Ask at most one follow-up question, and only when it moves the planning forward. Explore anything else in later turns.',
   'Spend the reply on instructional guidance, constructive critique, or a concrete activity idea — no introductions, recaps, or repeated information.',
   'When the teacher asks what a science practice means, give a one-sentence explanation with a concrete example.',
-  'For a science practice activity, first learn the grade level and topic (skip whatever the class or conversation already gives), then suggest practices that could fit the topic with a brief reason each. The teacher chooses — never pick practices for them.',
-  'Once the grade level, topic, and practices are known, never ask for them again or ask questions just to move on: offer a concise activity idea and say the teacher can refine it or generate a draft.',
+  'Help the teacher settle the instructional focus, in this order, skipping whatever the form, class, or conversation already gives: the grade level and science topic; the specific concept, mechanism, or phenomenon students will investigate; then the science practices to emphasize, suggesting practices that fit with a brief reason each. The teacher chooses, and may choose several — never pick practices for them.',
+  'Once these are known, never ask for them again or ask questions just to move on: say the teacher can generate a draft now. You may offer one concise activity idea aligned with the topic and practices to explore, accept, or revise, but activities are optional — the AI designs them in the draft when the teacher hasn’t.',
 ]
 
 // The most sentences and questions in one chat reply.
@@ -7310,6 +7354,11 @@ function LessonPlanningPanel({
     ...emptyActivityContext,
     grade: classActivityGrade(classGradeLevel),
   }))
+  // The same for a Whole Lesson conversation (the form's values come first).
+  const [lessonContext, setLessonContext] = useState<ActivityContext>(emptyActivityContext)
+  // With the real AI, a draft also needs the concept, mechanism, or phenomenon
+  // students investigate, which the conversation settles before the practices.
+  const requiresFocus = Boolean(brainstormRemote)
   // The practices the assistant last suggested for the topic — marked on the
   // bubbles, never selected for the teacher.
   const [suggestedPracticeIds, setSuggestedPracticeIds] = useState<string[]>([])
@@ -7361,7 +7410,7 @@ function LessonPlanningPanel({
     setBrainstormFocus(focus)
     // The practice bubbles come once the grade and topic are known.
     const teaching = focus === 'practice' ? activityTeaching(activityContext) : null
-    setShowPracticeBubbles(Boolean(teaching) && focusPracticeIds.length === 0)
+    setShowPracticeBubbles(Boolean(teaching) && focusPracticeIds.length === 0 && (!requiresFocus || Boolean(activityContext.phenomenon)))
     setSuggestedPracticeIds(teaching ? suggestedPracticesFor(teaching) : [])
     setPracticeSelection([])
     if (brainstormLog) {
@@ -7371,10 +7420,21 @@ function LessonPlanningPanel({
       setPracticeStartIndex(0)
       setPracticeChosenAt(-1)
       setBrainstormError(null)
-      setBrainstormMessages([createBrainstormIntro(formSnapshot, focus, activityContext)])
+      const intro = createBrainstormIntro(formSnapshot, focus, activityContext)
+      setBrainstormMessages([intro])
       void brainstormLog.resume(focus).then((restored) => {
         if (restored && restored.length > 0 && viewFocusRef.current === focus) {
           setBrainstormMessages((prev) => (prev.length === 1 ? [prev[0], ...restored] : prev))
+          // What the teacher said comes back with the conversation.
+          const setContext = focus === 'practice' ? setActivityContext : setLessonContext
+          setContext((context) => {
+            let lastAiText = intro.text
+            return restored.reduce((known, item) => {
+              if (item.role === 'teacher') return nextActivityContext(known, item.text, lastAiText, requiresFocus)
+              lastAiText = item.text
+              return known
+            }, context)
+          })
         }
       })
       return
@@ -7406,11 +7466,12 @@ function LessonPlanningPanel({
     if (!brainstormFocus || !brainstormLog || isBrainstormThinking) return
     brainstormLog.startNew(brainstormFocus)
     const teaching = brainstormFocus === 'practice' ? activityTeaching(activityContext) : null
-    setShowPracticeBubbles(Boolean(teaching) && focusPracticeIds.length === 0)
+    setShowPracticeBubbles(Boolean(teaching) && focusPracticeIds.length === 0 && (!requiresFocus || Boolean(activityContext.phenomenon)))
     setSuggestedPracticeIds(teaching ? suggestedPracticesFor(teaching) : [])
     setPracticeSelection([])
     setPracticeStartIndex(0)
     setPracticeChosenAt(-1)
+    if (brainstormFocus === 'lesson') setLessonContext(emptyActivityContext)
     setBrainstormSuggestions({})
     setActivityNotes({})
     setBrainstormError(null)
@@ -7543,35 +7604,30 @@ function LessonPlanningPanel({
     if (!message || isBrainstormThinking || !brainstormFocus) return
     setBrainstormDraft('')
     setShowPracticeBubbles(false)
-    // Practices chosen with the bubbles or named in chat since then.
-    const practiceFocus = selectedPractices ?? activityPracticeIds
+    // Practices chosen with the bubbles or named in chat since then, this message included.
+    const practiceFocus =
+      selectedPractices ??
+      practiceFocusBubbles.map((bubble) => bubble.id).filter((id) => activityPracticeIds.includes(id) || practiceCoaching[id].mentions.test(message.toLowerCase()))
     if (selectedPractices) {
       setFocusPracticeIds(selectedPractices)
       setPracticeChosenAt(brainstormMessages.length)
     }
     const current = isPracticeFocus ? activityNotes : brainstormSuggestions
     const found = extractLessonSuggestions(message, formSnapshot, current)
-    // A practice activity's grade and topic: the newest mention wins, so the
-    // teacher can change either. A bare answer counts as the topic only
-    // right after the assistant asked for it.
+    // What the teacher has said so far, for the focus shown.
+    const lastAiText = [...brainstormMessages].reverse().find((item) => item.role === 'ai')?.text ?? ''
     let nextContext = activityContext
     let contextUpdate = { grade: false, topic: false }
     if (isPracticeFocus) {
-      const lastAiText = [...brainstormMessages].reverse().find((item) => item.role === 'ai')?.text ?? ''
-      const grade = extractActivityGrade(message)
-      const { topic: newTopic, phenomenon } = extractActivityTopic(message, /are you teaching\b[^.!?]*\?/.test(lastAiText))
-      const topicValue = newTopic ?? (phenomenon && !activityContext.topic ? titleCaseTopic(phenomenon) : null)
+      nextContext = nextActivityContext(activityContext, message, lastAiText, requiresFocus)
       contextUpdate = {
-        grade: Boolean(grade && grade.label !== activityContext.grade?.label),
-        topic: Boolean(topicValue && topicValue !== activityContext.topic),
-      }
-      nextContext = {
-        grade: grade ?? activityContext.grade,
-        topic: topicValue ?? activityContext.topic,
-        phenomenon: phenomenon ?? (newTopic ? null : activityContext.phenomenon),
+        grade: nextContext.grade?.label !== activityContext.grade?.label,
+        topic: nextContext.topic !== activityContext.topic,
       }
       setActivityContext(nextContext)
     }
+    const nextLessonContext = isPracticeFocus || !requiresFocus ? lessonContext : nextActivityContext(lessonContext, message, lastAiText, true)
+    setLessonContext(nextLessonContext)
     const merged = { ...current }
     for (const suggestion of found) merged[suggestion.field] = mergeSuggestion(merged[suggestion.field], suggestion)
     if (isPracticeFocus) {
@@ -7593,7 +7649,8 @@ function LessonPlanningPanel({
     // Once the grade and topic are known and no practice is chosen yet, the
     // reply suggests practices and the bubbles appear for the teacher to pick.
     const teaching = isPracticeFocus ? activityTeaching(nextContext) : null
-    const offerPractices = Boolean(teaching) && practiceFocus.length === 0 && ![...practiceMentionMessages, message].some(namesPractice)
+    const offerPractices =
+      Boolean(teaching) && (!requiresFocus || Boolean(nextContext.phenomenon)) && practiceFocus.length === 0 && ![...practiceMentionMessages, message].some(namesPractice)
     setIsBrainstormThinking(true)
     setBrainstormError(null)
     if (brainstormRemote && request.kind === 'reply') {
@@ -7610,18 +7667,23 @@ function LessonPlanningPanel({
           practices: request.lesson.practices.slice(0, 300),
         },
         noticed: request.noticedLabels,
-        stillOpen: request.stillOpen.map((item) => item.question),
-        ...(isPracticeFocus
+        // "activity" says what's known: the form's other fields never hold up a draft.
+        stillOpen: [],
+        activity: isPracticeFocus
           ? {
-              activity: {
-                grade: nextContext.grade?.label ?? '',
-                topic: nextContext.topic ?? '',
-                phenomenon: nextContext.phenomenon ?? '',
-                practices: practiceFocus.map(practiceLabel),
-                hasDraft: practiceActivity.hasDraft,
-              },
+              grade: nextContext.grade?.label ?? '',
+              topic: nextContext.topic ?? '',
+              phenomenon: nextContext.phenomenon ?? '',
+              practices: practiceFocus.map(practiceLabel),
+              hasDraft: practiceActivity.hasDraft,
             }
-          : {}),
+          : {
+              grade: formSnapshot.gradeLevel || nextLessonContext.grade?.label || activityContext.grade?.label || '',
+              topic: (request.lesson.topic || nextLessonContext.topic || '').slice(0, 200),
+              phenomenon: nextLessonContext.phenomenon ?? '',
+              practices: practiceOptions.filter((practice) => formSnapshot.practices.includes(practice.id) || practiceFocus.includes(practice.id)).map((practice) => practice.label),
+              hasDraft: false,
+            },
       })
         .then((reply) => {
           // Shown only in the conversation it belongs to (saved there either way).
@@ -7664,6 +7726,13 @@ function LessonPlanningPanel({
     setShowPracticeBubbles(true)
   }
 
+  const askOnce = (text: string) => {
+    setShowPracticeBubbles(false)
+    // Clicking again doesn't repeat a question that's already waiting.
+    setBrainstormMessages((prev) => (prev[prev.length - 1]?.text === text ? prev : [...prev, { role: 'ai', text }]))
+    brainstormInputRef.current?.focus()
+  }
+
   // Generate Activity Draft needs the grade and topic, at least one
   // practice (selected or named in the conversation), and some discussion
   // of the activity beyond that context. It sends those and what the
@@ -7685,6 +7754,7 @@ function LessonPlanningPanel({
   const missingForActivity = [
     !activityContext.grade && 'grade level',
     !activityContext.topic && 'science topic',
+    requiresFocus && !activityContext.phenomenon && 'the focus',
     activityPracticeIds.length === 0 && 'a science practice',
   ].filter((item): item is string => Boolean(item))
   const canGenerateActivity = missingForActivity.length === 0 && !practiceActivity.isGenerating
@@ -7693,14 +7763,13 @@ function LessonPlanningPanel({
   const missingActivityPrompt = () => {
     const contextQuestion = missingContextQuestion(activityContext)
     if (contextQuestion) return `Before I draft the activity: ${contextQuestion.charAt(0).toLowerCase()}${contextQuestion.slice(1)}`
+    if (requiresFocus && !activityContext.phenomenon) return `Before I draft the activity: ${focusQuestion}`
     return 'Before I draft the activity: which science practice should it build — developing and using models, constructing explanations, or engaging in argument from evidence?'
   }
   const generateActivity = () => {
     if (practiceActivity.isGenerating || isBrainstormThinking) return
     if (!canGenerateActivity || !activityContext.grade || !activityContext.topic) {
-      setShowPracticeBubbles(false)
-      setBrainstormMessages((prev) => [...prev, { role: 'ai', text: missingActivityPrompt() }])
-      brainstormInputRef.current?.focus()
+      askOnce(missingActivityPrompt())
       return
     }
     practiceActivity.onGenerate(
@@ -7712,6 +7781,54 @@ function LessonPlanningPanel({
       // The activity's brainstorm (teacher messages and real AI replies),
       // saved with the activity when it's confirmed.
       brainstormMessages.slice(practiceStartIndex).filter((message) => message.role === 'teacher' || message.fromModel),
+    )
+  }
+
+  // Whole Lesson with the real AI: what the form, its pending suggestions, the
+  // class, and the conversation give. Once the focus is settled the AI writes
+  // the rest, so the other form fields never hold up a draft.
+  const pendingText = (field: BrainstormField) => {
+    const value = brainstormSuggestions[field]?.value
+    return typeof value === 'string' ? value : ''
+  }
+  const pendingPractices = brainstormSuggestions.practices?.value
+  const lessonGrade = gradeLevel || pendingText('gradeLevel') || lessonContext.grade?.band || activityContext.grade?.band || ''
+  const lessonTopic = topic.trim() || pendingText('topic') || lessonContext.topic || ''
+  const lessonPractices = practiceOptions
+    .filter((practice) => selectedPractices.includes(practice.id) || activityPracticeIds.includes(practice.id) || (Array.isArray(pendingPractices) && pendingPractices.includes(practice.id)))
+    .map((practice) => practice.id)
+  const lessonFocus = lessonContext.phenomenon || lessonDetails.learningObjectives.trim() || lessonDetails.instructionalSequence.trim()
+  const lessonReady = Boolean(lessonGrade && lessonTopic && lessonFocus && lessonPractices.length > 0)
+  const generateLessonFromBrainstorm = () => {
+    if (!requiresFocus || missingRequired.length === 0) {
+      handleGenerate()
+      return
+    }
+    if (isBrainstormThinking || isGeneratingLesson) return
+    if (!lessonReady) {
+      const question = !lessonGrade
+        ? 'what grade level are you teaching?'
+        : !lessonTopic
+          ? 'what science topic are you teaching?'
+          : !lessonFocus
+            ? focusQuestion
+            : 'which science practices should students emphasize — developing and using models, constructing explanations, or engaging in argument from evidence?'
+      askOnce(`Before I draft the lesson: ${question}`)
+      return
+    }
+    setShowValidation(false)
+    const practiceNames = joinLabels(lessonPractices.map((id) => practiceCoaching[id].name))
+    onGenerate?.(
+      {
+        ...lessonDetails,
+        gradeLevel: lessonGrade,
+        topic: lessonTopic,
+        sciencePractices: lessonPractices,
+        durationMinutes: lessonDetails.durationMinutes ?? 45,
+        learningObjectives: lessonDetails.learningObjectives.trim() || `Students will engage in ${practiceNames} to figure out ${lessonFocus.replace(/^[A-Z](?=[a-z])/, (letter) => letter.toLowerCase()).replace(/[.!?]+$/, '')}.`,
+        instructionalSequence: lessonDetails.instructionalSequence.trim() || defaultBrainstormSequence,
+      },
+      brainstormMessages.filter((message) => message.role === 'teacher' || message.fromModel),
     )
   }
 
@@ -8663,6 +8780,7 @@ function LessonPlanningPanel({
 
             {isPracticeFocus ? (
               <div className="brainstorm-actions">
+                {requiresFocus && canGenerateActivity && !practiceActivity.hasDraft && <p className="customization-note">Ready to draft. Exploring activities is optional: the AI designs them if you don’t.</p>}
                 {/* Missing grade, topic, practice, or idea is asked for in
                     the chat when the button is clicked, not listed here. */}
                 <button
@@ -8685,8 +8803,9 @@ function LessonPlanningPanel({
                   missing={missingRequired}
                   hint="Apply the AI’s suggestions, or choose “Review the form” to fill them in."
                 />
+                {requiresFocus && lessonReady && <p className="customization-note">Ready to draft. Exploring activities is optional: the AI designs them if you don’t.</p>}
                 <div className="brainstorm-actions">
-                  <button type="button" className="primary-button generate-button" onClick={handleGenerate} disabled={isGeneratingLesson}>
+                  <button type="button" className="primary-button generate-button" onClick={generateLessonFromBrainstorm} disabled={isGeneratingLesson}>
                     Generate Lesson Plan
                   </button>
                 </div>
